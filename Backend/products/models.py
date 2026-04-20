@@ -5,7 +5,7 @@ from django.db import models
 
 class Category(models.Model):
     name = models.CharField(max_length=255)
-    slug = models.SlugField(unique=True)
+    slug = models.SlugField(unique=True, max_length=255)
 
     class Meta:
         verbose_name_plural = "Categories"
@@ -24,6 +24,7 @@ class Product(models.Model):
     fabric_details = models.TextField(blank=True, null=True)
     is_active = models.BooleanField(default=True)
     moq = models.PositiveIntegerField(default=10, help_text="Minimum Order Quantity for B2B clients")
+    image = models.ImageField(upload_to='products/', blank=True, null=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
     def __str__(self):
