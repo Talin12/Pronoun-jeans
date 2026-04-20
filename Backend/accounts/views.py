@@ -1,3 +1,8 @@
-from django.shortcuts import render
+# Backend/accounts/views.py
 
-# Create your views here.
+from rest_framework_simplejwt.views import TokenObtainPairView
+from .serializers import B2BTokenObtainPairSerializer
+
+
+class B2BTokenObtainPairView(TokenObtainPairView):
+    serializer_class = B2BTokenObtainPairSerializer
