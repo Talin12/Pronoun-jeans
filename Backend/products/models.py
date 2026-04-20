@@ -1,7 +1,6 @@
 # Backend/products/models.py
 
 from django.db import models
-from django.utils.text import slugify
 
 
 class Category(models.Model):
@@ -24,6 +23,7 @@ class Product(models.Model):
     description = models.TextField(blank=True)
     fabric_details = models.TextField(blank=True, null=True)
     is_active = models.BooleanField(default=True)
+    moq = models.PositiveIntegerField(default=10, help_text="Minimum Order Quantity for B2B clients")
     created_at = models.DateTimeField(auto_now_add=True)
 
     def __str__(self):

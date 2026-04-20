@@ -10,4 +10,5 @@ urlpatterns = [
     path('api/products/', include('products.urls')),
     path('api/auth/token/', B2BTokenObtainPairView.as_view(), name='token_obtain_pair'),
     path('api/auth/token/refresh/', TokenRefreshView.as_view(), name='token_refresh'),
+    path('api/accounts/', include('accounts.urls')),
 ]
