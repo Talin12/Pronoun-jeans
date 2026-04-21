@@ -1,5 +1,3 @@
-// Frontend/src/pages/CategoryProducts.jsx
-
 import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { ArrowLeft, Package, Loader, BadgeCheck } from 'lucide-react';
@@ -15,10 +13,14 @@ const CategoryProducts = () => {
   const [categoryName, setCategoryName] = useState('');
 
   useEffect(() => {
+    setProducts([]);
+    setCategoryName('');
     setLoading(true);
+
     api.get(`products/catalog/?category=${category_slug}`)
       .then(res => {
         const data = res.data.results || res.data || [];
+        console.log("CATEGORY DATA FOR", category_slug, ":", data);
         setProducts(data);
         if (data.length > 0) setCategoryName(data[0].category_name);
       })
@@ -34,7 +36,6 @@ const CategoryProducts = () => {
 
   return (
     <div className="p-10 bg-primary min-h-screen">
-      {/* Header */}
       <div className="mb-10">
         <button
           onClick={() => navigate('/catalog')}
@@ -51,10 +52,11 @@ const CategoryProducts = () => {
         <h1 className="text-white text-4xl font-bold">
           {categoryName || 'Products'}
         </h1>
-        <p className="text-gray-400 mt-2">{products.length} product{products.length !== 1 ? 's' : ''} available</p>
+        <p className="text-gray-400 mt-2">
+          {products.length} product{products.length !== 1 ? 's' : ''} available
+        </p>
       </div>
 
-      {/* Products Grid */}
       {products.length === 0 ? (
         <div className="text-center py-20">
           <Package className="text-gray-600 w-16 h-16 mx-auto mb-4" />
@@ -67,7 +69,6 @@ const CategoryProducts = () => {
               key={product.id}
               className="group bg-secondary rounded-2xl overflow-hidden border border-white/5 hover:border-accent/40 transition-all duration-300 hover:-translate-y-1 hover:shadow-2xl"
             >
-              {/* Image */}
               <div className="h-64 overflow-hidden relative">
                 <img
                   src={
@@ -81,27 +82,22 @@ const CategoryProducts = () => {
                   className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
                   onError={(e) => { e.target.src = 'https://via.placeholder.com/400x300?text=No+Image'; }}
                 />
-                {/* MOQ Badge */}
                 <div className="absolute top-3 right-3 bg-accent/90 backdrop-blur-sm text-white text-xs font-bold px-3 py-1 rounded-full flex items-center gap-1">
                   <BadgeCheck className="w-3 h-3" />
                   MOQ: {product.moq}
                 </div>
               </div>
 
-              {/* Info */}
               <div className="p-5">
                 <p className="text-accent text-xs font-bold uppercase tracking-widest mb-1">
-                  {product.category_name}
+                  {product.category_name ? product.category_name : "UNCATEGORIZED"}
                 </p>
                 <h3 className="text-white font-bold text-lg leading-snug mb-3 line-clamp-2">
                   {product.name}
                 </h3>
-
-                {/* Variation count */}
                 <p className="text-gray-400 text-sm mb-4">
                   {product.variations.length} variation{product.variations.length !== 1 ? 's' : ''} available
                 </p>
-
                 <button
                   onClick={() => navigate(`/product/${product.slug}`)}
                   className="w-full bg-accent hover:bg-accent/80 text-white font-semibold py-2.5 rounded-xl transition-colors duration-200 text-sm"

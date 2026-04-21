@@ -15,7 +15,13 @@ class ProductViewSet(viewsets.ReadOnlyModelViewSet):
     lookup_field = "slug"
 
     def get_queryset(self):
-        queryset = Product.objects.filter(is_active=True).prefetch_related("variations")
+        queryset = (
+            Product.objects
+            .filter(is_active=True)
+            .exclude(image__isnull=True)
+            .exclude(image__exact='')
+            .prefetch_related("variations")
+        )
         category_slug = self.request.query_params.get("category")
         if category_slug:
             queryset = queryset.filter(category__slug=category_slug)

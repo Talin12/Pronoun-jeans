@@ -1,8 +1,6 @@
-# Backend/accounts/serializers.py
-
 from rest_framework import serializers
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
-from .models import CustomUser
+from .models import CustomUser, Address
 
 
 class B2BTokenObtainPairSerializer(TokenObtainPairSerializer):
@@ -33,3 +31,13 @@ class RegisterSerializer(serializers.ModelSerializer):
 
     def create(self, validated_data):
         return CustomUser.objects.create_user(**validated_data)
+
+
+class AddressSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Address
+        fields = ['id', 'address_line_1', 'address_line_2', 'city', 'state', 'pincode', 'is_default']
+
+    def create(self, validated_data):
+        validated_data['user'] = self.context['request'].user
+        return super().create(validated_data)
