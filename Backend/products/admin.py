@@ -6,7 +6,7 @@ from .models import Category, Product, ProductVariation
 
 @admin.register(Category)
 class CategoryAdmin(admin.ModelAdmin):
-    list_display = ("name", "slug")
+    list_display = ("name", "slug", "image")
     prepopulated_fields = {"slug": ("name",)}
 
 

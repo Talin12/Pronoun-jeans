@@ -1,75 +1,75 @@
+// Frontend/src/pages/Catalog.jsx
+
 import React, { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { Tag, ArrowRight, Loader } from 'lucide-react';
 import api from '../api/axios';
-import { Package, Loader2 } from 'lucide-react';
+
+const BACKEND_URL = 'http://localhost:8000';
 
 const Catalog = () => {
-  const [products, setProducts] = useState([]);
+  const [categories, setCategories] = useState([]);
   const [loading, setLoading] = useState(true);
-
-  // Use your local backend URL
-  const BACKEND_URL = "http://localhost:8000";
+  const navigate = useNavigate();
 
   useEffect(() => {
-    api.get('products/catalog/')
-      .then(res => {
-        const data = res.data.results || res.data || [];
-        setProducts(data);
-        // Debugging: This will show you exactly what is coming from the DB
-        console.log("Raw Product Data from DB:", data); 
-        setLoading(false);
-      })
-      .catch(err => {
-        console.error("Fetch error:", err);
-        setLoading(false);
-      });
+    api.get('products/categories/')
+      .then(res => setCategories(res.data.results || res.data || []))
+      .catch(err => console.error(err))
+      .finally(() => setLoading(false));
   }, []);
 
-  const getImageUrl = (imagePath) => {
-    if (!imagePath) return "https://placehold.co/400x500/16171d/white?text=No+Image";
-    
-    // If the path already includes http, use it as is.
-    // If not, prepend the backend URL.
-    const fullUrl = imagePath.startsWith('http') ? imagePath : `${BACKEND_URL}${imagePath}`;
-    return fullUrl;
-  };
-
   if (loading) return (
-    <div className="flex h-screen items-center justify-center bg-[#08060d]">
-      <Loader2 className="animate-spin text-purple-500" size={48} />
+    <div className="flex items-center justify-center min-h-screen bg-primary">
+      <Loader className="animate-spin text-accent w-10 h-10" />
     </div>
   );
 
   return (
-    <div className="min-h-screen bg-[#08060d] text-white p-8">
-      <div className="max-w-7xl mx-auto grid grid-cols-1 md:grid-cols-3 gap-10">
-        {products.map((product) => (
-          <div key={product.id} className="bg-[#16171d] rounded-3xl overflow-hidden border border-white/5 hover:border-purple-500/30 transition-all group">
-            <div className="h-80 bg-black relative overflow-hidden">
-              <img 
-                src={getImageUrl(product.image)} 
-                alt={product.name} 
+    <div className="p-10 bg-primary min-h-screen">
+      <div className="mb-10">
+        <div className="flex items-center gap-2 mb-2">
+          <Tag className="text-accent w-5 h-5" />
+          <span className="text-accent text-xs font-bold uppercase tracking-widest">Shop by Category</span>
+        </div>
+        <h1 className="text-white text-4xl font-bold">Our Collections</h1>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+        {categories.map((category) => (
+          <div
+            key={category.id}
+            onClick={() => navigate(`/catalog/${category.slug}`)}
+            className="group relative bg-secondary rounded-2xl overflow-hidden border border-white/5 cursor-pointer hover:border-accent/40 transition-all duration-300 hover:-translate-y-1 hover:shadow-2xl"
+          >
+            {/* Image */}
+            <div className="h-72 overflow-hidden">
+              <img
+                src={
+                  category.image
+                    ? category.image.startsWith('http')
+                      ? category.image
+                      : `${BACKEND_URL}${category.image}`
+                    : 'https://via.placeholder.com/600x400?text=No+Image'
+                }
+                alt={category.name}
                 className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
-                onError={(e) => {
-                  console.error("Image failed to load at:", e.target.src);
-                  // Use a different placeholder service that is more reliable
-                  e.target.src = "https://placehold.co/400x500/16171d/white?text=Image+Error";
-                }}
+                onError={(e) => { e.target.src = 'https://via.placeholder.com/600x400?text=No+Image'; }}
               />
-              <div className="absolute bottom-4 left-4 bg-black/60 backdrop-blur-md px-3 py-1 rounded-full border border-white/10">
-                <span className="text-xs font-bold text-purple-400">MOQ: {product.moq || 1} Units</span>
-              </div>
             </div>
-            
-            <div className="p-6">
-              <p className="text-[10px] font-black uppercase tracking-widest text-purple-500 mb-2">
-                {product.category_name}
-              </p>
-              <h3 className="text-xl font-bold mb-6 line-clamp-2 h-14">
-                {product.name}
-              </h3>
-              <button className="w-full bg-white text-black font-bold py-3 rounded-xl hover:bg-purple-500 hover:text-white transition-all flex items-center justify-center gap-2">
-                <Package size={18} /> View Variations
-              </button>
+
+            {/* Overlay */}
+            <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent" />
+
+            {/* Content */}
+            <div className="absolute bottom-0 left-0 right-0 p-6 flex items-end justify-between">
+              <div>
+                <p className="text-accent text-xs font-bold uppercase tracking-widest mb-1">Collection</p>
+                <h2 className="text-white text-2xl font-bold">{category.name}</h2>
+              </div>
+              <div className="bg-accent rounded-full p-2 group-hover:scale-110 transition-transform duration-300">
+                <ArrowRight className="text-white w-5 h-5" />
+              </div>
             </div>
           </div>
         ))}

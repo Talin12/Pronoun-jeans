@@ -11,6 +11,12 @@ class CategoryViewSet(viewsets.ReadOnlyModelViewSet):
 
 
 class ProductViewSet(viewsets.ReadOnlyModelViewSet):
-    queryset = Product.objects.filter(is_active=True).prefetch_related("variations")
     serializer_class = ProductSerializer
     lookup_field = "slug"
+
+    def get_queryset(self):
+        queryset = Product.objects.filter(is_active=True).prefetch_related("variations")
+        category_slug = self.request.query_params.get("category")
+        if category_slug:
+            queryset = queryset.filter(category__slug=category_slug)
+        return queryset

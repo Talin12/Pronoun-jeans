@@ -7,7 +7,7 @@ from .models import Category, Product, ProductVariation
 class CategorySerializer(serializers.ModelSerializer):
     class Meta:
         model = Category
-        fields = ["id", "name", "slug"]
+        fields = ["id", "name", "slug", "image"]
 
 
 class ProductVariationSerializer(serializers.ModelSerializer):
@@ -23,14 +23,7 @@ class ProductSerializer(serializers.ModelSerializer):
     class Meta:
         model = Product
         fields = [
-            "id",
-            "name",
-            "slug",
-            "description",
-            "fabric_details",
-            "category",
-            "category_name",
-            "is_active",
-            "created_at",
-            "variations",
+            "id", "name", "slug", "description", "fabric_details",
+            "category", "category_name", "is_active", "moq",
+            "image", "created_at", "variations",
         ]
