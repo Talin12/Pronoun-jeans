@@ -67,7 +67,8 @@ const CategoryProducts = () => {
           {products.map((product) => (
             <div
               key={product.id}
-              className="group bg-secondary rounded-2xl overflow-hidden border border-white/5 hover:border-accent/40 transition-all duration-300 hover:-translate-y-1 hover:shadow-2xl"
+              onClick={() => navigate(`/product/${product.slug}`)}
+              className="group bg-secondary rounded-2xl overflow-hidden border border-white/5 hover:border-accent/40 transition-all duration-300 hover:-translate-y-1 hover:shadow-2xl cursor-pointer"
             >
               <div className="h-64 overflow-hidden relative">
                 <img
@@ -98,12 +99,9 @@ const CategoryProducts = () => {
                 <p className="text-gray-400 text-sm mb-4">
                   {product.variations.length} variation{product.variations.length !== 1 ? 's' : ''} available
                 </p>
-                <button
-                  onClick={() => navigate(`/product/${product.slug}`)}
-                  className="w-full bg-accent hover:bg-accent/80 text-white font-semibold py-2.5 rounded-xl transition-colors duration-200 text-sm"
-                >
+                <div className="w-full bg-accent hover:bg-accent/80 text-white font-semibold py-2.5 rounded-xl transition-colors duration-200 text-sm text-center">
                   View Variations
-                </button>
+                </div>
               </div>
             </div>
           ))}
