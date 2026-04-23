@@ -3,7 +3,7 @@
 @theme {
   --color-primary:    #09090b;
   --color-secondary:  #18181b;
-  --color-accent:     #a855f7;
+  --color-accent:     #ef4444;
   --color-textMain:   #ffffff;
   --color-textMuted:  #71717a;
 }
@@ -11,7 +11,7 @@
 :root {
   --color-primary:    #09090b;
   --color-secondary:  #18181b;
-  --color-accent:     #a855f7;
+  --color-accent:     #ef4444;
   --color-textMain:   #ffffff;
   --color-textMuted:  #71717a;
   --color-border:     rgba(255,255,255,0.07);
@@ -20,7 +20,7 @@
 :root.light {
   --color-primary:    #f4f4f5;
   --color-secondary:  #ffffff;
-  --color-accent:     #9333ea;
+  --color-accent:     #dc2626;
   --color-textMain:   #09090b;
   --color-textMuted:  #52525b;
   --color-border:     rgba(0,0,0,0.08);

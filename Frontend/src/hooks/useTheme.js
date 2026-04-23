@@ -5,7 +5,7 @@ const STORAGE_KEY = 'pronoun-theme';
 const getInitialTheme = () => {
   const saved = localStorage.getItem(STORAGE_KEY);
   if (saved) return saved;
-  return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+  return 'light';
 };
 
 const applyTheme = (theme) => {

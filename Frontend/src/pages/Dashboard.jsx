@@ -18,7 +18,7 @@ const STATUS_COLORS = {
   pending:    'text-yellow-400 bg-yellow-400/10 border-yellow-400/20',
   confirmed:  'text-blue-400   bg-blue-400/10   border-blue-400/20',
   processing: 'text-blue-400   bg-blue-400/10   border-blue-400/20',
-  shipped:    'text-purple-400 bg-purple-400/10 border-purple-400/20',
+  shipped:    'text-red-400 bg-red-400/10 border-red-400/20',
   delivered:  'text-green-400  bg-green-400/10  border-green-400/20',
   cancelled:  'text-red-400    bg-red-400/10    border-red-400/20',
 };
@@ -255,7 +255,7 @@ const Addresses = () => {
                   </span>
                 )}
                 {addr.is_default_billing && (
-                  <span className="flex items-center gap-1 text-purple-400 text-xs font-bold">
+                  <span className="flex items-center gap-1 text-red-400 text-xs font-bold">
                     <CreditCard className="w-3 h-3" /> Billing
                   </span>
                 )}
