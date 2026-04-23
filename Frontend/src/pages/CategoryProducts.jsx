@@ -3,8 +3,6 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { ArrowLeft, Package, Loader, BadgeCheck } from 'lucide-react';
 import api from '../api/axios';
 
-const BACKEND_URL = 'http://localhost:8000';
-
 const CategoryProducts = () => {
   const { category_slug } = useParams();
   const navigate = useNavigate();
@@ -70,19 +68,19 @@ const CategoryProducts = () => {
               onClick={() => navigate(`/product/${product.slug}`)}
               className="group bg-secondary rounded-2xl overflow-hidden border border-white/5 hover:border-accent/40 transition-all duration-300 hover:-translate-y-1 hover:shadow-2xl cursor-pointer"
             >
-              <div className="h-64 overflow-hidden relative">
-                <img
-                  src={
-                    product.image
-                      ? product.image.startsWith('http')
-                        ? product.image
-                        : `${BACKEND_URL}${product.image}`
-                      : 'https://via.placeholder.com/400x300?text=No+Image'
-                  }
-                  alt={product.name}
-                  className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
-                  onError={(e) => { e.target.src = 'https://via.placeholder.com/400x300?text=No+Image'; }}
-                />
+              <div className="h-64 overflow-hidden relative bg-secondary">
+                {product.image ? (
+                  <img
+                    src={product.image}
+                    alt={product.name}
+                    className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+                    onError={(e) => { e.target.style.display = 'none'; }}
+                  />
+                ) : (
+                  <div className="w-full h-full flex items-center justify-center">
+                    <Package className="w-16 h-16 text-gray-700" />
+                  </div>
+                )}
                 <div className="absolute top-3 right-3 bg-accent/90 backdrop-blur-sm text-white text-xs font-bold px-3 py-1 rounded-full flex items-center gap-1">
                   <BadgeCheck className="w-3 h-3" />
                   MOQ: {product.moq}

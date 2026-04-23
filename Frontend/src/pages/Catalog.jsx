@@ -1,11 +1,7 @@
-// Frontend/src/pages/Catalog.jsx
-
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Tag, ArrowRight, Loader } from 'lucide-react';
 import api from '../api/axios';
-
-const BACKEND_URL = 'http://localhost:8000';
 
 const Catalog = () => {
   const [categories, setCategories] = useState([]);
@@ -42,26 +38,23 @@ const Catalog = () => {
             onClick={() => navigate(`/catalog/${category.slug}`)}
             className="group relative bg-secondary rounded-2xl overflow-hidden border border-white/5 cursor-pointer hover:border-accent/40 transition-all duration-300 hover:-translate-y-1 hover:shadow-2xl"
           >
-            {/* Image */}
-            <div className="h-72 overflow-hidden">
-              <img
-                src={
-                  category.image
-                    ? category.image.startsWith('http')
-                      ? category.image
-                      : `${BACKEND_URL}${category.image}`
-                    : 'https://via.placeholder.com/600x400?text=No+Image'
-                }
-                alt={category.name}
-                className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
-                onError={(e) => { e.target.src = 'https://via.placeholder.com/600x400?text=No+Image'; }}
-              />
+            <div className="h-72 overflow-hidden bg-secondary">
+              {category.image ? (
+                <img
+                  src={category.image}
+                  alt={category.name}
+                  className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+                  onError={(e) => { e.target.style.display = 'none'; }}
+                />
+              ) : (
+                <div className="w-full h-full flex items-center justify-center">
+                  <Tag className="w-16 h-16 text-gray-700" />
+                </div>
+              )}
             </div>
 
-            {/* Overlay */}
             <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent" />
 
-            {/* Content */}
             <div className="absolute bottom-0 left-0 right-0 p-6 flex items-end justify-between">
               <div>
                 <p className="text-accent text-xs font-bold uppercase tracking-widest mb-1">Collection</p>

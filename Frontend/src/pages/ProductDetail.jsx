@@ -3,8 +3,6 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { ArrowLeft, Loader, BadgeCheck, ShoppingCart, AlertCircle, CheckCircle2 } from 'lucide-react';
 import api from '../api/axios';
 
-const BACKEND_URL = 'http://localhost:8000';
-
 const decodeHtml = (text) =>
   text
     .replace(/&amp;/g, '&')
@@ -50,28 +48,17 @@ const ProductDetail = () => {
   const handleBulkAdd = async () => {
     setError('');
     setSuccess(false);
-    
+
     const itemsToAdd = Object.entries(quantities)
       .filter(([, qty]) => qty > 0)
       .map(([id, qty]) => ({ variation_id: parseInt(id), quantity: qty }));
 
-    if (itemsToAdd.length === 0) { 
-      setError('Please enter a quantity for at least one variation.'); 
-      return; 
-    }
-    
-    if (totalSelected < product.moq) { 
-      setError(`Minimum order quantity is ${product.moq} units. You selected ${totalSelected}.`); 
-      return; 
-    }
-    
+    if (itemsToAdd.length === 0) { setError('Please enter a quantity for at least one variation.'); return; }
+    if (totalSelected < product.moq) { setError(`Minimum order quantity is ${product.moq} units. You selected ${totalSelected}.`); return; }
+
     setSubmitting(true);
     try {
-      await api.post('orders/cart/update/', { 
-        product_id: product.id, 
-        items: itemsToAdd 
-      });
-      
+      await api.post('orders/cart/update/', { product_id: product.id, items: itemsToAdd });
       setSuccess(true);
       setQuantities({});
     } catch (err) {
@@ -84,12 +71,8 @@ const ProductDetail = () => {
   if (loading) return <div className="flex items-center justify-center min-h-screen bg-primary"><Loader className="animate-spin text-accent w-10 h-10" /></div>;
   if (!product) return <div className="flex items-center justify-center min-h-screen bg-primary"><p className="text-gray-400">Product not found.</p></div>;
 
-  const imageUrl = product.image
-    ? product.image.startsWith('http') ? product.image : `${BACKEND_URL}${product.image}`
-    : 'https://via.placeholder.com/600x600?text=No+Image';
-
-  const firstV    = product.variations[0];
-  const setPrice  = firstV ? (parseFloat(firstV.b2b_price) * product.moq).toFixed(2) : null;
+  const firstV   = product.variations[0];
+  const setPrice = firstV ? (parseFloat(firstV.b2b_price) * product.moq).toFixed(2) : null;
 
   return (
     <div className="bg-primary min-h-screen">
@@ -101,13 +84,19 @@ const ProductDetail = () => {
 
         <div className="flex flex-col lg:flex-row gap-8 items-start">
           <div className="w-full lg:w-72 xl:w-80 shrink-0">
-            <div className="rounded-2xl overflow-hidden bg-secondary border border-white/5">
-              <img
-                src={imageUrl}
-                alt={product.name}
-                className="w-full aspect-square object-cover"
-                onError={(e) => { e.target.src = 'https://via.placeholder.com/600x600?text=No+Image'; }}
-              />
+            <div className="rounded-2xl overflow-hidden bg-secondary border border-white/5 aspect-square">
+              {product.image ? (
+                <img
+                  src={product.image}
+                  alt={product.name}
+                  className="w-full h-full object-cover"
+                  onError={(e) => { e.target.style.display = 'none'; }}
+                />
+              ) : (
+                <div className="w-full h-full flex items-center justify-center">
+                  <ShoppingCart className="w-16 h-16 text-gray-700" />
+                </div>
+              )}
             </div>
 
             <div className="mt-4 space-y-3">
@@ -175,7 +164,7 @@ const ProductDetail = () => {
                               value={quantities[v.id] || ''}
                               onChange={(e) => handleQtyChange(v.id, e.target.value)}
                               placeholder="0"
-                              className="w-18 bg-primary border border-white/10 text-white rounded-lg px-2 py-1.5 text-sm focus:outline-none focus:border-accent transition-colors w-16"
+                              className="w-16 bg-primary border border-white/10 text-white rounded-lg px-2 py-1.5 text-sm focus:outline-none focus:border-accent transition-colors"
                             />
                           </td>
                         </tr>
@@ -215,7 +204,6 @@ const ProductDetail = () => {
               </div>
             )}
           </div>
-
         </div>
       </div>
     </div>
