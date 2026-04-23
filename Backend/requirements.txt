@@ -7,6 +7,8 @@ Django==6.0.4
 django-cloudinary-storage==0.3.0
 django-cors-headers==4.9.0
 django-environ==0.13.0
+django-jazzmin==3.0.4
+django-unfold==0.90.0
 djangorestframework==3.17.1
 djangorestframework_simplejwt==5.5.1
 idna==3.11
@@ -19,4 +21,3 @@ six==1.17.0
 sqlparse==0.5.5
 urllib3==2.6.3
 whitenoise==6.12.0
-gunicorn==21.2.0
