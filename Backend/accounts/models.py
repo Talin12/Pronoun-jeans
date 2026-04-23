@@ -23,14 +23,17 @@ class Address(models.Model):
     city = models.CharField(max_length=100)
     state = models.CharField(max_length=100)
     pincode = models.CharField(max_length=10)
-    is_default = models.BooleanField(default=False)
+    is_default_shipping = models.BooleanField(default=False)
+    is_default_billing = models.BooleanField(default=False)
 
     class Meta:
-        ordering = ['-is_default', 'id']
+        ordering = ['-is_default_shipping', 'id']
 
     def save(self, *args, **kwargs):
-        if self.is_default:
-            Address.objects.filter(user=self.user, is_default=True).exclude(pk=self.pk).update(is_default=False)
+        if self.is_default_shipping:
+            Address.objects.filter(user=self.user, is_default_shipping=True).exclude(pk=self.pk).update(is_default_shipping=False)
+        if self.is_default_billing:
+            Address.objects.filter(user=self.user, is_default_billing=True).exclude(pk=self.pk).update(is_default_billing=False)
         super().save(*args, **kwargs)
 
     def __str__(self):

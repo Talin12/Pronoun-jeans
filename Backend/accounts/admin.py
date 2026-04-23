@@ -25,6 +25,6 @@ class CustomUserAdmin(UserAdmin):
 
 @admin.register(Address)
 class AddressAdmin(admin.ModelAdmin):
-    list_display  = ['user', 'address_line_1', 'city', 'state', 'pincode', 'is_default']
-    list_filter   = ['state', 'is_default']
+    list_display  = ['user', 'address_line_1', 'city', 'state', 'pincode', 'is_default_shipping', 'is_default_billing']
+    list_filter   = ['state', 'is_default_shipping', 'is_default_billing']
     search_fields = ['user__email', 'city', 'pincode']

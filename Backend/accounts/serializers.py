@@ -36,7 +36,10 @@ class RegisterSerializer(serializers.ModelSerializer):
 class AddressSerializer(serializers.ModelSerializer):
     class Meta:
         model = Address
-        fields = ['id', 'address_line_1', 'address_line_2', 'city', 'state', 'pincode', 'is_default']
+        fields = [
+            'id', 'address_line_1', 'address_line_2', 'city', 'state',
+            'pincode', 'is_default_shipping', 'is_default_billing'
+        ]
 
     def create(self, validated_data):
         validated_data['user'] = self.context['request'].user
