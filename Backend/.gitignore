@@ -16,3 +16,5 @@ db.sqlite3-journal
 
 # Media
 media/
+
+.DS_Store
