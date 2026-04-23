@@ -22,3 +22,8 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Frontend/.gitignore
+.env
+.env.*
+.DS_Store
