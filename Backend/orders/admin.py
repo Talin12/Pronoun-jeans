@@ -1,15 +1,14 @@
 from django.contrib import admin
-from unfold.admin import ModelAdmin, TabularInline
 from .models import Cart, CartItem, Order, OrderItem
 
 
-class CartItemInline(TabularInline):
+class CartItemInline(admin.TabularInline):
     model  = CartItem
     extra  = 0
     fields = ['variation', 'quantity']
 
 
-class OrderItemInline(TabularInline):
+class OrderItemInline(admin.TabularInline):
     model           = OrderItem
     extra           = 0
     fields          = ['variation', 'quantity', 'price']
@@ -17,13 +16,13 @@ class OrderItemInline(TabularInline):
 
 
 @admin.register(Cart)
-class CartAdmin(ModelAdmin):
+class CartAdmin(admin.ModelAdmin):
     list_display = ['user', 'created_at', 'updated_at']
     inlines      = [CartItemInline]
 
 
 @admin.register(Order)
-class OrderAdmin(ModelAdmin):
+class OrderAdmin(admin.ModelAdmin):
     list_display    = ['id', 'user', 'status', 'total_amount', 'created_at']
     list_filter     = ['status']
     search_fields   = ['user__email']

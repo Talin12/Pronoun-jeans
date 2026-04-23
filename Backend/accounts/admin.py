@@ -1,11 +1,10 @@
 from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin
-from unfold.admin import ModelAdmin, TabularInline
 from .models import CustomUser, Address
 
 
 @admin.register(CustomUser)
-class CustomUserAdmin(ModelAdmin, UserAdmin):
+class CustomUserAdmin(UserAdmin):
     list_display  = ['email', 'company_name', 'phone_number', 'gst_number', 'is_verified_b2b', 'is_staff', 'date_joined']
     list_filter   = ['is_verified_b2b', 'is_staff', 'is_active']
     search_fields = ['email', 'company_name', 'gst_number', 'phone_number']
@@ -25,7 +24,7 @@ class CustomUserAdmin(ModelAdmin, UserAdmin):
 
 
 @admin.register(Address)
-class AddressAdmin(ModelAdmin):
+class AddressAdmin(admin.ModelAdmin):
     list_display  = ['user', 'address_line_1', 'city', 'state', 'pincode', 'is_default_shipping', 'is_default_billing']
     list_filter   = ['state', 'is_default_shipping', 'is_default_billing']
     search_fields = ['user__email', 'city', 'pincode']

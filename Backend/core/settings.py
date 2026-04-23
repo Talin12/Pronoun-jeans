@@ -15,7 +15,7 @@ DEBUG      = env('DEBUG')
 ALLOWED_HOSTS = env.list('ALLOWED_HOSTS', default=['localhost', '127.0.0.1'])
 
 INSTALLED_APPS = [
-    'unfold',
+    'jazzmin',
     'django.contrib.admin',
     'django.contrib.auth',
     'django.contrib.contenttypes',
@@ -104,7 +104,7 @@ STORAGES = {
         'BACKEND': 'cloudinary_storage.storage.MediaCloudinaryStorage',
     },
     'staticfiles': {
-        'BACKEND': 'django.contrib.staticfiles.storage.StaticFilesStorage',
+        'BACKEND': 'core.storage.NonStrictManifestStaticFilesStorage',
     },
 }
 
@@ -136,3 +136,5 @@ SIMPLE_JWT = {
     'USER_ID_FIELD':            'id',
     'USER_ID_CLAIM':            'user_id',
 }
+
+STATICFILES_DIRS = []
