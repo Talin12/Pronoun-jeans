@@ -1,16 +1,19 @@
 import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ArrowLeft, Package, Loader, BadgeCheck, Search, X } from 'lucide-react';
+import { ArrowLeft, Package, Loader, BadgeCheck, Search, X, Lock } from 'lucide-react';
 import api from '../api/axios';
+import { useAuthStore } from '../store/useAuthStore';
 
 const CategoryProducts = () => {
   const { category_slug } = useParams();
   const navigate = useNavigate();
-  const [products, setProducts]       = useState([]);
-  const [loading, setLoading]         = useState(true);
+  const { isAuthenticated } = useAuthStore();
+
+  const [products, setProducts]         = useState([]);
+  const [loading, setLoading]           = useState(true);
   const [categoryName, setCategoryName] = useState('');
-  const [searchQuery, setSearchQuery] = useState('');
-  const [searchInput, setSearchInput] = useState('');
+  const [searchQuery, setSearchQuery]   = useState('');
+  const [searchInput, setSearchInput]   = useState('');
   const debounceRef = useRef(null);
 
   const fetchProducts = useCallback((search = '') => {
@@ -85,10 +88,7 @@ const CategoryProducts = () => {
           className="w-full bg-white dark:bg-zinc-900 border border-gray-200 dark:border-white/10 text-gray-900 dark:text-zinc-100 placeholder-gray-400 dark:placeholder-zinc-500 rounded-xl pl-11 pr-10 py-3 text-sm focus:outline-none focus:border-accent/50 transition-colors shadow-sm"
         />
         {searchInput && (
-          <button
-            onClick={clearSearch}
-            className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 dark:text-zinc-500 hover:text-gray-700 dark:hover:text-zinc-300 transition-colors"
-          >
+          <button onClick={clearSearch} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 dark:text-zinc-500 hover:text-gray-700 dark:hover:text-zinc-300 transition-colors">
             <X className="w-4 h-4" />
           </button>
         )}
@@ -133,10 +133,19 @@ const CategoryProducts = () => {
                     <Package className="w-16 h-16 text-gray-300 dark:text-zinc-700" />
                   </div>
                 )}
-                <div className="absolute top-3 right-3 bg-white/90 dark:bg-zinc-900/80 backdrop-blur-sm text-gray-700 dark:text-zinc-300 text-xs font-bold px-3 py-1 rounded-full flex items-center gap-1 border border-gray-200 dark:border-white/10">
-                  <BadgeCheck className="w-3 h-3" />
-                  MOQ: {product.moq}
-                </div>
+
+                {/* MOQ badge — only shown when logged in */}
+                {isAuthenticated ? (
+                  <div className="absolute top-3 right-3 bg-white/90 dark:bg-zinc-900/80 backdrop-blur-sm text-gray-700 dark:text-zinc-300 text-xs font-bold px-3 py-1 rounded-full flex items-center gap-1 border border-gray-200 dark:border-white/10">
+                    <BadgeCheck className="w-3 h-3" />
+                    MOQ: {product.moq}
+                  </div>
+                ) : (
+                  <div className="absolute top-3 right-3 bg-white/90 dark:bg-zinc-900/80 backdrop-blur-sm text-gray-400 dark:text-zinc-500 text-xs font-bold px-3 py-1 rounded-full flex items-center gap-1 border border-gray-200 dark:border-white/10">
+                    <Lock className="w-3 h-3" />
+                    Login for pricing
+                  </div>
+                )}
               </div>
 
               <div className="p-5">
@@ -150,7 +159,7 @@ const CategoryProducts = () => {
                   {product.variations.length} variation{product.variations.length !== 1 ? 's' : ''} available
                 </p>
                 <div className="w-full bg-accent hover:bg-red-700 text-white font-semibold py-2.5 rounded-xl transition-colors duration-200 text-sm text-center">
-                  View Variations
+                  {isAuthenticated ? 'View Variations' : 'View Product'}
                 </div>
               </div>
             </div>

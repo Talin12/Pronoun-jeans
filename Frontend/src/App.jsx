@@ -21,15 +21,15 @@ function App() {
     <BrowserRouter>
       <Navbar />
       <Routes>
-        <Route path="/"                        element={<Home />} />
-        <Route path="/about"                   element={<AboutUs />} />
-        <Route path="/login"                   element={<Login />} />
-        <Route path="/catalog"                 element={<Catalog />} />
-        <Route path="/catalog/:category_slug"  element={<CategoryProducts />} />
-        <Route path="/product/:slug"           element={<ProductDetail />} />
-        <Route path="/cart"                    element={<Cart />} />
-        <Route path="/history"                 element={<OrderHistory />} />
-        <Route path="/dashboard"               element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
+        <Route path="/"                       element={<Home />} />
+        <Route path="/about"                  element={<AboutUs />} />
+        <Route path="/login"                  element={<Login />} />
+        <Route path="/catalog"                element={<Catalog />} />
+        <Route path="/catalog/:category_slug" element={<CategoryProducts />} />
+        <Route path="/product/:slug"          element={<ProductDetail />} />
+        <Route path="/cart"                   element={<ProtectedRoute><Cart /></ProtectedRoute>} />
+        <Route path="/history"                element={<ProtectedRoute><OrderHistory /></ProtectedRoute>} />
+        <Route path="/dashboard"              element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
       </Routes>
     </BrowserRouter>
   );
