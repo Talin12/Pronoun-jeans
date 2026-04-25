@@ -1,90 +1,39 @@
 @import "tailwindcss";
+@variant dark (&:where(.dark, .dark *));
 
 @theme {
-  --color-primary:    #09090b;
-  --color-secondary:  #18181b;
-  --color-accent:     #ef4444;
-  --color-textMain:   #ffffff;
-  --color-textMuted:  #71717a;
+  --color-accent:    #dc2626;
+  --color-primary:   #ffffff;
+  --color-secondary: #f9fafb;
+  --color-textMain:  #111827;
+  --color-textMuted: #6b7280;
 }
 
 :root {
-  --color-primary:    #09090b;
-  --color-secondary:  #18181b;
-  --color-accent:     #ef4444;
-  --color-textMain:   #ffffff;
-  --color-textMuted:  #71717a;
-  --color-border:     rgba(255,255,255,0.07);
+  --color-primary:    #ffffff;
+  --color-secondary:  #f9fafb;
+  --color-accent:     #dc2626;
+  --color-text-main:  #111827;
+  --color-text-muted: #6b7280;
+  --color-border:     #e5e7eb;
 }
 
-:root.light {
-  --color-primary:    #f4f4f5;
-  --color-secondary:  #ffffff;
+:root.dark {
+  --color-primary:    #09090b;
+  --color-secondary:  #18181b;
   --color-accent:     #dc2626;
-  --color-textMain:   #09090b;
-  --color-textMuted:  #52525b;
-  --color-border:     rgba(0,0,0,0.08);
+  --color-text-main:  #f4f4f5;
+  --color-text-muted: #71717a;
+  --color-border:     rgba(255,255,255,0.07);
 }
 
 @layer base {
   html, body {
     background-color: var(--color-primary);
-    color: var(--color-textMain);
+    color: var(--color-text-main);
     font-family: ui-sans-serif, system-ui, sans-serif;
     -webkit-font-smoothing: antialiased;
-    -moz-osx-font-smoothing: grayscale;
     min-height: 100vh;
     transition: background-color 0.2s ease, color 0.2s ease;
   }
-}
-
-:root.light .text-white {
-  color: #09090b !important;
-}
-
-:root.light .text-gray-400 {
-  color: #52525b !important;
-}
-
-:root.light .text-gray-300 {
-  color: #3f3f46 !important;
-}
-
-:root.light .text-gray-500 {
-  color: #71717a !important;
-}
-
-:root.light .text-gray-600 {
-  color: #52525b !important;
-}
-
-:root.light .bg-primary {
-  background-color: #f4f4f5 !important;
-}
-
-:root.light .bg-secondary {
-  background-color: #ffffff !important;
-}
-
-:root.light .border-white\/5 {
-  border-color: rgba(0,0,0,0.08) !important;
-}
-
-:root.light .border-white\/10 {
-  border-color: rgba(0,0,0,0.12) !important;
-}
-
-:root.light .bg-white\/\[0\.02\] {
-  background-color: rgba(0,0,0,0.02) !important;
-}
-
-:root.light .bg-white\/5 {
-  background-color: rgba(0,0,0,0.05) !important;
-}
-
-:root.light input,
-:root.light textarea {
-  background-color: #f4f4f5;
-  color: #09090b;
-  border-color: rgba(0,0,0,0.15);
 }

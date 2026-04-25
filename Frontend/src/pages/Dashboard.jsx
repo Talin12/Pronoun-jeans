@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import {
   ShoppingBag, MapPin, User, ChevronRight, Loader,
-  Plus, Trash2, CheckCircle2, AlertCircle, Star, Pencil, X, FileText, Truck, CreditCard
+  Plus, Trash2, CheckCircle2, AlertCircle, Pencil, X, FileText, Truck, CreditCard
 } from 'lucide-react';
 import api from '../api/axios';
 
@@ -15,12 +15,12 @@ const EMPTY_ADDRESS = {
 };
 
 const STATUS_COLORS = {
-  pending:    'text-yellow-400 bg-yellow-400/10 border-yellow-400/20',
-  confirmed:  'text-blue-400   bg-blue-400/10   border-blue-400/20',
-  processing: 'text-blue-400   bg-blue-400/10   border-blue-400/20',
-  shipped:    'text-red-400 bg-red-400/10 border-red-400/20',
-  delivered:  'text-green-400  bg-green-400/10  border-green-400/20',
-  cancelled:  'text-red-400    bg-red-400/10    border-red-400/20',
+  pending:    'text-yellow-600 bg-yellow-50 border-yellow-200',
+  confirmed:  'text-blue-600   bg-blue-50   border-blue-200',
+  processing: 'text-blue-600   bg-blue-50   border-blue-200',
+  shipped:    'text-purple-600 bg-purple-50 border-purple-200',
+  delivered:  'text-green-600  bg-green-50  border-green-200',
+  cancelled:  'text-red-600    bg-red-50    border-red-200',
 };
 
 const Dashboard = () => {
@@ -33,12 +33,12 @@ const Dashboard = () => {
   ];
 
   return (
-    <div className="bg-primary min-h-screen p-6 lg:p-12">
+    <div className="bg-gray-50 dark:bg-zinc-950 min-h-screen p-6 lg:p-12">
       <div className="max-w-6xl mx-auto">
-        <h1 className="text-white text-3xl font-bold mb-8">My Dashboard</h1>
+        <h1 className="text-gray-900 dark:text-zinc-100 text-3xl font-bold mb-8">My Dashboard</h1>
         <div className="flex flex-col lg:flex-row gap-8">
           <aside className="lg:w-60 shrink-0">
-            <nav className="bg-secondary rounded-2xl border border-white/5 overflow-hidden">
+            <nav className="bg-white dark:bg-zinc-900 rounded-2xl border border-gray-200 dark:border-white/5 overflow-hidden shadow-sm">
               {tabs.map((tab) => {
                 const Icon = tab.icon;
                 const active = activeTab === tab.id;
@@ -46,8 +46,10 @@ const Dashboard = () => {
                   <button
                     key={tab.id}
                     onClick={() => setActiveTab(tab.id)}
-                    className={`w-full flex items-center justify-between gap-3 px-5 py-4 text-sm font-semibold transition-colors border-b border-white/5 last:border-0
-                      ${active ? 'bg-accent/10 text-accent' : 'text-gray-400 hover:text-white hover:bg-white/5'}`}
+                    className={`w-full flex items-center justify-between gap-3 px-5 py-4 text-sm font-semibold transition-colors border-b border-gray-100 dark:border-white/5 last:border-0
+                      ${active
+                        ? 'bg-red-50 dark:bg-accent/10 text-accent'
+                        : 'text-gray-500 dark:text-zinc-400 hover:text-gray-900 dark:hover:text-white hover:bg-gray-50 dark:hover:bg-white/5'}`}
                   >
                     <span className="flex items-center gap-3"><Icon className="w-4 h-4" />{tab.label}</span>
                     {active && <ChevronRight className="w-4 h-4" />}
@@ -82,14 +84,14 @@ const PastOrders = () => {
   if (orders.length === 0) return <Empty icon={ShoppingBag} message="You haven't placed any orders yet." />;
 
   return (
-    <div className="bg-secondary rounded-2xl border border-white/5 overflow-hidden">
-      <div className="p-6 border-b border-white/5">
-        <h2 className="text-white text-xl font-bold">Past Orders</h2>
+    <div className="bg-white dark:bg-zinc-900 rounded-2xl border border-gray-200 dark:border-white/5 overflow-hidden shadow-sm">
+      <div className="p-6 border-b border-gray-100 dark:border-white/5">
+        <h2 className="text-gray-900 dark:text-zinc-100 text-xl font-bold">Past Orders</h2>
       </div>
       <div className="overflow-x-auto">
         <table className="w-full text-sm">
           <thead>
-            <tr className="text-gray-400 text-xs uppercase tracking-widest border-b border-white/5">
+            <tr className="text-gray-500 dark:text-zinc-400 text-xs uppercase tracking-widest border-b border-gray-100 dark:border-white/5 bg-gray-50 dark:bg-zinc-800/50">
               <th className="text-left px-6 py-4">Order ID</th>
               <th className="text-left px-6 py-4">Date</th>
               <th className="text-left px-6 py-4">Items</th>
@@ -103,13 +105,13 @@ const PastOrders = () => {
               const totalQty    = order.items?.reduce((s, i) => s + i.quantity, 0) ?? 0;
               const statusClass = STATUS_COLORS[order.status?.toLowerCase()] || STATUS_COLORS.pending;
               return (
-                <tr key={order.id} className={`border-b border-white/5 ${idx % 2 === 0 ? 'bg-white/[0.02]' : ''}`}>
+                <tr key={order.id} className={`border-b border-gray-100 dark:border-white/5 ${idx % 2 === 0 ? 'bg-gray-50/50 dark:bg-white/[0.02]' : 'bg-white dark:bg-transparent'}`}>
                   <td className="px-6 py-4 text-accent font-mono font-bold">#{order.id}</td>
-                  <td className="px-6 py-4 text-gray-300">
+                  <td className="px-6 py-4 text-gray-600 dark:text-zinc-300">
                     {new Date(order.created_at).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}
                   </td>
-                  <td className="px-6 py-4 text-gray-300">{totalQty} units</td>
-                  <td className="px-6 py-4 text-white font-bold">₹{order.total_amount}</td>
+                  <td className="px-6 py-4 text-gray-600 dark:text-zinc-300">{totalQty} units</td>
+                  <td className="px-6 py-4 text-gray-900 dark:text-zinc-100 font-bold">₹{order.total_amount}</td>
                   <td className="px-6 py-4">
                     <span className={`text-xs font-bold px-3 py-1 rounded-full border capitalize ${statusClass}`}>
                       {order.status}
@@ -118,7 +120,7 @@ const PastOrders = () => {
                   <td className="px-6 py-4">
                     <button
                       onClick={() => alert(`Invoice for order #${order.id} — coming soon.`)}
-                      className="flex items-center gap-1.5 text-xs text-gray-400 hover:text-accent border border-white/10 hover:border-accent/40 px-3 py-1.5 rounded-lg transition-colors font-semibold"
+                      className="flex items-center gap-1.5 text-xs text-gray-500 dark:text-zinc-400 hover:text-accent border border-gray-200 dark:border-white/10 hover:border-accent/40 px-3 py-1.5 rounded-lg transition-colors font-semibold"
                     >
                       <FileText className="w-3.5 h-3.5" /> Download
                     </button>
@@ -200,17 +202,17 @@ const Addresses = () => {
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between mb-2">
-        <h2 className="text-white text-xl font-bold">Addresses</h2>
-        <button onClick={openAdd} className="flex items-center gap-2 bg-accent hover:bg-accent/80 text-white text-sm font-bold px-4 py-2 rounded-xl transition-colors">
+        <h2 className="text-gray-900 dark:text-zinc-100 text-xl font-bold">Addresses</h2>
+        <button onClick={openAdd} className="flex items-center gap-2 bg-accent hover:bg-red-700 text-white text-sm font-bold px-4 py-2 rounded-xl transition-colors">
           <Plus className="w-4 h-4" /> Add New
         </button>
       </div>
 
       {showForm && (
-        <div className="bg-secondary rounded-2xl border border-accent/30 p-6 space-y-4">
+        <div className="bg-white dark:bg-zinc-900 rounded-2xl border border-accent/30 p-6 space-y-4 shadow-sm">
           <div className="flex items-center justify-between">
-            <h3 className="text-white font-bold">{editTarget ? 'Edit Address' : 'New Address'}</h3>
-            <button onClick={() => setShowForm(false)}><X className="w-4 h-4 text-gray-400 hover:text-white" /></button>
+            <h3 className="text-gray-900 dark:text-zinc-100 font-bold">{editTarget ? 'Edit Address' : 'New Address'}</h3>
+            <button onClick={() => setShowForm(false)}><X className="w-4 h-4 text-gray-400 hover:text-gray-700 dark:hover:text-white" /></button>
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <FormInput label="Address Line 1 *" value={form.address_line_1} onChange={v => setForm(p => ({ ...p, address_line_1: v }))} />
@@ -220,22 +222,22 @@ const Addresses = () => {
             <FormInput label="Pincode *"        value={form.pincode}        onChange={v => setForm(p => ({ ...p, pincode: v }))} />
           </div>
           <div className="flex flex-col sm:flex-row gap-4">
-            <label className="flex items-center gap-2 text-gray-300 text-sm cursor-pointer">
+            <label className="flex items-center gap-2 text-gray-600 dark:text-zinc-300 text-sm cursor-pointer">
               <input type="checkbox" checked={form.is_default_shipping}
                 onChange={e => setForm(p => ({ ...p, is_default_shipping: e.target.checked }))}
                 className="accent-accent" />
               <Truck className="w-3.5 h-3.5 text-accent" /> Default Shipping
             </label>
-            <label className="flex items-center gap-2 text-gray-300 text-sm cursor-pointer">
+            <label className="flex items-center gap-2 text-gray-600 dark:text-zinc-300 text-sm cursor-pointer">
               <input type="checkbox" checked={form.is_default_billing}
                 onChange={e => setForm(p => ({ ...p, is_default_billing: e.target.checked }))}
                 className="accent-accent" />
               <CreditCard className="w-3.5 h-3.5 text-accent" /> Default Billing
             </label>
           </div>
-          {error && <div className="flex items-center gap-2 text-red-400 text-sm"><AlertCircle className="w-4 h-4" />{error}</div>}
+          {error && <div className="flex items-center gap-2 text-red-600 text-sm"><AlertCircle className="w-4 h-4" />{error}</div>}
           <button onClick={handleSubmit} disabled={submitting}
-            className="flex items-center gap-2 bg-accent hover:bg-accent/80 disabled:opacity-50 text-white font-bold px-6 py-2.5 rounded-xl transition-colors text-sm">
+            className="flex items-center gap-2 bg-accent hover:bg-red-700 disabled:opacity-50 text-white font-bold px-6 py-2.5 rounded-xl transition-colors text-sm">
             {submitting ? <Loader className="animate-spin w-4 h-4" /> : <CheckCircle2 className="w-4 h-4" />}
             {submitting ? 'Saving...' : 'Save Address'}
           </button>
@@ -247,7 +249,7 @@ const Addresses = () => {
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           {addresses.map((addr) => (
-            <div key={addr.id} className={`bg-secondary rounded-2xl border p-5 relative ${addr.is_default_shipping || addr.is_default_billing ? 'border-accent/40' : 'border-white/5'}`}>
+            <div key={addr.id} className={`bg-white dark:bg-zinc-900 rounded-2xl border p-5 relative shadow-sm ${addr.is_default_shipping || addr.is_default_billing ? 'border-accent/40' : 'border-gray-200 dark:border-white/5'}`}>
               <div className="absolute top-3 right-3 flex flex-col items-end gap-1">
                 {addr.is_default_shipping && (
                   <span className="flex items-center gap-1 text-accent text-xs font-bold">
@@ -255,19 +257,19 @@ const Addresses = () => {
                   </span>
                 )}
                 {addr.is_default_billing && (
-                  <span className="flex items-center gap-1 text-red-400 text-xs font-bold">
+                  <span className="flex items-center gap-1 text-red-500 text-xs font-bold">
                     <CreditCard className="w-3 h-3" /> Billing
                   </span>
                 )}
               </div>
-              <p className="text-white font-semibold text-sm pr-20">{addr.address_line_1}</p>
-              {addr.address_line_2 && <p className="text-gray-400 text-sm">{addr.address_line_2}</p>}
-              <p className="text-gray-400 text-sm">{addr.city}, {addr.state} — {addr.pincode}</p>
+              <p className="text-gray-900 dark:text-zinc-100 font-semibold text-sm pr-20">{addr.address_line_1}</p>
+              {addr.address_line_2 && <p className="text-gray-500 dark:text-zinc-400 text-sm">{addr.address_line_2}</p>}
+              <p className="text-gray-500 dark:text-zinc-400 text-sm">{addr.city}, {addr.state} — {addr.pincode}</p>
               <div className="flex items-center gap-3 mt-4">
-                <button onClick={() => openEdit(addr)} className="flex items-center gap-1 text-xs text-gray-400 hover:text-white transition-colors font-semibold">
+                <button onClick={() => openEdit(addr)} className="flex items-center gap-1 text-xs text-gray-500 hover:text-gray-900 dark:text-zinc-400 dark:hover:text-white transition-colors font-semibold">
                   <Pencil className="w-3 h-3" /> Edit
                 </button>
-                <button onClick={() => handleDelete(addr.id)} className="flex items-center gap-1 text-xs text-red-400 hover:text-red-300 transition-colors font-semibold">
+                <button onClick={() => handleDelete(addr.id)} className="flex items-center gap-1 text-xs text-red-500 hover:text-red-700 transition-colors font-semibold">
                   <Trash2 className="w-3 h-3" /> Delete
                 </button>
               </div>
@@ -312,13 +314,13 @@ const AccountDetails = () => {
   if (loading) return <Spinner />;
 
   return (
-    <div className="bg-secondary rounded-2xl border border-white/5 p-6">
-      <h2 className="text-white text-xl font-bold mb-6">Account Details</h2>
+    <div className="bg-white dark:bg-zinc-900 rounded-2xl border border-gray-200 dark:border-white/5 p-6 shadow-sm">
+      <h2 className="text-gray-900 dark:text-zinc-100 text-xl font-bold mb-6">Account Details</h2>
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
         <div className="sm:col-span-2">
-          <label className="text-gray-400 text-xs font-bold uppercase tracking-widest block mb-1.5">Email</label>
+          <label className="text-gray-500 dark:text-zinc-400 text-xs font-bold uppercase tracking-widest block mb-1.5">Email</label>
           <input value={form.email || ''} disabled
-            className="w-full bg-primary/50 border border-white/10 text-gray-500 rounded-xl px-4 py-3 text-sm cursor-not-allowed" />
+            className="w-full bg-gray-50 dark:bg-zinc-800 border border-gray-200 dark:border-white/10 text-gray-400 dark:text-zinc-500 rounded-xl px-4 py-3 text-sm cursor-not-allowed" />
         </div>
         <FormInput label="Company Name" value={form.company_name || ''} onChange={v => setForm(p => ({ ...p, company_name: v }))} />
         <FormInput label="Phone Number" value={form.phone_number || ''} onChange={v => setForm(p => ({ ...p, phone_number: v }))} />
@@ -326,19 +328,19 @@ const AccountDetails = () => {
           <FormInput label="GST Number" value={form.gst_number || ''} onChange={v => setForm(p => ({ ...p, gst_number: v }))} />
         </div>
         {form.is_verified_b2b && (
-          <div className="sm:col-span-2 flex items-center gap-2 text-green-400 text-sm font-semibold">
+          <div className="sm:col-span-2 flex items-center gap-2 text-green-600 text-sm font-semibold">
             <CheckCircle2 className="w-4 h-4" /> Verified B2B Account
           </div>
         )}
       </div>
       <div className="mt-6 flex items-center gap-4">
         <button onClick={handleSave} disabled={submitting}
-          className="flex items-center gap-2 bg-accent hover:bg-accent/80 disabled:opacity-50 text-white font-bold px-6 py-2.5 rounded-xl transition-colors text-sm">
+          className="flex items-center gap-2 bg-accent hover:bg-red-700 disabled:opacity-50 text-white font-bold px-6 py-2.5 rounded-xl transition-colors text-sm">
           {submitting && <Loader className="animate-spin w-4 h-4" />}
           {submitting ? 'Saving...' : 'Save Changes'}
         </button>
-        {success && <span className="flex items-center gap-1.5 text-green-400 text-sm font-semibold"><CheckCircle2 className="w-4 h-4" />Changes saved!</span>}
-        {error   && <span className="flex items-center gap-1.5 text-red-400 text-sm font-semibold"><AlertCircle className="w-4 h-4" />{error}</span>}
+        {success && <span className="flex items-center gap-1.5 text-green-600 text-sm font-semibold"><CheckCircle2 className="w-4 h-4" />Changes saved!</span>}
+        {error   && <span className="flex items-center gap-1.5 text-red-600 text-sm font-semibold"><AlertCircle className="w-4 h-4" />{error}</span>}
       </div>
     </div>
   );
@@ -346,9 +348,9 @@ const AccountDetails = () => {
 
 const FormInput = ({ label, value, onChange, disabled = false }) => (
   <div>
-    <label className="text-gray-400 text-xs font-bold uppercase tracking-widest block mb-1.5">{label}</label>
+    <label className="text-gray-500 dark:text-zinc-400 text-xs font-bold uppercase tracking-widest block mb-1.5">{label}</label>
     <input value={value} onChange={e => onChange(e.target.value)} disabled={disabled}
-      className="w-full bg-primary border border-white/10 text-white rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-accent transition-colors disabled:opacity-50 disabled:cursor-not-allowed" />
+      className="w-full bg-gray-50 dark:bg-zinc-800 border border-gray-200 dark:border-white/10 text-gray-900 dark:text-zinc-100 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-accent transition-colors disabled:opacity-50 disabled:cursor-not-allowed" />
   </div>
 );
 
@@ -360,8 +362,8 @@ const Spinner = () => (
 
 const Empty = ({ icon: Icon, message }) => (
   <div className="text-center py-20">
-    <Icon className="text-gray-600 w-14 h-14 mx-auto mb-4" />
-    <p className="text-gray-400">{message}</p>
+    <Icon className="text-gray-300 dark:text-zinc-700 w-14 h-14 mx-auto mb-4" />
+    <p className="text-gray-500 dark:text-zinc-400">{message}</p>
   </div>
 );
 

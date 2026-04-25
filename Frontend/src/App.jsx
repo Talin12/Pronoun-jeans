@@ -2,6 +2,7 @@ import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-route
 import Navbar from './components/layout/Navbar';
 import Home from './pages/Home';
 import Login from './pages/Login';
+import AboutUs from './pages/AboutUs';
 import Catalog from './pages/Catalog';
 import CategoryProducts from './pages/CategoryProducts';
 import ProductDetail from './pages/ProductDetail';
@@ -21,6 +22,7 @@ function App() {
       <Navbar />
       <Routes>
         <Route path="/"                        element={<Home />} />
+        <Route path="/about"                   element={<AboutUs />} />
         <Route path="/login"                   element={<Login />} />
         <Route path="/catalog"                 element={<Catalog />} />
         <Route path="/catalog/:category_slug"  element={<CategoryProducts />} />

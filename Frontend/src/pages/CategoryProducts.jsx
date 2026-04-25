@@ -6,8 +6,8 @@ import api from '../api/axios';
 const CategoryProducts = () => {
   const { category_slug } = useParams();
   const navigate = useNavigate();
-  const [products, setProducts] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [products, setProducts]       = useState([]);
+  const [loading, setLoading]         = useState(true);
   const [categoryName, setCategoryName] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
   const [searchInput, setSearchInput] = useState('');
@@ -17,7 +17,6 @@ const CategoryProducts = () => {
     setLoading(true);
     const params = new URLSearchParams({ category: category_slug });
     if (search) params.append('search', search);
-
     api.get(`products/catalog/?${params.toString()}`)
       .then(res => {
         const data = res.data.results || res.data || [];
@@ -53,11 +52,11 @@ const CategoryProducts = () => {
   };
 
   return (
-    <div className="p-10 bg-zinc-950 dark:bg-zinc-950 min-h-screen">
+    <div className="p-10 bg-gray-50 dark:bg-zinc-950 min-h-screen">
       <div className="mb-10">
         <button
           onClick={() => navigate('/catalog')}
-          className="flex items-center gap-2 text-zinc-400 hover:text-white transition-colors mb-6 text-sm font-semibold"
+          className="flex items-center gap-2 text-gray-500 dark:text-zinc-400 hover:text-gray-900 dark:hover:text-white transition-colors mb-6 text-sm font-semibold"
         >
           <ArrowLeft className="w-4 h-4" /> Back to Collections
         </button>
@@ -68,28 +67,27 @@ const CategoryProducts = () => {
             {categoryName || category_slug}
           </span>
         </div>
-        <h1 className="text-zinc-100 text-4xl font-bold">
+        <h1 className="text-gray-900 dark:text-zinc-100 text-4xl font-bold">
           {categoryName || 'Products'}
         </h1>
-        <p className="text-zinc-400 mt-2">
+        <p className="text-gray-500 dark:text-zinc-400 mt-2">
           {products.length} product{products.length !== 1 ? 's' : ''} available
         </p>
       </div>
 
-      {/* Search Bar */}
       <div className="relative mb-8 max-w-lg">
-        <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-400 pointer-events-none" />
+        <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 dark:text-zinc-500 pointer-events-none" />
         <input
           type="text"
           value={searchInput}
           onChange={handleSearchChange}
           placeholder="Search by name or SKU…"
-          className="w-full bg-zinc-900 dark:bg-zinc-900 border border-white/10 text-zinc-100 placeholder-zinc-500 rounded-xl pl-11 pr-10 py-3 text-sm focus:outline-none focus:border-accent/50 transition-colors"
+          className="w-full bg-white dark:bg-zinc-900 border border-gray-200 dark:border-white/10 text-gray-900 dark:text-zinc-100 placeholder-gray-400 dark:placeholder-zinc-500 rounded-xl pl-11 pr-10 py-3 text-sm focus:outline-none focus:border-accent/50 transition-colors shadow-sm"
         />
         {searchInput && (
           <button
             onClick={clearSearch}
-            className="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-500 hover:text-zinc-300 transition-colors"
+            className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 dark:text-zinc-500 hover:text-gray-700 dark:hover:text-zinc-300 transition-colors"
           >
             <X className="w-4 h-4" />
           </button>
@@ -102,14 +100,16 @@ const CategoryProducts = () => {
         </div>
       ) : products.length === 0 ? (
         <div className="text-center py-20">
-          <Package className="text-zinc-700 w-16 h-16 mx-auto mb-4" />
+          <Package className="text-gray-300 dark:text-zinc-700 w-16 h-16 mx-auto mb-4" />
           {searchQuery ? (
             <>
-              <p className="text-zinc-400 text-lg">No products found matching <span className="text-zinc-200 font-semibold">"{searchQuery}"</span></p>
+              <p className="text-gray-500 dark:text-zinc-400 text-lg">
+                No products found matching <span className="text-gray-900 dark:text-zinc-200 font-semibold">"{searchQuery}"</span>
+              </p>
               <button onClick={clearSearch} className="mt-4 text-accent text-sm hover:underline">Clear search</button>
             </>
           ) : (
-            <p className="text-zinc-400 text-lg">No products found in this category.</p>
+            <p className="text-gray-500 dark:text-zinc-400 text-lg">No products found in this category.</p>
           )}
         </div>
       ) : (
@@ -118,9 +118,9 @@ const CategoryProducts = () => {
             <div
               key={product.id}
               onClick={() => navigate(`/product/${product.slug}`)}
-              className="group bg-zinc-900 dark:bg-zinc-900 rounded-2xl overflow-hidden border border-white/5 hover:border-white/20 transition-all duration-300 hover:-translate-y-1 cursor-pointer"
+              className="group bg-white dark:bg-zinc-900 rounded-2xl overflow-hidden border border-gray-200 dark:border-white/5 hover:border-gray-300 dark:hover:border-white/20 hover:shadow-md transition-all duration-300 hover:-translate-y-1 cursor-pointer"
             >
-              <div className="h-64 overflow-hidden relative bg-zinc-900">
+              <div className="h-64 overflow-hidden relative bg-gray-100 dark:bg-zinc-900">
                 {product.image ? (
                   <img
                     src={product.image}
@@ -130,10 +130,10 @@ const CategoryProducts = () => {
                   />
                 ) : (
                   <div className="w-full h-full flex items-center justify-center">
-                    <Package className="w-16 h-16 text-zinc-700" />
+                    <Package className="w-16 h-16 text-gray-300 dark:text-zinc-700" />
                   </div>
                 )}
-                <div className="absolute top-3 right-3 bg-zinc-900/80 backdrop-blur-sm text-zinc-300 text-xs font-bold px-3 py-1 rounded-full flex items-center gap-1 border border-white/10">
+                <div className="absolute top-3 right-3 bg-white/90 dark:bg-zinc-900/80 backdrop-blur-sm text-gray-700 dark:text-zinc-300 text-xs font-bold px-3 py-1 rounded-full flex items-center gap-1 border border-gray-200 dark:border-white/10">
                   <BadgeCheck className="w-3 h-3" />
                   MOQ: {product.moq}
                 </div>
@@ -143,10 +143,10 @@ const CategoryProducts = () => {
                 <p className="text-accent text-xs font-bold uppercase tracking-widest mb-1">
                   {product.category_name || 'UNCATEGORIZED'}
                 </p>
-                <h3 className="text-zinc-100 font-bold text-lg leading-snug mb-3 line-clamp-2">
+                <h3 className="text-gray-900 dark:text-zinc-100 font-bold text-lg leading-snug mb-3 line-clamp-2">
                   {product.name}
                 </h3>
-                <p className="text-zinc-500 text-sm mb-4">
+                <p className="text-gray-500 dark:text-zinc-500 text-sm mb-4">
                   {product.variations.length} variation{product.variations.length !== 1 ? 's' : ''} available
                 </p>
                 <div className="w-full bg-accent hover:bg-red-700 text-white font-semibold py-2.5 rounded-xl transition-colors duration-200 text-sm text-center">
