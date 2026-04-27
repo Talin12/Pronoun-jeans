@@ -15,17 +15,16 @@ const EMPTY_ADDRESS = {
 };
 
 const STATUS_COLORS = {
-  pending:    'text-yellow-600 bg-yellow-50 border-yellow-200',
-  confirmed:  'text-blue-600   bg-blue-50   border-blue-200',
-  processing: 'text-blue-600   bg-blue-50   border-blue-200',
-  shipped:    'text-purple-600 bg-purple-50 border-purple-200',
-  delivered:  'text-green-600  bg-green-50  border-green-200',
-  cancelled:  'text-red-600    bg-red-50    border-red-200',
+  pending:    'text-yellow-600 bg-yellow-50 border-yellow-200 dark:text-yellow-400 dark:bg-yellow-400/10 dark:border-yellow-400/20',
+  confirmed:  'text-blue-600   bg-blue-50   border-blue-200   dark:text-blue-400   dark:bg-blue-400/10   dark:border-blue-400/20',
+  processing: 'text-blue-600   bg-blue-50   border-blue-200   dark:text-blue-400   dark:bg-blue-400/10   dark:border-blue-400/20',
+  shipped:    'text-purple-600 bg-purple-50 border-purple-200 dark:text-purple-400 dark:bg-purple-400/10 dark:border-purple-400/20',
+  delivered:  'text-green-600  bg-green-50  border-green-200  dark:text-green-400  dark:bg-green-400/10  dark:border-green-400/20',
+  cancelled:  'text-red-600    bg-red-50    border-red-200    dark:text-red-400    dark:bg-red-400/10    dark:border-red-400/20',
 };
 
 const Dashboard = () => {
   const [activeTab, setActiveTab] = useState(TAB_ORDERS);
-
   const tabs = [
     { id: TAB_ORDERS,  label: 'Past Orders',    icon: ShoppingBag },
     { id: TAB_ADDRESS, label: 'Addresses',       icon: MapPin      },
@@ -43,14 +42,9 @@ const Dashboard = () => {
                 const Icon = tab.icon;
                 const active = activeTab === tab.id;
                 return (
-                  <button
-                    key={tab.id}
-                    onClick={() => setActiveTab(tab.id)}
+                  <button key={tab.id} onClick={() => setActiveTab(tab.id)}
                     className={`w-full flex items-center justify-between gap-3 px-5 py-4 text-sm font-semibold transition-colors border-b border-gray-100 dark:border-white/5 last:border-0
-                      ${active
-                        ? 'bg-red-50 dark:bg-accent/10 text-accent'
-                        : 'text-gray-500 dark:text-zinc-400 hover:text-gray-900 dark:hover:text-white hover:bg-gray-50 dark:hover:bg-white/5'}`}
-                  >
+                      ${active ? 'bg-red-50 dark:bg-accent/10 text-accent' : 'text-gray-500 dark:text-zinc-400 hover:text-gray-900 dark:hover:text-white hover:bg-gray-50 dark:hover:bg-white/5'}`}>
                     <span className="flex items-center gap-3"><Icon className="w-4 h-4" />{tab.label}</span>
                     {active && <ChevronRight className="w-4 h-4" />}
                   </button>
@@ -113,15 +107,11 @@ const PastOrders = () => {
                   <td className="px-6 py-4 text-gray-600 dark:text-zinc-300">{totalQty} units</td>
                   <td className="px-6 py-4 text-gray-900 dark:text-zinc-100 font-bold">₹{order.total_amount}</td>
                   <td className="px-6 py-4">
-                    <span className={`text-xs font-bold px-3 py-1 rounded-full border capitalize ${statusClass}`}>
-                      {order.status}
-                    </span>
+                    <span className={`text-xs font-bold px-3 py-1 rounded-full border capitalize ${statusClass}`}>{order.status}</span>
                   </td>
                   <td className="px-6 py-4">
-                    <button
-                      onClick={() => alert(`Invoice for order #${order.id} — coming soon.`)}
-                      className="flex items-center gap-1.5 text-xs text-gray-500 dark:text-zinc-400 hover:text-accent border border-gray-200 dark:border-white/10 hover:border-accent/40 px-3 py-1.5 rounded-lg transition-colors font-semibold"
-                    >
+                    <button onClick={() => alert(`Invoice for order #${order.id} — coming soon.`)}
+                      className="flex items-center gap-1.5 text-xs text-gray-500 dark:text-zinc-400 hover:text-accent border border-gray-200 dark:border-white/10 hover:border-accent/40 px-3 py-1.5 rounded-lg transition-colors font-semibold">
                       <FileText className="w-3.5 h-3.5" /> Download
                     </button>
                   </td>
@@ -150,51 +140,25 @@ const Addresses = () => {
       .catch(err => console.error(err))
       .finally(() => setLoading(false));
   };
-
   useEffect(() => { fetchAddresses(); }, []);
 
-  const openAdd = () => { setEditTarget(null); setForm(EMPTY_ADDRESS); setError(''); setShowForm(true); };
-
+  const openAdd  = () => { setEditTarget(null); setForm(EMPTY_ADDRESS); setError(''); setShowForm(true); };
   const openEdit = (addr) => {
     setEditTarget(addr.id);
-    setForm({
-      address_line_1:      addr.address_line_1,
-      address_line_2:      addr.address_line_2 || '',
-      city:                addr.city,
-      state:               addr.state,
-      pincode:             addr.pincode,
-      is_default_shipping: addr.is_default_shipping,
-      is_default_billing:  addr.is_default_billing,
-    });
-    setError('');
-    setShowForm(true);
+    setForm({ address_line_1: addr.address_line_1, address_line_2: addr.address_line_2 || '', city: addr.city, state: addr.state, pincode: addr.pincode, is_default_shipping: addr.is_default_shipping, is_default_billing: addr.is_default_billing });
+    setError(''); setShowForm(true);
   };
-
-  const handleDelete = async (id) => {
-    await api.delete(`accounts/addresses/${id}/`);
-    fetchAddresses();
-  };
-
+  const handleDelete = async (id) => { await api.delete(`accounts/addresses/${id}/`); fetchAddresses(); };
   const handleSubmit = async () => {
     setError('');
-    if (!form.address_line_1 || !form.city || !form.state || !form.pincode) {
-      setError('Please fill in all required fields.');
-      return;
-    }
+    if (!form.address_line_1 || !form.city || !form.state || !form.pincode) { setError('Please fill in all required fields.'); return; }
     setSubmitting(true);
     try {
-      if (editTarget) {
-        await api.put(`accounts/addresses/${editTarget}/`, form);
-      } else {
-        await api.post('accounts/addresses/', form);
-      }
-      setShowForm(false);
-      fetchAddresses();
-    } catch (err) {
-      setError(err.response?.data?.detail || 'Failed to save address.');
-    } finally {
-      setSubmitting(false);
-    }
+      if (editTarget) { await api.put(`accounts/addresses/${editTarget}/`, form); }
+      else { await api.post('accounts/addresses/', form); }
+      setShowForm(false); fetchAddresses();
+    } catch (err) { setError(err.response?.data?.detail || 'Failed to save address.'); }
+    finally { setSubmitting(false); }
   };
 
   if (loading) return <Spinner />;
@@ -223,19 +187,15 @@ const Addresses = () => {
           </div>
           <div className="flex flex-col sm:flex-row gap-4">
             <label className="flex items-center gap-2 text-gray-600 dark:text-zinc-300 text-sm cursor-pointer">
-              <input type="checkbox" checked={form.is_default_shipping}
-                onChange={e => setForm(p => ({ ...p, is_default_shipping: e.target.checked }))}
-                className="accent-accent" />
+              <input type="checkbox" checked={form.is_default_shipping} onChange={e => setForm(p => ({ ...p, is_default_shipping: e.target.checked }))} className="accent-accent" />
               <Truck className="w-3.5 h-3.5 text-accent" /> Default Shipping
             </label>
             <label className="flex items-center gap-2 text-gray-600 dark:text-zinc-300 text-sm cursor-pointer">
-              <input type="checkbox" checked={form.is_default_billing}
-                onChange={e => setForm(p => ({ ...p, is_default_billing: e.target.checked }))}
-                className="accent-accent" />
+              <input type="checkbox" checked={form.is_default_billing} onChange={e => setForm(p => ({ ...p, is_default_billing: e.target.checked }))} className="accent-accent" />
               <CreditCard className="w-3.5 h-3.5 text-accent" /> Default Billing
             </label>
           </div>
-          {error && <div className="flex items-center gap-2 text-red-600 text-sm"><AlertCircle className="w-4 h-4" />{error}</div>}
+          {error && <div className="flex items-center gap-2 text-red-600 dark:text-red-400 text-sm"><AlertCircle className="w-4 h-4" />{error}</div>}
           <button onClick={handleSubmit} disabled={submitting}
             className="flex items-center gap-2 bg-accent hover:bg-red-700 disabled:opacity-50 text-white font-bold px-6 py-2.5 rounded-xl transition-colors text-sm">
             {submitting ? <Loader className="animate-spin w-4 h-4" /> : <CheckCircle2 className="w-4 h-4" />}
@@ -251,16 +211,8 @@ const Addresses = () => {
           {addresses.map((addr) => (
             <div key={addr.id} className={`bg-white dark:bg-zinc-900 rounded-2xl border p-5 relative shadow-sm ${addr.is_default_shipping || addr.is_default_billing ? 'border-accent/40' : 'border-gray-200 dark:border-white/5'}`}>
               <div className="absolute top-3 right-3 flex flex-col items-end gap-1">
-                {addr.is_default_shipping && (
-                  <span className="flex items-center gap-1 text-accent text-xs font-bold">
-                    <Truck className="w-3 h-3" /> Shipping
-                  </span>
-                )}
-                {addr.is_default_billing && (
-                  <span className="flex items-center gap-1 text-red-500 text-xs font-bold">
-                    <CreditCard className="w-3 h-3" /> Billing
-                  </span>
-                )}
+                {addr.is_default_shipping && <span className="flex items-center gap-1 text-accent text-xs font-bold"><Truck className="w-3 h-3" /> Shipping</span>}
+                {addr.is_default_billing  && <span className="flex items-center gap-1 text-red-500 text-xs font-bold"><CreditCard className="w-3 h-3" /> Billing</span>}
               </div>
               <p className="text-gray-900 dark:text-zinc-100 font-semibold text-sm pr-20">{addr.address_line_1}</p>
               {addr.address_line_2 && <p className="text-gray-500 dark:text-zinc-400 text-sm">{addr.address_line_2}</p>}
@@ -298,17 +250,10 @@ const AccountDetails = () => {
   const handleSave = async () => {
     setError(''); setSuccess(false); setSubmitting(true);
     try {
-      await api.put('accounts/profile/', {
-        company_name: form.company_name,
-        gst_number:   form.gst_number,
-        phone_number: form.phone_number,
-      });
+      await api.put('accounts/profile/', { company_name: form.company_name, gst_number: form.gst_number, phone_number: form.phone_number });
       setSuccess(true);
-    } catch (err) {
-      setError(err.response?.data?.detail || 'Failed to save changes.');
-    } finally {
-      setSubmitting(false);
-    }
+    } catch (err) { setError(err.response?.data?.detail || 'Failed to save changes.'); }
+    finally { setSubmitting(false); }
   };
 
   if (loading) return <Spinner />;
@@ -323,12 +268,12 @@ const AccountDetails = () => {
             className="w-full bg-gray-50 dark:bg-zinc-800 border border-gray-200 dark:border-white/10 text-gray-400 dark:text-zinc-500 rounded-xl px-4 py-3 text-sm cursor-not-allowed" />
         </div>
         <FormInput label="Company Name" value={form.company_name || ''} onChange={v => setForm(p => ({ ...p, company_name: v }))} />
-        <FormInput label="Phone Number" value={form.phone_number || ''} onChange={v => setForm(p => ({ ...p, phone_number: v }))} />
+        <FormInput label="Phone Number" value={form.phone_number  || ''} onChange={v => setForm(p => ({ ...p, phone_number: v }))} />
         <div className="sm:col-span-2">
           <FormInput label="GST Number" value={form.gst_number || ''} onChange={v => setForm(p => ({ ...p, gst_number: v }))} />
         </div>
         {form.is_verified_b2b && (
-          <div className="sm:col-span-2 flex items-center gap-2 text-green-600 text-sm font-semibold">
+          <div className="sm:col-span-2 flex items-center gap-2 text-green-600 dark:text-green-400 text-sm font-semibold">
             <CheckCircle2 className="w-4 h-4" /> Verified B2B Account
           </div>
         )}
@@ -339,8 +284,8 @@ const AccountDetails = () => {
           {submitting && <Loader className="animate-spin w-4 h-4" />}
           {submitting ? 'Saving...' : 'Save Changes'}
         </button>
-        {success && <span className="flex items-center gap-1.5 text-green-600 text-sm font-semibold"><CheckCircle2 className="w-4 h-4" />Changes saved!</span>}
-        {error   && <span className="flex items-center gap-1.5 text-red-600 text-sm font-semibold"><AlertCircle className="w-4 h-4" />{error}</span>}
+        {success && <span className="flex items-center gap-1.5 text-green-600 dark:text-green-400 text-sm font-semibold"><CheckCircle2 className="w-4 h-4" />Changes saved!</span>}
+        {error   && <span className="flex items-center gap-1.5 text-red-600 dark:text-red-400 text-sm font-semibold"><AlertCircle className="w-4 h-4" />{error}</span>}
       </div>
     </div>
   );

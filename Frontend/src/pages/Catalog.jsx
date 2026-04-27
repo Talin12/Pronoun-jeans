@@ -40,21 +40,16 @@ const Catalog = () => {
           >
             <div className="h-72 overflow-hidden bg-gray-100 dark:bg-zinc-900">
               {category.image ? (
-                <img
-                  src={category.image}
-                  alt={category.name}
+                <img src={category.image} alt={category.name}
                   className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
-                  onError={(e) => { e.target.style.display = 'none'; }}
-                />
+                  onError={(e) => { e.target.style.display = 'none'; }} />
               ) : (
                 <div className="w-full h-full flex items-center justify-center">
                   <Tag className="w-16 h-16 text-gray-300 dark:text-zinc-700" />
                 </div>
               )}
             </div>
-
             <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/10 to-transparent" />
-
             <div className="absolute bottom-0 left-0 right-0 p-6 flex items-end justify-between">
               <div>
                 <p className="text-white/70 text-xs font-bold uppercase tracking-widest mb-1">Collection</p>

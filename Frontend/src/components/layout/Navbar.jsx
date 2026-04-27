@@ -1,12 +1,18 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../../store/useAuthStore';
+import { useCartStore } from '../../store/useCartStore';
 import { ShoppingBag, LogOut } from 'lucide-react';
 import ThemeToggle from '../ui/ThemeToggle';
 
 const Navbar = () => {
   const { isAuthenticated, user, logout } = useAuthStore();
+  const { cartCount, cartTotal, fetchCart } = useCartStore();
   const navigate = useNavigate();
+
+  useEffect(() => {
+    if (isAuthenticated) fetchCart();
+  }, [isAuthenticated]);
 
   return (
     <nav className="bg-white dark:bg-zinc-950 border-b border-gray-200 dark:border-white/5 sticky top-0 z-50 shadow-sm">
@@ -24,8 +30,22 @@ const Navbar = () => {
           )}
 
           <div className="flex items-center gap-3 ml-4">
-            <Link to="/cart" className="relative p-2 hover:bg-gray-100 dark:hover:bg-zinc-800 rounded-full transition-all text-gray-700 dark:text-zinc-300">
-              <ShoppingBag size={22} />
+
+            {/* Cart icon with badge + total */}
+            <Link to="/cart" className="flex items-center gap-2 hover:bg-gray-100 dark:hover:bg-zinc-800 rounded-xl px-3 py-2 transition-all group">
+              <div className="relative">
+                <ShoppingBag size={22} className="text-gray-700 dark:text-zinc-300 group-hover:text-accent transition-colors" />
+                {isAuthenticated && cartCount > 0 && (
+                  <span className="absolute -top-2 -right-2 bg-accent text-white text-[10px] font-black w-4 h-4 rounded-full flex items-center justify-center leading-none">
+                    {cartCount > 99 ? '99+' : cartCount}
+                  </span>
+                )}
+              </div>
+              {isAuthenticated && cartTotal > 0 && (
+                <span className="text-sm font-bold text-gray-900 dark:text-zinc-100 hidden sm:block">
+                  ₹{cartTotal.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                </span>
+              )}
             </Link>
 
             <ThemeToggle />
