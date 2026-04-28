@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ArrowLeft, Loader, BadgeCheck, ShoppingCart, AlertCircle, CheckCircle2, Lock } from 'lucide-react';
+import { ArrowLeft, Loader, BadgeCheck, ShoppingCart, AlertCircle, CheckCircle2, Lock, MoveRight } from 'lucide-react';
 import api from '../api/axios';
 import { useAuthStore } from '../store/useAuthStore';
 import { useCartStore } from '../store/useCartStore';
@@ -111,6 +111,7 @@ const ProductDetail = () => {
 
         <div className="flex flex-col lg:flex-row gap-8 items-start">
 
+          {/* Left — image + meta */}
           <div className="w-full lg:w-72 xl:w-80 shrink-0">
             <div className="rounded-2xl overflow-hidden bg-white dark:bg-zinc-900 border border-gray-200 dark:border-white/5 aspect-square shadow-sm">
               {product.image ? (
@@ -151,7 +152,8 @@ const ProductDetail = () => {
             </div>
           </div>
 
-          <div className="flex-1 min-w-0">
+          {/* Right — bulk order table OR login gate */}
+          <div className="flex-1 min-w-0 w-full">
             {isAuthenticated ? (
               <div className="bg-white dark:bg-zinc-900 rounded-2xl border border-gray-200 dark:border-white/5 overflow-hidden shadow-sm">
                 <div className="px-5 py-3.5 border-b border-gray-100 dark:border-white/5 flex items-center justify-between">
@@ -163,12 +165,19 @@ const ProductDetail = () => {
                   )}
                 </div>
 
-                <div className="overflow-x-auto">
-                  <table className="w-full text-sm">
+                {/* Mobile swipe hint */}
+                <div className="flex items-center justify-end gap-1.5 px-5 py-2 bg-gray-50 dark:bg-zinc-800/50 border-b border-gray-100 dark:border-white/5 md:hidden">
+                  <MoveRight className="w-3 h-3 text-gray-400 dark:text-zinc-500" />
+                  <span className="text-xs text-gray-400 dark:text-zinc-500">Swipe to view full matrix</span>
+                </div>
+
+                {/* Scrollable table container */}
+                <div className="overflow-x-auto w-full">
+                  <table className="w-full text-sm min-w-[540px]">
                     <thead>
                       <tr className="text-gray-500 dark:text-zinc-400 text-xs uppercase tracking-widest border-b border-gray-100 dark:border-white/5 bg-gray-50 dark:bg-white/[0.02]">
                         <th className="text-left px-4 py-3">Size / Color</th>
-                        <th className="text-left px-4 py-3 hidden md:table-cell">SKU</th>
+                        <th className="text-left px-4 py-3">SKU</th>
                         <th className="text-left px-4 py-3">Price</th>
                         <th className="text-left px-4 py-3 w-24">QTY</th>
                       </tr>
@@ -183,7 +192,7 @@ const ProductDetail = () => {
                               <span className="text-gray-400 dark:text-zinc-600 mx-1">/</span>
                               <span className="text-accent text-xs font-medium">{v.color}</span>
                             </td>
-                            <td className="px-4 py-3 text-gray-400 dark:text-zinc-500 font-mono text-xs hidden md:table-cell">{v.sku}</td>
+                            <td className="px-4 py-3 text-gray-400 dark:text-zinc-500 font-mono text-xs">{v.sku}</td>
                             <td className="px-4 py-3">
                               <p className="text-gray-400 dark:text-zinc-500 text-xs uppercase tracking-widest leading-none">Set Price</p>
                               <p className="text-gray-900 dark:text-zinc-100 font-black text-sm mt-0.5">₹{vSet}</p>
@@ -208,7 +217,7 @@ const ProductDetail = () => {
                     {error && <div className="flex items-center gap-2 text-red-600 dark:text-red-400 text-sm font-semibold"><AlertCircle className="w-4 h-4 shrink-0" />{error}</div>}
                   </div>
                   <button onClick={handleBulkAdd} disabled={submitting}
-                    className="flex items-center gap-2 bg-accent hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold px-6 py-2.5 rounded-xl transition-colors text-sm uppercase tracking-wide whitespace-nowrap">
+                    className="w-full sm:w-auto flex items-center justify-center gap-2 bg-accent hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold px-6 py-2.5 rounded-xl transition-colors text-sm uppercase tracking-wide whitespace-nowrap">
                     {submitting ? <Loader className="animate-spin w-4 h-4" /> : <ShoppingCart className="w-4 h-4" />}
                     {submitting ? 'Adding...' : 'Confirm Bulk Order'}
                   </button>
