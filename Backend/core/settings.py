@@ -120,7 +120,7 @@ CLOUDINARY_STORAGE = {
 
 STORAGES = {
     'default': {
-        'BACKEND': 'cloudinary_storage.storage.MediaCloudinaryStorage',
+        'BACKEND': 'core.storage.TimeoutMediaCloudinaryStorage',
     },
     'staticfiles': {
         'BACKEND': 'core.storage.NonStrictManifestStaticFilesStorage',
