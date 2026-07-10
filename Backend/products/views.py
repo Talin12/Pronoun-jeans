@@ -25,8 +25,13 @@ class IsVerifiedB2B(BasePermission):
 
 class CategoryViewSet(viewsets.ReadOnlyModelViewSet):
     permission_classes = [AllowAny]
-    queryset           = Category.objects.all()
     serializer_class   = CategorySerializer
+    lookup_field       = 'slug'
+
+    def get_queryset(self):
+        # Only main (top-level) categories are listed/looked-up here — their
+        # sub-categories come along nested via CategorySerializer.
+        return Category.objects.filter(parent__isnull=True).prefetch_related('subcategories')
 
 
 class ProductViewSet(viewsets.ReadOnlyModelViewSet):
@@ -47,6 +52,9 @@ class ProductViewSet(viewsets.ReadOnlyModelViewSet):
         category_slug = self.request.query_params.get('category')
         if category_slug:
             queryset = queryset.filter(category__slug=category_slug)
+        subcategory_slug = self.request.query_params.get('subcategory')
+        if subcategory_slug:
+            queryset = queryset.filter(subcategories__slug=subcategory_slug)
         return queryset
 
     @method_decorator(cache_page(60 * 15))

@@ -54,6 +54,22 @@ const Catalog = () => {
               <div>
                 <p className="text-white/70 text-xs font-bold uppercase tracking-widest mb-1">Collection</p>
                 <h2 className="text-white text-2xl font-bold">{category.name}</h2>
+                {category.subcategories?.length > 0 && (
+                  <div className="flex flex-wrap gap-1.5 mt-2">
+                    {category.subcategories.map((sub) => (
+                      <span
+                        key={sub.id}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          navigate(`/catalog/${category.slug}?subcategory=${sub.slug}`);
+                        }}
+                        className="text-white/80 text-xs font-medium bg-white/10 hover:bg-white/20 rounded-full px-2.5 py-1 transition-colors"
+                      >
+                        {sub.name}
+                      </span>
+                    ))}
+                  </div>
+                )}
               </div>
               <div className="bg-accent rounded-full p-2 group-hover:scale-110 transition-transform duration-300">
                 <ArrowRight className="text-white w-5 h-5" />

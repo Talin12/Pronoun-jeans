@@ -2,10 +2,18 @@ from rest_framework import serializers
 from .models import Category, Product, ProductVariation, ProductImage, VariationImage
 
 
-class CategorySerializer(serializers.ModelSerializer):
+class SubCategorySerializer(serializers.ModelSerializer):
     class Meta:
         model  = Category
-        fields = ['id', 'name', 'slug', 'image']
+        fields = ['id', 'name', 'slug']
+
+
+class CategorySerializer(serializers.ModelSerializer):
+    subcategories = SubCategorySerializer(many=True, read_only=True)
+
+    class Meta:
+        model  = Category
+        fields = ['id', 'name', 'slug', 'image', 'parent', 'subcategories']
 
 
 class ProductImageSerializer(serializers.ModelSerializer):
@@ -98,11 +106,12 @@ class ProductSerializer(serializers.ModelSerializer):
     variations     = ProductVariationSerializer(many=True, read_only=True)
     category_name  = serializers.CharField(source='category.name', read_only=True)
     gallery_images = ProductImageSerializer(many=True, read_only=True)
+    subcategories  = SubCategorySerializer(many=True, read_only=True)
 
     class Meta:
         model  = Product
         fields = [
             'id', 'name', 'slug', 'description', 'fabric_details',
-            'category', 'category_name', 'is_active', 'moq',
+            'category', 'category_name', 'subcategories', 'is_active', 'moq',
             'image', 'created_at', 'variations', 'gallery_images',
         ]

@@ -187,7 +187,7 @@ def clone_products(modeladmin, request, queryset):
     for pk in original_pks:
         try:
             source = Product.objects.prefetch_related(
-                'variations__color_palette', 'gallery_images'
+                'variations__color_palette', 'gallery_images', 'subcategories'
             ).get(pk=pk)
         except Product.DoesNotExist:
             continue
@@ -205,6 +205,7 @@ def clone_products(modeladmin, request, queryset):
         clone.moq            = source.moq
         clone.image          = source.image
         clone.save()
+        clone.subcategories.set(source.subcategories.all())
 
         for v in source.variations.all():
             nv                 = ProductVariation()
@@ -269,11 +270,28 @@ class ColorAdmin(admin.ModelAdmin):
     swatch.short_description = 'Color'
 
 
+class SubcategoryInline(admin.TabularInline):
+    model               = Category
+    fk_name             = 'parent'
+    extra               = 1
+    fields              = ['name', 'slug', 'image']
+    prepopulated_fields = {'slug': ('name',)}
+
+
 @admin.register(Category)
 class CategoryAdmin(admin.ModelAdmin):
-    list_display        = ['name', 'slug']
+    list_display        = ['name', 'parent', 'slug']
+    list_filter          = ['parent']
     search_fields       = ['name', 'slug']
     prepopulated_fields = {'slug': ('name',)}
+    inlines             = [SubcategoryInline]
+
+    def get_inline_instances(self, request, obj=None):
+        # Sub-categories can't have their own sub-categories, so only offer
+        # the inline on a main category's page, not a sub-category's.
+        if obj and obj.parent_id:
+            return []
+        return super().get_inline_instances(request, obj)
 
 
 @admin.register(ProductImage)
@@ -284,8 +302,40 @@ class ProductImageAdmin(admin.ModelAdmin):
     ordering      = ['product', 'order']
 
 
+class ProductAdminForm(forms.ModelForm):
+    class Meta:
+        model  = Product
+        fields = '__all__'
+        widgets = {
+            'subcategories': forms.CheckboxSelectMultiple,
+        }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields['subcategories'].queryset = (
+            Category.objects.filter(parent__isnull=False)
+            .select_related('parent')
+            .order_by('parent__name', 'name')
+        )
+        self.fields['subcategories'].label_from_instance = lambda obj: f"{obj.parent.name} → {obj.name}"
+        self.fields['subcategories'].required = False
+
+    def clean(self):
+        cleaned      = super().clean()
+        category     = cleaned.get('category')
+        subcategories = cleaned.get('subcategories')
+        if category and subcategories:
+            mismatched = [sc.name for sc in subcategories if sc.parent_id != category.id]
+            if mismatched:
+                raise forms.ValidationError(
+                    f"These sub-categories don't belong to the selected category: {', '.join(mismatched)}"
+                )
+        return cleaned
+
+
 @admin.register(Product)
 class ProductAdmin(admin.ModelAdmin):
+    form                = ProductAdminForm
     list_display        = ['name', 'category', 'is_active', 'moq', 'created_at']
     list_filter         = ['is_active', 'category']
     search_fields       = ['name', 'slug']
@@ -296,7 +346,7 @@ class ProductAdmin(admin.ModelAdmin):
 
     fieldsets = (
         ('Product Info', {
-            'fields': ('name', 'slug', 'category', 'description', 'fabric_details', 'is_active', 'moq'),
+            'fields': ('name', 'slug', 'category', 'subcategories', 'description', 'fabric_details', 'is_active', 'moq'),
         }),
         ('Media', {
             'fields': ('image',),

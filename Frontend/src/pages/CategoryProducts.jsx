@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useCallback, useRef } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { ArrowLeft, Package, Loader, BadgeCheck, Search, X, Lock } from 'lucide-react';
 import api from '../api/axios';
 import { useAuthStore } from '../store/useAuthStore';
@@ -7,42 +7,61 @@ import { useAuthStore } from '../store/useAuthStore';
 const CategoryProducts = () => {
   const { category_slug } = useParams();
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const { isAuthenticated } = useAuthStore();
 
   const [products, setProducts]           = useState([]);
   const [loading, setLoading]             = useState(true);
   const [categoryName, setCategoryName]   = useState('');
+  const [subcategories, setSubcategories] = useState([]);
+  const [activeSubcategory, setActiveSubcategory] = useState(searchParams.get('subcategory') || '');
   const [searchQuery, setSearchQuery]     = useState('');
   const [searchInput, setSearchInput]     = useState('');
   const debounceRef = useRef(null);
 
-  const fetchProducts = useCallback((search = '') => {
+  useEffect(() => {
+    api.get(`products/categories/${category_slug}/`)
+      .then(res => {
+        setCategoryName(res.data.name);
+        setSubcategories(res.data.subcategories || []);
+      })
+      .catch(() => {});
+  }, [category_slug]);
+
+  const fetchProducts = useCallback((search = '', subcategory = '') => {
     setLoading(true);
     const params = new URLSearchParams({ category: category_slug });
     if (search) params.append('search', search);
+    if (subcategory) params.append('subcategory', subcategory);
     api.get(`products/catalog/?${params.toString()}`)
       .then(res => {
         const data = res.data.results || res.data || [];
         setProducts(data);
-        if (data.length > 0 && !categoryName) setCategoryName(data[0].category_name);
       })
       .catch(err => console.error(err))
       .finally(() => setLoading(false));
   }, [category_slug]);
 
   useEffect(() => {
-    setProducts([]); setCategoryName(''); setSearchInput(''); setSearchQuery('');
-    fetchProducts('');
+    const initialSubcategory = searchParams.get('subcategory') || '';
+    setProducts([]); setSearchInput(''); setSearchQuery(''); setActiveSubcategory(initialSubcategory);
+    fetchProducts('', initialSubcategory);
   }, [category_slug]);
+
+  const handleSubcategoryClick = (slug) => {
+    setActiveSubcategory(slug);
+    setSearchParams(slug ? { subcategory: slug } : {});
+    fetchProducts(searchQuery, slug);
+  };
 
   const handleSearchChange = (e) => {
     const value = e.target.value;
     setSearchInput(value);
     clearTimeout(debounceRef.current);
-    debounceRef.current = setTimeout(() => { setSearchQuery(value); fetchProducts(value); }, 300);
+    debounceRef.current = setTimeout(() => { setSearchQuery(value); fetchProducts(value, activeSubcategory); }, 300);
   };
 
-  const clearSearch = () => { setSearchInput(''); setSearchQuery(''); fetchProducts(''); };
+  const clearSearch = () => { setSearchInput(''); setSearchQuery(''); fetchProducts('', activeSubcategory); };
 
   return (
     <div className="p-10 bg-gray-50 dark:bg-zinc-950 min-h-screen">
@@ -58,6 +77,34 @@ const CategoryProducts = () => {
         <h1 className="text-gray-900 dark:text-zinc-100 text-4xl font-bold">{categoryName || 'Products'}</h1>
         <p className="text-gray-500 dark:text-zinc-400 mt-2">{products.length} product{products.length !== 1 ? 's' : ''} available</p>
       </div>
+
+      {subcategories.length > 0 && (
+        <div className="flex flex-wrap gap-2 mb-8">
+          <button
+            onClick={() => handleSubcategoryClick('')}
+            className={`px-4 py-2 rounded-full text-sm font-semibold border transition-colors ${
+              !activeSubcategory
+                ? 'bg-accent text-white border-accent'
+                : 'bg-white dark:bg-zinc-900 text-gray-600 dark:text-zinc-300 border-gray-200 dark:border-white/10 hover:border-accent/40'
+            }`}
+          >
+            All
+          </button>
+          {subcategories.map((sub) => (
+            <button
+              key={sub.id}
+              onClick={() => handleSubcategoryClick(sub.slug)}
+              className={`px-4 py-2 rounded-full text-sm font-semibold border transition-colors ${
+                activeSubcategory === sub.slug
+                  ? 'bg-accent text-white border-accent'
+                  : 'bg-white dark:bg-zinc-900 text-gray-600 dark:text-zinc-300 border-gray-200 dark:border-white/10 hover:border-accent/40'
+              }`}
+            >
+              {sub.name}
+            </button>
+          ))}
+        </div>
+      )}
 
       <div className="relative mb-8 max-w-lg">
         <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 dark:text-zinc-500 pointer-events-none" />

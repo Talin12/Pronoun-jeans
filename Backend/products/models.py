@@ -1,19 +1,32 @@
 from decimal import Decimal, ROUND_HALF_UP
+from django.core.exceptions import ValidationError
 from django.db import models
 
 from core.utils.images import CompressedImageField
 
 
 class Category(models.Model):
-    name  = models.CharField(max_length=255)
-    slug  = models.SlugField(unique=True, max_length=255)
-    image = CompressedImageField(upload_to='categories/', null=True, blank=True)
+    name   = models.CharField(max_length=255)
+    slug   = models.SlugField(unique=True, max_length=255)
+    image  = CompressedImageField(upload_to='categories/', null=True, blank=True)
+    parent = models.ForeignKey(
+        'self', on_delete=models.CASCADE, null=True, blank=True,
+        related_name='subcategories',
+        help_text='Leave blank for a main category. Set this to nest it as a sub-category.',
+    )
 
     class Meta:
         verbose_name_plural = "Categories"
 
     def __str__(self):
-        return self.name
+        return f"{self.parent.name} → {self.name}" if self.parent_id else self.name
+
+    def clean(self):
+        if self.parent_id:
+            if self.pk and self.parent_id == self.pk:
+                raise ValidationError({'parent': 'A category cannot be its own parent.'})
+            if self.parent.parent_id:
+                raise ValidationError({'parent': 'Only one level of sub-categories is supported.'})
 
 
 class HeroSlide(models.Model):
@@ -33,6 +46,11 @@ class HeroSlide(models.Model):
 
 class Product(models.Model):
     category       = models.ForeignKey(Category, on_delete=models.SET_NULL, null=True, related_name="products")
+    subcategories  = models.ManyToManyField(
+        Category, blank=True, related_name='products_in_subcategory',
+        limit_choices_to={'parent__isnull': False},
+        help_text='Sub-categories (within the selected category) this product should also appear under.',
+    )
     name           = models.CharField(max_length=255)
     slug           = models.SlugField(unique=True, max_length=255)
     description    = models.TextField(blank=True)
