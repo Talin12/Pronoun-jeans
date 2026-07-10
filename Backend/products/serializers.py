@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import Category, Product, ProductVariation, ProductImage, VariationImage
+from .models import Category, Product, ProductVariation, ProductImage, VariationImage, ProductColorImage
 
 
 class SubCategorySerializer(serializers.ModelSerializer):
@@ -28,12 +28,19 @@ class VariationImageSerializer(serializers.ModelSerializer):
         fields = ['id', 'image', 'alt_text', 'order']
 
 
+class ProductColorImageSerializer(serializers.ModelSerializer):
+    class Meta:
+        model  = ProductColorImage
+        fields = ['id', 'image', 'alt_text', 'order']
+
+
 class ProductVariationSerializer(serializers.ModelSerializer):
     set_price         = serializers.DecimalField(source='b2b_price', max_digits=10, decimal_places=2, read_only=True)
     margin_percentage = serializers.SerializerMethodField()
     color_name        = serializers.SerializerMethodField()
     color_hex         = serializers.SerializerMethodField()
-    gallery_images    = VariationImageSerializer(many=True, read_only=True)
+    gallery_images    = serializers.SerializerMethodField()
+    pieces            = serializers.SerializerMethodField()
 
     size          = serializers.SerializerMethodField()
     size_display  = serializers.SerializerMethodField()
@@ -49,10 +56,29 @@ class ProductVariationSerializer(serializers.ModelSerializer):
             'per_piece_price',
             'mrp',
             'mrp_per_piece',
+            'pieces',
             'margin_percentage',
             'set_breakdown',
             'stock_quantity', 'image', 'gallery_images',
         ]
+
+    def get_gallery_images(self, obj):
+        """
+        Images are shared per product+color, uploaded once via
+        ProductColorImage. Falls back to this specific variation's own
+        legacy VariationImage gallery for older data that predates that
+        model (or if a variation has no color_palette set).
+        """
+        if obj.color_palette_id:
+            color_images = ProductColorImage.objects.filter(
+                product_id=obj.product_id, color_id=obj.color_palette_id
+            ).order_by('order', 'id')
+            if color_images.exists():
+                return ProductColorImageSerializer(color_images, many=True, context=self.context).data
+        return VariationImageSerializer(obj.gallery_images.all(), many=True, context=self.context).data
+
+    def get_pieces(self, obj):
+        return obj.pieces
 
     def get_size(self, obj):
         """Returns the size name string e.g. 'L TO 3XL'. Same as before."""

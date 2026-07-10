@@ -7,7 +7,7 @@ from django.utils.text import slugify
 
 from .models import (
     Category, Product, ProductImage, ProductVariation, VariationImage,
-    Color, HeroSlide, SizeSet, SizeSetBreakdown,
+    Color, HeroSlide, SizeSet, SizeSetBreakdown, ProductColorImage,
 )
 
 
@@ -58,7 +58,7 @@ class SizeSetBreakdownInline(admin.TabularInline):
     """
     model   = SizeSetBreakdown
     extra   = 1
-    fields  = ['label', 'breakdown_string']
+    fields  = ['label', 'breakdown_string', 'pieces']
 
 
 @admin.register(SizeSet)
@@ -100,6 +100,19 @@ class ProductVariationForm(forms.ModelForm):
         self.fields['size_set'].widget.attrs.update({'style': 'min-width:140px;'})
         self.fields['size_breakdown'].widget.attrs.update({'style': 'min-width:200px;'})
 
+    def clean(self):
+        cleaned = super().clean()
+        # b2b_price/mrp are now auto-calculated from the per-piece fields
+        # (see ProductVariation.save) and are readonly in the admin, so a
+        # brand-new variation needs per_piece_price to end up with a price
+        # at all. Existing variations that already have a b2b_price keep it
+        # untouched if per_piece_price is left blank (legacy data).
+        if cleaned.get('per_piece_price') is None:
+            has_existing_price = bool(self.instance.pk and self.instance.b2b_price is not None)
+            if not has_existing_price:
+                self.add_error('per_piece_price', 'Required — the total price is calculated from this.')
+        return cleaned
+
 
 # ── Inlines ───────────────────────────────────────────────────────────────────
 
@@ -110,6 +123,20 @@ class ProductImageInline(admin.TabularInline):
     ordering = ['order']
 
 
+class ProductColorImageInline(admin.TabularInline):
+    """
+    Upload a color's gallery once here and every variation of that product
+    in that color (e.g. a 3-piece set and a 5-piece set both "Beige")
+    automatically shows these same images — no need to re-upload per set.
+    """
+    model    = ProductColorImage
+    extra    = 0
+    fields   = ['color', 'image', 'alt_text', 'order']
+    ordering = ['color__name', 'order']
+    verbose_name        = 'Product Color Image'
+    verbose_name_plural = 'Product Color Images (shared across all set sizes of that color)'
+
+
 class ProductVariationInline(admin.TabularInline):
     model  = ProductVariation
     form   = ProductVariationForm
@@ -118,17 +145,19 @@ class ProductVariationInline(admin.TabularInline):
         'size_set',
         'color_palette',
         'sku',
-        'b2b_price',
         'size_breakdown',
         'per_piece_price',
-        'mrp',
         'mrp_per_piece',
+        'b2b_price',
+        'mrp',
         'stock_quantity',
         'image',
         'color',
         'variation_images_widget',
     ]
-    readonly_fields = ['color', 'variation_images_widget']
+    # b2b_price/mrp are auto-calculated (per-piece price × pieces in the
+    # selected set breakdown) — admins only enter the per-piece fields.
+    readonly_fields = ['color', 'variation_images_widget', 'b2b_price', 'mrp']
 
     def variation_images_widget(self, obj):
         from django.utils.html import mark_safe
@@ -164,9 +193,13 @@ class ProductVariationInline(admin.TabularInline):
         parts.append(
             '</div>'
             '<label style="cursor:pointer;font-size:12px;white-space:nowrap;color:#417690;">'
-            '+ Add images'
+            '+ Add images (this variation only)'
             '<input type="file" multiple accept="image/*" class="var-img-picker" style="display:none;">'
             '</label>'
+            '<div style="flex-basis:100%;font-size:11px;color:#999;">'
+            'Tip: if this color is shared by other set sizes, add images once under '
+            '"Product Color Images" below instead of repeating them per variation.'
+            '</div>'
             '</div>'
         )
         return mark_safe(''.join(parts))
@@ -187,7 +220,7 @@ def clone_products(modeladmin, request, queryset):
     for pk in original_pks:
         try:
             source = Product.objects.prefetch_related(
-                'variations__color_palette', 'gallery_images', 'subcategories'
+                'variations__color_palette', 'gallery_images', 'subcategories', 'color_images'
             ).get(pk=pk)
         except Product.DoesNotExist:
             continue
@@ -230,6 +263,15 @@ def clone_products(modeladmin, request, queryset):
             ni.alt_text = img.alt_text
             ni.order    = img.order
             ni.save()
+
+        for cimg in source.color_images.all():
+            nci          = ProductColorImage()
+            nci.product  = clone
+            nci.color    = cimg.color
+            nci.image    = cimg.image
+            nci.alt_text = cimg.alt_text
+            nci.order    = cimg.order
+            nci.save()
 
         cloned_ids.append(clone.pk)
 
@@ -342,7 +384,7 @@ class ProductAdmin(admin.ModelAdmin):
     prepopulated_fields = {'slug': ('name',)}
     ordering            = ['-created_at']
     actions             = [clone_products]
-    inlines             = [ProductImageInline, ProductVariationInline]
+    inlines             = [ProductImageInline, ProductColorImageInline, ProductVariationInline]
 
     fieldsets = (
         ('Product Info', {
@@ -366,12 +408,15 @@ class VariationImageInline(admin.TabularInline):
 
 @admin.register(ProductVariation)
 class ProductVariationAdmin(admin.ModelAdmin):
-    form          = ProductVariationForm
-    list_display  = ['sku', 'product', 'size_set', 'color', 'b2b_price', 'per_piece_price', 'mrp', 'mrp_per_piece', 'stock_quantity']
-    list_filter   = ['product__category', 'size_set']
-    search_fields = ['sku', 'product__name', 'color']
-    ordering      = ['product', 'size_set__name']
-    inlines       = [VariationImageInline]
+    form            = ProductVariationForm
+    list_display    = ['sku', 'product', 'size_set', 'color', 'b2b_price', 'per_piece_price', 'mrp', 'mrp_per_piece', 'stock_quantity']
+    list_filter     = ['product__category', 'size_set']
+    search_fields   = ['sku', 'product__name', 'color']
+    ordering        = ['product', 'size_set__name']
+    inlines         = [VariationImageInline]
+    # b2b_price/mrp are auto-calculated (per-piece price × pieces) — same
+    # as the inline on the Product page, kept consistent here.
+    readonly_fields = ['b2b_price', 'mrp']
 
     def get_urls(self):
         from django.urls import path

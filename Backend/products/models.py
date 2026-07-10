@@ -1,5 +1,6 @@
 from decimal import Decimal, ROUND_HALF_UP
 from django.core.exceptions import ValidationError
+from django.core.validators import MinValueValidator
 from django.db import models
 
 from core.utils.images import CompressedImageField
@@ -88,6 +89,28 @@ class Color(models.Model):
         return f"{self.name} ({self.hex_code})"
 
 
+class ProductColorImage(models.Model):
+    """
+    Gallery image for one color of a product, uploaded once and shared by
+    every variation of that product+color (e.g. a 3-piece and a 5-piece
+    "Beige" set both show the same images instead of needing separate
+    per-variation uploads).
+    """
+    product  = models.ForeignKey(Product, on_delete=models.CASCADE, related_name='color_images')
+    color    = models.ForeignKey(Color, on_delete=models.CASCADE, related_name='product_images')
+    image    = CompressedImageField(upload_to='products/colors/')
+    alt_text = models.CharField(max_length=255, blank=True)
+    order    = models.PositiveSmallIntegerField(default=0)
+
+    class Meta:
+        ordering            = ['product', 'color', 'order', 'id']
+        verbose_name        = 'Product Color Image'
+        verbose_name_plural = 'Product Color Images'
+
+    def __str__(self):
+        return f"{self.product.name} — {self.color.name} (#{self.pk})"
+
+
 # ── Size Sets ─────────────────────────────────────────────────────────────────
 
 class SizeSet(models.Model):
@@ -131,6 +154,12 @@ class SizeSetBreakdown(models.Model):
                                         help_text='Exact string stored on the variation and '
                                                   'shown to buyers in the tooltip. '
                                                   'Usually the same as the label.')
+    pieces           = models.PositiveIntegerField(
+        default=1,
+        validators=[MinValueValidator(1)],
+        help_text='Total garment pieces in this breakdown, e.g. "1xL, 1xXL, 1xXXL, 1x3XL" = 4. '
+                  'Used to auto-calculate a variation\'s total MRP/price from its per-piece price.',
+    )
 
     class Meta:
         unique_together     = ('size_set', 'breakdown_string')
@@ -191,6 +220,16 @@ class ProductVariation(models.Model):
                 setattr(self, field,
                         Decimal(str(val)).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP))
 
+        # Auto-calculate the set totals from the per-piece prices, e.g. a
+        # "Set of 3 PCS" breakdown multiplies per-piece price/MRP by 3.
+        # Only overrides when a per-piece value is actually given, so
+        # existing rows saved the old (manual-total) way are left alone.
+        pieces = self.size_breakdown.pieces if self.size_breakdown_id else 1
+        if self.per_piece_price is not None:
+            self.b2b_price = (self.per_piece_price * pieces).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
+        if self.mrp_per_piece is not None:
+            self.mrp = (self.mrp_per_piece * pieces).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
+
         if self.color_palette_id:
             palette = self.__dict__.get('color_palette')
             if palette is not None:
@@ -215,6 +254,11 @@ class ProductVariation(models.Model):
     def set_breakdown(self):
         """Returns the breakdown string, e.g. '1xL, 1xXL, 1xXXL, 1x3XL'."""
         return self.size_breakdown.breakdown_string if self.size_breakdown else ''
+
+    @property
+    def pieces(self):
+        """Number of garment pieces in this variation's set breakdown (1 if none)."""
+        return self.size_breakdown.pieces if self.size_breakdown else 1
 
     def __str__(self):
         product_name = (
