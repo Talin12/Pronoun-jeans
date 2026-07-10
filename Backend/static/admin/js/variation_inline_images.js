@@ -63,14 +63,20 @@
           body: fd,
         });
         const data = await resp.json();
-        data.images.forEach(img => {
+        (data.images || []).forEach(img => {
           const deleteUrl = uploadUrl.replace('upload-images/', `delete-image/${img.id}/`);
           const thumb = buildThumb(img.id, img.url, deleteUrl);
           thumbsWrap.appendChild(thumb);
           wireDeletes(widget);
         });
+        if (data.errors && data.errors.length) {
+          alert('Some images could not be uploaded:\n\n' + data.errors.join('\n'));
+        } else if (data.error) {
+          alert('Image upload failed: ' + data.error);
+        }
       } catch (e) {
         console.error('Variation image upload failed', e);
+        alert('Image upload failed. Please check your connection and try again.');
       }
 
       picker.value = '';

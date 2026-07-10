@@ -1,11 +1,13 @@
 from decimal import Decimal, ROUND_HALF_UP
 from django.db import models
 
+from core.utils.images import CompressedImageField
+
 
 class Category(models.Model):
     name  = models.CharField(max_length=255)
     slug  = models.SlugField(unique=True, max_length=255)
-    image = models.ImageField(upload_to='categories/', null=True, blank=True)
+    image = CompressedImageField(upload_to='categories/', null=True, blank=True)
 
     class Meta:
         verbose_name_plural = "Categories"
@@ -15,7 +17,7 @@ class Category(models.Model):
 
 
 class HeroSlide(models.Model):
-    image     = models.ImageField(upload_to='hero_slides/')
+    image     = CompressedImageField(upload_to='hero_slides/')
     caption   = models.CharField(max_length=255, blank=True)
     order     = models.PositiveSmallIntegerField(default=0)
     is_active = models.BooleanField(default=True)
@@ -37,7 +39,7 @@ class Product(models.Model):
     fabric_details = models.TextField(blank=True, null=True)
     is_active      = models.BooleanField(default=True)
     moq            = models.PositiveIntegerField(default=10)
-    image          = models.ImageField(upload_to='products/', blank=True, null=True)
+    image          = CompressedImageField(upload_to='products/', blank=True, null=True)
     created_at     = models.DateTimeField(auto_now_add=True)
 
     def __str__(self):
@@ -46,7 +48,7 @@ class Product(models.Model):
 
 class ProductImage(models.Model):
     product  = models.ForeignKey(Product, on_delete=models.CASCADE, related_name='gallery_images')
-    image    = models.ImageField(upload_to='products/gallery/')
+    image    = CompressedImageField(upload_to='products/gallery/')
     alt_text = models.CharField(max_length=255, blank=True)
     order    = models.PositiveSmallIntegerField(default=0)
 
@@ -157,7 +159,7 @@ class ProductVariation(models.Model):
     mrp_per_piece   = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
 
     stock_quantity  = models.PositiveIntegerField(default=0)
-    image           = models.ImageField(upload_to='variations/', null=True, blank=True)
+    image           = CompressedImageField(upload_to='variations/', null=True, blank=True)
 
     class Meta:
         # unique_together now uses size_set instead of size string
@@ -208,7 +210,7 @@ class ProductVariation(models.Model):
 
 class VariationImage(models.Model):
     variation = models.ForeignKey(ProductVariation, on_delete=models.CASCADE, related_name='gallery_images')
-    image     = models.ImageField(upload_to='variations/gallery/')
+    image     = CompressedImageField(upload_to='variations/gallery/')
     alt_text  = models.CharField(max_length=255, blank=True)
     order     = models.PositiveSmallIntegerField(default=0)
 

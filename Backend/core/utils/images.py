@@ -1,0 +1,122 @@
+"""
+Image upload handling: validation + automatic compression.
+
+Cloudinary (our media storage) rejects files larger than 10 MB, which
+previously surfaced as a bare 500 in the admin. Every image field should
+use CompressedImageField so that:
+  1. Oversized / non-image uploads fail with a friendly form error.
+  2. Valid images are downscaled and re-encoded before they reach
+     Cloudinary, so they never hit the 10 MB limit.
+"""
+
+import io
+import os
+
+from django.core.exceptions import ValidationError
+from django.db import models
+from django.template.defaultfilters import filesizeformat
+from PIL import Image, ImageOps
+
+# Reject anything above this outright — even compression shouldn't have to
+# chew through a file this big.
+MAX_UPLOAD_BYTES = 25 * 1024 * 1024
+
+# Long-edge cap and re-encode quality for stored images.
+MAX_DIMENSION = 2500
+JPEG_QUALITY = 85
+WEBP_QUALITY = 90
+
+# Files already below this size AND within MAX_DIMENSION are stored as-is.
+PASSTHROUGH_BYTES = int(2.5 * 1024 * 1024)
+
+
+def validate_image_upload(file):
+    """
+    Field/form validator: friendly errors instead of a 500.
+    Checks the size cap and that Pillow can actually read the file.
+    """
+    size = getattr(file, 'size', None)
+    if size and size > MAX_UPLOAD_BYTES:
+        raise ValidationError(
+            f'This image is too large ({filesizeformat(size)}). '
+            f'Please upload an image under {filesizeformat(MAX_UPLOAD_BYTES)}.'
+        )
+
+    try:
+        pos = file.tell()
+        img = Image.open(file)
+        img.verify()
+        file.seek(pos)
+    except Exception:
+        try:
+            file.seek(0)
+        except Exception:
+            pass
+        raise ValidationError(
+            'This file is not a supported image. '
+            'Please upload a JPEG, PNG or WebP image.'
+        )
+
+
+def compress_image(file, name):
+    """
+    Downscale to MAX_DIMENSION on the long edge and re-encode
+    (JPEG for opaque images, WebP when transparency must be kept).
+
+    Returns (content_bytes_io, new_name), or None if the file is already
+    small enough to store unchanged or cannot be processed (in which case
+    the caller should fall back to the original file).
+    """
+    try:
+        file.seek(0)
+        img = Image.open(file)
+        img.load()
+    except Exception:
+        return None
+
+    has_alpha = (
+        img.mode in ('RGBA', 'LA')
+        or (img.mode == 'P' and 'transparency' in img.info)
+    )
+
+    size = getattr(file, 'size', None) or 0
+    if size <= PASSTHROUGH_BYTES and max(img.size) <= MAX_DIMENSION:
+        file.seek(0)
+        return None
+
+    # Respect EXIF orientation before stripping metadata on re-encode.
+    img = ImageOps.exif_transpose(img)
+    img.thumbnail((MAX_DIMENSION, MAX_DIMENSION), Image.LANCZOS)
+
+    base, _ = os.path.splitext(os.path.basename(name))
+    buf = io.BytesIO()
+    if has_alpha:
+        img = img.convert('RGBA')
+        img.save(buf, 'WEBP', quality=WEBP_QUALITY)
+        new_name = f'{base}.webp'
+    else:
+        img = img.convert('RGB')
+        img.save(buf, 'JPEG', quality=JPEG_QUALITY, optimize=True)
+        new_name = f'{base}.jpg'
+    buf.seek(0)
+    return buf, new_name
+
+
+class CompressedImageField(models.ImageField):
+    """
+    ImageField that validates uploads (size + real image) and compresses
+    them in pre_save, so nothing oversized ever reaches Cloudinary.
+    """
+    default_validators = [validate_image_upload]
+
+    def pre_save(self, model_instance, add):
+        field_file = getattr(model_instance, self.attname)
+        # _committed is False only for freshly assigned uploads; existing
+        # files (e.g. product clones sharing an image) are left untouched.
+        if field_file and not field_file._committed:
+            result = compress_image(field_file.file, field_file.name)
+            if result is not None:
+                buf, new_name = result
+                field_file.file = buf
+                field_file.name = new_name
+        return super().pre_save(model_instance, add)

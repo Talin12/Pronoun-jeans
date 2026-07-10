@@ -341,7 +341,11 @@ class ProductVariationAdmin(admin.ModelAdmin):
         return custom_urls + urls
 
     def _upload_images(self, request, variation_id):
+        from django.core.exceptions import ValidationError
         from django.http import JsonResponse
+
+        from core.utils.images import validate_image_upload
+
         if request.method != 'POST':
             return JsonResponse({'error': 'POST only'}, status=405)
         try:
@@ -350,10 +354,18 @@ class ProductVariationAdmin(admin.ModelAdmin):
             return JsonResponse({'error': 'Not found'}, status=404)
         files   = request.FILES.getlist('images')
         created = []
+        errors  = []
         for f in files:
-            img = VariationImage.objects.create(variation=variation, image=f)
-            created.append({'id': img.pk, 'url': img.image.url})
-        return JsonResponse({'images': created})
+            try:
+                validate_image_upload(f)
+                img = VariationImage.objects.create(variation=variation, image=f)
+            except ValidationError as e:
+                errors.append(f'{f.name}: {e.messages[0]}')
+            except Exception:
+                errors.append(f'{f.name}: upload failed, please try again.')
+            else:
+                created.append({'id': img.pk, 'url': img.image.url})
+        return JsonResponse({'images': created, 'errors': errors})
 
     def _delete_image(self, request, variation_id, image_id):
         from django.http import JsonResponse

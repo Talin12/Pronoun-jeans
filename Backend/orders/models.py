@@ -2,6 +2,8 @@ from django.db import models
 from django.conf import settings
 from django.utils import timezone
 
+from core.utils.images import CompressedImageField
+
 
 class Coupon(models.Model):
     class DiscountType(models.TextChoices):
@@ -113,7 +115,7 @@ class Order(models.Model):
     )
     utr_number          = models.CharField(max_length=50, null=True, blank=True,
                                            help_text='UPI Transaction Reference ID provided by buyer')
-    payment_screenshot  = models.ImageField(
+    payment_screenshot  = CompressedImageField(
         upload_to='payment_receipts/',
         null=True, blank=True,
         help_text='Screenshot of payment success screen uploaded by buyer',
