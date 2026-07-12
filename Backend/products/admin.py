@@ -99,25 +99,30 @@ class ProductVariationForm(forms.ModelForm):
         self.fields['size_set'].queryset = SizeSet.objects.filter(is_active=True)
         self.fields['size_set'].widget.attrs.update({'style': 'min-width:140px;'})
         self.fields['size_breakdown'].widget.attrs.update({'style': 'min-width:200px;'})
+        # b2b_price has no blank=True on the model (it's the one price
+        # field that's always required at the DB level), but it's fine to
+        # leave blank on the form when per_piece_price is filled in —
+        # ProductVariation.save() auto-fills it from per_piece_price ×
+        # pieces in that case. clean() below still requires one or the
+        # other to be present.
+        self.fields['b2b_price'].required = False
 
     def clean(self):
         cleaned = super().clean()
-        # b2b_price/mrp are now auto-calculated from the per-piece fields
-        # (see ProductVariation.save) and are readonly in the admin, so a
-        # brand-new variation needs per_piece_price to end up with a price
-        # at all. Editing an existing *legacy* variation that never used
-        # per-piece pricing (per_piece_price was already blank before this
-        # edit) is still allowed to stay blank, keeping its manually-set
-        # b2b_price untouched. b2b_price itself can't be used as the "is
-        # this legacy" signal — it's a NOT NULL field, so it's always set
-        # on any saved row — so this checks the pre-edit per_piece_price
-        # instead (via the snapshot ProductVariation.__init__ captures).
-        if cleaned.get('per_piece_price') is None:
-            was_already_unset = bool(
-                self.instance.pk and self.instance._original_per_piece_price is None
+        # b2b_price/mrp auto-calculate from the per-piece fields (see
+        # ProductVariation.save) but stay directly editable, so the admin
+        # can correct the total by hand if the auto-calculated number
+        # looks wrong — editing them without also touching per_piece_price
+        # in the same save sticks, it won't get silently recalculated back
+        # (save() only recomputes when a per-piece input actually changed).
+        # At least one of per_piece_price / b2b_price must be given though,
+        # since b2b_price is required at the DB level.
+        if cleaned.get('per_piece_price') is None and cleaned.get('b2b_price') is None:
+            self.add_error(
+                'per_piece_price',
+                'Enter a per-piece price (the total is calculated automatically) '
+                'or fill in the total price directly.',
             )
-            if not was_already_unset:
-                self.add_error('per_piece_price', 'Required — the total price is calculated from this.')
         return cleaned
 
 
@@ -162,9 +167,10 @@ class ProductVariationInline(admin.TabularInline):
         'color',
         'variation_images_widget',
     ]
-    # b2b_price/mrp are auto-calculated (per-piece price × pieces in the
-    # selected set breakdown) — admins only enter the per-piece fields.
-    readonly_fields = ['color', 'variation_images_widget', 'b2b_price', 'mrp']
+    # b2b_price/mrp auto-fill from the per-piece fields × pieces in the
+    # selected set breakdown, but stay editable — the admin can correct
+    # the total by hand if it looks wrong (see ProductVariationForm).
+    readonly_fields = ['color', 'variation_images_widget']
 
     def variation_images_widget(self, obj):
         from django.utils.html import mark_safe
@@ -415,15 +421,12 @@ class VariationImageInline(admin.TabularInline):
 
 @admin.register(ProductVariation)
 class ProductVariationAdmin(admin.ModelAdmin):
-    form            = ProductVariationForm
-    list_display    = ['sku', 'product', 'size_set', 'color', 'b2b_price', 'per_piece_price', 'mrp', 'mrp_per_piece', 'stock_quantity']
-    list_filter     = ['product__category', 'size_set']
-    search_fields   = ['sku', 'product__name', 'color']
-    ordering        = ['product', 'size_set__name']
-    inlines         = [VariationImageInline]
-    # b2b_price/mrp are auto-calculated (per-piece price × pieces) — same
-    # as the inline on the Product page, kept consistent here.
-    readonly_fields = ['b2b_price', 'mrp']
+    form          = ProductVariationForm
+    list_display  = ['sku', 'product', 'size_set', 'color', 'b2b_price', 'per_piece_price', 'mrp', 'mrp_per_piece', 'stock_quantity']
+    list_filter   = ['product__category', 'size_set']
+    search_fields = ['sku', 'product__name', 'color']
+    ordering      = ['product', 'size_set__name']
+    inlines       = [VariationImageInline]
 
     def get_urls(self):
         from django.urls import path
