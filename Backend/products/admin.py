@@ -105,11 +105,18 @@ class ProductVariationForm(forms.ModelForm):
         # b2b_price/mrp are now auto-calculated from the per-piece fields
         # (see ProductVariation.save) and are readonly in the admin, so a
         # brand-new variation needs per_piece_price to end up with a price
-        # at all. Existing variations that already have a b2b_price keep it
-        # untouched if per_piece_price is left blank (legacy data).
+        # at all. Editing an existing *legacy* variation that never used
+        # per-piece pricing (per_piece_price was already blank before this
+        # edit) is still allowed to stay blank, keeping its manually-set
+        # b2b_price untouched. b2b_price itself can't be used as the "is
+        # this legacy" signal — it's a NOT NULL field, so it's always set
+        # on any saved row — so this checks the pre-edit per_piece_price
+        # instead (via the snapshot ProductVariation.__init__ captures).
         if cleaned.get('per_piece_price') is None:
-            has_existing_price = bool(self.instance.pk and self.instance.b2b_price is not None)
-            if not has_existing_price:
+            was_already_unset = bool(
+                self.instance.pk and self.instance._original_per_piece_price is None
+            )
+            if not was_already_unset:
                 self.add_error('per_piece_price', 'Required — the total price is calculated from this.')
         return cleaned
 

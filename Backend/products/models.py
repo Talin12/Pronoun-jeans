@@ -213,6 +213,18 @@ class ProductVariation(models.Model):
         unique_together = ("product", "size_set", "color")
         verbose_name    = "Product Variation"
 
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        # Snapshot of the pricing inputs as loaded from the DB (or as
+        # initially constructed, for a brand-new instance). save() compares
+        # against these to tell whether the admin actually changed a
+        # pricing input this time, vs. is just saving an unrelated field
+        # (e.g. stock_quantity) on a row that already has a price — see
+        # the dirty-check in save() below.
+        self._original_per_piece_price   = self.per_piece_price
+        self._original_mrp_per_piece     = self.mrp_per_piece
+        self._original_size_breakdown_id = self.size_breakdown_id
+
     def save(self, *args, **kwargs):
         for field in ('b2b_price', 'per_piece_price', 'mrp', 'mrp_per_piece'):
             val = getattr(self, field)
@@ -221,14 +233,26 @@ class ProductVariation(models.Model):
                         Decimal(str(val)).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP))
 
         # Auto-calculate the set totals from the per-piece prices, e.g. a
-        # "Set of 3 PCS" breakdown multiplies per-piece price/MRP by 3.
-        # Only overrides when a per-piece value is actually given, so
-        # existing rows saved the old (manual-total) way are left alone.
-        pieces = self.size_breakdown.pieces if self.size_breakdown_id else 1
-        if self.per_piece_price is not None:
-            self.b2b_price = (self.per_piece_price * pieces).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
-        if self.mrp_per_piece is not None:
-            self.mrp = (self.mrp_per_piece * pieces).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
+        # "Set of 3 PCS" breakdown multiplies per-piece price/MRP by 3 —
+        # but only when a pricing input actually changed (or this is a
+        # brand-new row). Without this guard, saving *any* field (e.g.
+        # stock_quantity) would silently recompute and overwrite a
+        # b2b_price/mrp that may have been deliberately set to something
+        # other than the formula result (a negotiated/rounded price) —
+        # and since these fields are readonly in the admin, that overwrite
+        # would happen with no visibility at all.
+        pricing_inputs_changed = (
+            self.pk is None
+            or self.per_piece_price != self._original_per_piece_price
+            or self.mrp_per_piece != self._original_mrp_per_piece
+            or self.size_breakdown_id != self._original_size_breakdown_id
+        )
+        if pricing_inputs_changed:
+            pieces = self.pieces
+            if self.per_piece_price is not None:
+                self.b2b_price = (self.per_piece_price * pieces).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
+            if self.mrp_per_piece is not None:
+                self.mrp = (self.mrp_per_piece * pieces).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
 
         if self.color_palette_id:
             palette = self.__dict__.get('color_palette')
@@ -242,6 +266,10 @@ class ProductVariation(models.Model):
                     self.color = color_name
 
         super().save(*args, **kwargs)
+
+        self._original_per_piece_price   = self.per_piece_price
+        self._original_mrp_per_piece     = self.mrp_per_piece
+        self._original_size_breakdown_id = self.size_breakdown_id
 
     # ── Convenience properties used by serializer ─────────────────────────────
 
