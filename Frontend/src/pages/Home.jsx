@@ -132,8 +132,10 @@ const Home = () => {
           : <div className="absolute inset-0 bg-zinc-900 animate-pulse" />
         }
 
-        {/* Text always on top */}
-        <div className="relative z-20 h-full flex items-center">
+        {/* Text always on top — pointer-events-none so this full-bleed layer
+            doesn't swallow clicks meant for the slideshow's arrow buttons
+            underneath it; re-enabled on the actual buttons below. */}
+        <div className="relative z-20 h-full flex items-center pointer-events-none">
           <div className="max-w-5xl mx-auto px-6 sm:px-10 w-full">
             <div className="max-w-2xl">
               <span className="inline-block text-white/70 text-xs font-black uppercase tracking-[0.25em] mb-5 bg-white/10 backdrop-blur-sm border border-white/20 px-3 py-1.5 rounded-full">
@@ -149,11 +151,11 @@ const Home = () => {
               </p>
               <div className="flex items-center gap-4 flex-wrap">
                 <button onClick={() => navigate('/catalog')}
-                  className="inline-flex items-center gap-2 bg-accent hover:bg-red-700 text-white font-bold px-8 py-3.5 rounded-full transition-colors text-sm shadow-lg shadow-accent/30">
+                  className="pointer-events-auto inline-flex items-center gap-2 bg-accent hover:bg-red-700 text-white font-bold px-8 py-3.5 rounded-full transition-colors text-sm shadow-lg shadow-accent/30">
                   Browse Catalog <ArrowRight className="w-4 h-4" />
                 </button>
                 <button onClick={() => navigate('/about')}
-                  className="inline-flex items-center gap-2 bg-white/10 hover:bg-white/20 backdrop-blur-sm border border-white/30 text-white font-bold px-8 py-3.5 rounded-full transition-colors text-sm">
+                  className="pointer-events-auto inline-flex items-center gap-2 bg-white/10 hover:bg-white/20 backdrop-blur-sm border border-white/30 text-white font-bold px-8 py-3.5 rounded-full transition-colors text-sm">
                   Our Story
                 </button>
               </div>
