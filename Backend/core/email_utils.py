@@ -77,6 +77,25 @@ def send_onboarding_welcome_email(user):
     )
 
 
+def send_b2b_approved_email(user):
+    # Users who signed up themselves already have a password and just need to
+    # log in. If an approved account somehow has no usable password, include a
+    # set-password link so they can still get in.
+    context = {
+        'user':         user,
+        'frontend_url': settings.FRONTEND_URL,
+        'login_link':   f"{settings.FRONTEND_URL}/login",
+    }
+    if not user.has_usable_password():
+        context['set_password_link'], _, _ = _make_reset_link(user)
+    _send(
+        subject  = "You're approved — welcome to Pronoun Jeans B2B",
+        template = 'emails/b2b_approved.html',
+        context  = context,
+        to       = user.email,
+    )
+
+
 def send_request_access_received_email(user):
     _send(
         subject  = 'We received your request — Pronoun Jeans',

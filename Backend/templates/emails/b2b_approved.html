@@ -1,0 +1,64 @@
+{% extends "emails/base_email.html" %}
+{% block content %}
+
+<p style="margin:0 0 6px;font-size:12px;font-weight:700;color:#c62828;text-transform:uppercase;letter-spacing:1.5px;">Account Approved</p>
+<h1 style="margin:0 0 20px;font-size:26px;font-weight:700;color:#111111;line-height:1.2;">You're approved. Welcome aboard.</h1>
+
+<p style="margin:0 0 16px;font-size:15px;color:#555555;line-height:1.7;">
+  Hi {% if user.first_name %}{{ user.first_name }}{% else %}there{% endif %}, great news — your Pronoun Jeans B2B account{% if user.company_name %} for <strong>{{ user.company_name }}</strong>{% endif %} has been reviewed and approved. You now have full access to wholesale pricing and can start placing orders.
+</p>
+<p style="margin:0 0 32px;font-size:15px;color:#555555;line-height:1.7;">
+  {% if set_password_link %}First, set up your password to access your account.{% else %}Just log in with your email and password to get started.{% endif %}
+</p>
+
+<!-- CTA Button -->
+<table cellpadding="0" cellspacing="0" role="presentation" style="margin:0 0 36px;">
+  <tr>
+    <td style="border-radius:4px;background-color:#c62828;">
+      {% if set_password_link %}
+      <a href="{{ set_password_link }}" style="display:inline-block;padding:14px 36px;font-size:15px;font-weight:600;color:#ffffff;text-decoration:none;letter-spacing:0.3px;">Set My Password</a>
+      {% else %}
+      <a href="{{ login_link }}" style="display:inline-block;padding:14px 36px;font-size:15px;font-weight:600;color:#ffffff;text-decoration:none;letter-spacing:0.3px;">Log In & Start Ordering</a>
+      {% endif %}
+    </td>
+  </tr>
+</table>
+
+<!-- Account details card -->
+<table cellpadding="0" cellspacing="0" role="presentation" width="100%" style="background:#fafafa;border:1px solid #eeeeee;border-radius:4px;margin:0 0 28px;">
+  <tr>
+    <td style="padding:20px 24px;">
+      <p style="margin:0 0 12px;font-size:12px;font-weight:700;color:#444444;text-transform:uppercase;letter-spacing:1px;">Your account details</p>
+      <table cellpadding="0" cellspacing="0" role="presentation" width="100%">
+        <tr>
+          <td style="padding:4px 0;font-size:13px;color:#888888;width:90px;">Email</td>
+          <td style="padding:4px 0;font-size:14px;font-weight:600;color:#222222;">{{ user.email }}</td>
+        </tr>
+        {% if user.company_name %}
+        <tr>
+          <td style="padding:4px 0;font-size:13px;color:#888888;">Company</td>
+          <td style="padding:4px 0;font-size:14px;color:#444444;">{{ user.company_name }}</td>
+        </tr>
+        {% endif %}
+        {% if user.phone_number %}
+        <tr>
+          <td style="padding:4px 0;font-size:13px;color:#888888;">Phone</td>
+          <td style="padding:4px 0;font-size:14px;color:#444444;">{{ user.phone_number }}</td>
+        </tr>
+        {% endif %}
+      </table>
+    </td>
+  </tr>
+</table>
+
+{% if set_password_link %}
+<p style="margin:0;font-size:13px;color:#aaaaaa;line-height:1.6;">
+  This setup link expires in 24 hours. If it expires, use the "Forgot Password" option on the login page.
+</p>
+{% else %}
+<p style="margin:0;font-size:14px;color:#888888;line-height:1.7;">
+  Questions? Reply to this email or reach us at <a href="mailto:pronounjeans@gmail.com" style="color:#c62828;text-decoration:none;">pronounjeans@gmail.com</a>
+</p>
+{% endif %}
+
+{% endblock %}
