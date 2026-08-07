@@ -398,6 +398,7 @@ class ProductAdmin(admin.ModelAdmin):
     ordering            = ['-created_at']
     actions             = [clone_products]
     inlines             = [ProductImageInline, ProductColorImageInline, ProductVariationInline]
+    readonly_fields     = ['media_library_gallery']
 
     fieldsets = (
         ('Product Info', {
@@ -406,7 +407,27 @@ class ProductAdmin(admin.ModelAdmin):
         ('Media', {
             'fields': ('image',),
         }),
+        ('Media Library (shared — upload once, reuse anywhere)', {
+            'fields': ('media_library_gallery',),
+            'description': 'Pick images from the shared library instead of re-uploading. '
+                           'Alt text is edited on the image itself and reused everywhere it appears (an SEO win).',
+        }),
     )
+
+    class Media:
+        css = {'all': ('medialib/css/media_picker.css',)}
+        js  = ('medialib/js/media_picker.js',)
+
+    def media_library_gallery(self, obj):
+        from django.utils.html import format_html
+        if not obj or not obj.pk:
+            return format_html('<span style="color:#999;">Save the product first to add library images.</span>')
+        return format_html(
+            '<div class="media-picker-field" data-api-base="/admin/medialib/api/" '
+            'data-type="product" data-id="{}" data-role="gallery" data-folder="products/gallery"></div>',
+            obj.pk,
+        )
+    media_library_gallery.short_description = 'Shared gallery'
 
 
 class VariationImageInline(admin.TabularInline):

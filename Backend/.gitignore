@@ -17,4 +17,15 @@ db.sqlite3-journal
 # Media
 media/
 
+# Media-library rehearsal (CONTAINS PRODUCTION DATA — never commit)
+# Scripts (*.sh) and core/settings_rehearsal.py are tracked; data/reports are not.
+rehearsal/*.sql
+rehearsal/*.dump
+rehearsal/*.json
+rehearsal/*.log
+rehearsal/report_*.txt
+rehearsal/.env.rehearsal
+migrate_media.checkpoint.json
+migrate_media*.log
+
 .DS_Store

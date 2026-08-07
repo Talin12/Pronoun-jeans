@@ -3,6 +3,7 @@ import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { ArrowLeft, Package, Loader, BadgeCheck, Search, X, Lock } from 'lucide-react';
 import api from '../api/axios';
 import { useAuthStore } from '../store/useAuthStore';
+import ResponsiveImage from '../components/shared/ResponsiveImage';
 
 const CategoryProducts = () => {
   const { category_slug } = useParams();
@@ -138,7 +139,8 @@ const CategoryProducts = () => {
               className="group bg-white dark:bg-zinc-900 rounded-2xl overflow-hidden border border-gray-200 dark:border-white/5 hover:border-gray-300 dark:hover:border-white/20 hover:shadow-md transition-all duration-300 hover:-translate-y-1 cursor-pointer">
               <div className="h-64 overflow-hidden relative bg-gray-100 dark:bg-zinc-900">
                 {product.image ? (
-                  <img src={product.image} alt={product.name}
+                  <ResponsiveImage src={product.image} alt={product.name}
+                    sizes="(max-width: 768px) 100vw, (max-width: 1024px) 50vw, 33vw"
                     className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
                     onError={(e) => { e.target.style.display = 'none'; }} />
                 ) : (

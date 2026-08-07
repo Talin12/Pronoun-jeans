@@ -36,6 +36,7 @@ INSTALLED_APPS = [
     'accounts',
     'products',
     'orders',
+    'medialib',
     'django.contrib.humanize',
 ]
 

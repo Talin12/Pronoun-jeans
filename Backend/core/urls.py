@@ -11,6 +11,7 @@ admin.site.site_title   = 'Pronoun Jeans'
 admin.site.index_title  = 'Dashboard'
 
 urlpatterns = [
+    path('admin/medialib/', include('medialib.urls')),
     path('admin/', admin.site.urls),
     path('api/products/', include('products.urls')),
     path('api/auth/token/', B2BTokenObtainPairView.as_view(), name='token_obtain_pair'),

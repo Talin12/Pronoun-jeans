@@ -7,6 +7,7 @@ import {
 import api from '../api/axios';
 import { useAuthStore } from '../store/useAuthStore';
 import { useCartStore } from '../store/useCartStore';
+import ResponsiveImage from '../components/shared/ResponsiveImage';
 
 const decodeHtml = (text) => {
   if (!text) return '';
@@ -108,7 +109,9 @@ const ZoomableImage = ({ src, alt }) => {
         onMouseEnter={() => setZooming(true)}
         onMouseLeave={() => setZooming(false)}
         onMouseMove={handleMouseMove}>
-        <img src={src} alt={alt} className="w-full h-full object-cover" draggable={false}
+        <ResponsiveImage src={src} alt={alt} priority
+          sizes="(max-width: 1024px) 100vw, 50vw"
+          className="w-full h-full object-cover" draggable={false}
           onError={(e) => { e.target.style.display = 'none'; }} />
         {zooming && (
           <div className="absolute border-2 border-accent/50 bg-white/20 pointer-events-none"

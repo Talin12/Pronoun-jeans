@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Tag, ArrowRight, Loader } from 'lucide-react';
 import api from '../api/axios';
+import ResponsiveImage from '../components/shared/ResponsiveImage';
 
 const Catalog = () => {
   const [categories, setCategories] = useState([]);
@@ -40,7 +41,8 @@ const Catalog = () => {
           >
             <div className="h-72 overflow-hidden bg-gray-100 dark:bg-zinc-900">
               {category.image ? (
-                <img src={category.image} alt={category.name}
+                <ResponsiveImage src={category.image} alt={category.name}
+                  sizes="(max-width: 768px) 100vw, 50vw"
                   className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
                   onError={(e) => { e.target.style.display = 'none'; }} />
               ) : (

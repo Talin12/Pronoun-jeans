@@ -41,6 +41,32 @@ class ProductViewSet(viewsets.ReadOnlyModelViewSet):
     filter_backends  = [filters.SearchFilter]
     search_fields    = ['name', 'slug', 'variations__sku']
 
+    def get_serializer(self, *args, **kwargs):
+        """
+        Batch-load shared media-library attachments for every product being
+        serialised (list page or single detail) in ONE query, so the
+        `library_media` field never triggers N+1. The map is threaded through
+        serializer context. MediaAttachment is polymorphic (no FK back to
+        Product), so this can't be a plain prefetch_related.
+        """
+        if args:
+            instance = args[0]
+            objs = instance if isinstance(instance, (list, tuple)) else [instance]
+            ids = [o.id for o in objs if getattr(o, 'id', None) is not None]
+            if ids:
+                from collections import defaultdict
+                from medialib.models import MediaAttachment
+                mapping = defaultdict(list)
+                atts = (MediaAttachment.objects
+                        .filter(attachable_type='product', attachable_id__in=ids,
+                                media__deleted_at__isnull=True)
+                        .select_related('media').order_by('sort_order', 'id'))
+                for a in atts:
+                    mapping[a.attachable_id].append(a)
+                ctx = kwargs.setdefault('context', self.get_serializer_context())
+                ctx['media_by_product'] = mapping
+        return super().get_serializer(*args, **kwargs)
+
     def get_queryset(self):
         queryset = (
             Product.objects

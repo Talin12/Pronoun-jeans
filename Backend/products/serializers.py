@@ -133,11 +133,28 @@ class ProductSerializer(serializers.ModelSerializer):
     category_name  = serializers.CharField(source='category.name', read_only=True)
     gallery_images = ProductImageSerializer(many=True, read_only=True)
     subcategories  = SubCategorySerializer(many=True, read_only=True)
+    # Additive: shared media-library images for this product. Empty until the
+    # Phase 5 migration runs, so existing clients keep working off `image` /
+    # `gallery_images`. The view batches these into context to avoid N+1.
+    library_media  = serializers.SerializerMethodField()
 
     class Meta:
         model  = Product
         fields = [
             'id', 'name', 'slug', 'description', 'fabric_details',
             'category', 'category_name', 'subcategories', 'is_active', 'moq',
-            'image', 'created_at', 'variations', 'gallery_images',
+            'image', 'created_at', 'variations', 'gallery_images', 'library_media',
         ]
+
+    def get_library_media(self, obj):
+        from medialib.presenters import serialize_attachment
+        mapping = self.context.get('media_by_product')
+        if mapping is not None:
+            atts = mapping.get(obj.id, [])
+        else:
+            from medialib.models import MediaAttachment
+            atts = (MediaAttachment.objects
+                    .filter(attachable_type='product', attachable_id=obj.id,
+                            media__deleted_at__isnull=True)
+                    .select_related('media').order_by('sort_order', 'id'))
+        return [serialize_attachment(a) for a in atts]

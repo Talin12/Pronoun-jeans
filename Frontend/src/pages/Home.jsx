@@ -2,6 +2,7 @@ import React, { useEffect, useState, useRef } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Package, Truck, ShieldCheck, ArrowRight, Tag, ChevronLeft, ChevronRight } from 'lucide-react';
 import api from '../api/axios';
+import ResponsiveImage from '../components/shared/ResponsiveImage';
 
 const TRUST_BADGES = [
   { icon: Package,     title: 'Bulk Pricing',        desc: 'Exclusive B2B rates on every SKU with tiered MOQ discounts.'   },
@@ -49,10 +50,12 @@ const HeroSlideshow = ({ slides }) => {
     <>
       {/* Current slide image — cross-fade via opacity */}
       <div className={`absolute inset-0 transition-opacity duration-500 ease-in-out ${fading ? 'opacity-0' : 'opacity-100'}`}>
-        <img
+        <ResponsiveImage
           key={slide.id}
           src={slide.image}
           alt={slide.caption || `Slide ${current + 1}`}
+          priority
+          sizes="100vw"
           className="w-full h-full object-cover object-center"
         />
       </div>
@@ -203,7 +206,8 @@ const Home = () => {
                   className="group relative bg-white dark:bg-zinc-900 rounded-2xl overflow-hidden border border-gray-200 dark:border-white/5 hover:border-accent/40 hover:shadow-md transition-all duration-300 hover:-translate-y-1">
                   {cat.image ? (
                     <div className="h-48 overflow-hidden bg-gray-100 dark:bg-zinc-800">
-                      <img src={cat.image} alt={cat.name}
+                      <ResponsiveImage src={cat.image} alt={cat.name}
+                        sizes="(max-width: 768px) 100vw, 33vw"
                         className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
                         onError={(e) => { e.target.style.display = 'none'; }} />
                     </div>
