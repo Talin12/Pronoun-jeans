@@ -80,3 +80,22 @@
 .app-wrapper > .control-sidebar {
     position: fixed !important;
 }
+
+/* --------------------------------------------------------------------------
+   FIX: admin LOGIN logo invisible on the dark login screen.
+
+   admin/img/logo.png is a light-background logo (black "P", dark-grey
+   "PRO-NOUN" wordmark). Jazzmin's login uses a dark background, so the black
+   and grey parts nearly disappear — only the red arrow shows. Give the login
+   logo a white rounded backdrop so all brand colours read properly. Scoped to
+   .login-logo (login page only) so the main admin sidebar logo is untouched.
+   -------------------------------------------------------------------------- */
+.login-logo img {
+    background: #ffffff;
+    padding: 16px 24px;
+    border-radius: 14px;
+    max-width: 320px;
+    width: 80%;
+    height: auto;
+    box-shadow: 0 2px 14px rgba(0, 0, 0, 0.25);
+}
