@@ -1,6 +1,7 @@
 from django.contrib import admin
 from django.db.models import Count
 from django.utils.html import format_html, format_html_join
+from django.utils.safestring import mark_safe
 
 from . import presenters
 from .models import MediaAsset, MediaAttachment
@@ -59,9 +60,10 @@ class MediaAssetAdmin(admin.ModelAdmin):
 
     def label(self, obj):
         name = obj.title or obj.original_filename or obj.storage_key
-        alt_note = '' if obj.alt_text else ' · <span style="color:#e67e22;">no alt text</span>'
+        alt_note = '' if obj.alt_text else mark_safe(
+            ' · <span style="color:#e67e22;">no alt text</span>')
         return format_html('<b>{}</b><br><small style="color:#888;">{}{}</small>',
-                           name, obj.mime_type or '', format_html(alt_note))
+                           name, obj.mime_type or '', alt_note)
     label.short_description = 'Image'
 
     def used_in(self, obj):
@@ -92,7 +94,7 @@ class MediaAssetAdmin(admin.ModelAdmin):
             return '—'
         rows = presenters.usage_for(obj)
         if not rows:
-            return format_html('<span style="color:#888;">Not used anywhere yet.</span>')
+            return mark_safe('<span style="color:#888;">Not used anywhere yet.</span>')
         return format_html(
             '<ul style="margin:0;padding-left:18px;">{}</ul>',
             format_html_join(

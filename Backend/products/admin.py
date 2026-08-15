@@ -420,8 +420,9 @@ class ProductAdmin(admin.ModelAdmin):
 
     def media_library_gallery(self, obj):
         from django.utils.html import format_html
+        from django.utils.safestring import mark_safe
         if not obj or not obj.pk:
-            return format_html('<span style="color:#999;">Save the product first to add library images.</span>')
+            return mark_safe('<span style="color:#999;">Save the product first to add library images.</span>')
         return format_html(
             '<div class="media-picker-field" data-api-base="/admin/medialib/api/" '
             'data-type="product" data-id="{}" data-role="gallery" data-folder="products/gallery"></div>',
