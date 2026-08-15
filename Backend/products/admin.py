@@ -1,10 +1,12 @@
 from django import forms
 from django.contrib import admin, messages
 from django.contrib.admin import AdminSite
+from django.db.models import Count
 from django.http import HttpResponseRedirect
 from django.urls import reverse
 from django.utils.text import slugify
 
+from core.utils.images import thumbnail_url
 from .models import (
     Category, Product, ProductImage, ProductVariation, VariationImage,
     Color, HeroSlide, SizeSet, SizeSetBreakdown, ProductColorImage,
@@ -42,7 +44,7 @@ class HeroSlideAdmin(admin.ModelAdmin):
         if obj.image:
             return format_html(
                 '<img src="{}" style="height:48px;border-radius:6px;object-fit:cover;" />',
-                obj.image.url,
+                thumbnail_url(obj.image, 96),
             )
         return '—'
     preview.short_description = 'Preview'
@@ -68,9 +70,15 @@ class SizeSetAdmin(admin.ModelAdmin):
     ordering      = ['order', 'name']
     inlines       = [SizeSetBreakdownInline]
 
+    def get_queryset(self, request):
+        # Count breakdowns in the list query instead of one COUNT per row.
+        return super().get_queryset(request).annotate(_breakdowns=Count('breakdowns'))
+
     def breakdown_count(self, obj):
-        return obj.breakdowns.count()
+        n = getattr(obj, '_breakdowns', None)
+        return obj.breakdowns.count() if n is None else n
     breakdown_count.short_description = 'Breakdowns'
+    breakdown_count.admin_order_field = '_breakdowns'
 
     class Media:
         js = ('admin/js/set_breakdown_builder.js',)
@@ -195,7 +203,7 @@ class ProductVariationInline(admin.TabularInline):
             parts.append(
                 f'<div class="var-thumb" data-image-id="{img.pk}" '
                 f'style="position:relative;display:inline-block;">'
-                f'<img src="{img.image.url}" '
+                f'<img src="{thumbnail_url(img.image, 96)}" '
                 f'style="height:48px;width:48px;object-fit:cover;border-radius:4px;">'
                 f'<button type="button" class="var-thumb-del" data-url="{delete_url}" '
                 f'style="position:absolute;top:-6px;right:-6px;background:#e74c3c;color:#fff;'
@@ -351,10 +359,13 @@ class CategoryAdmin(admin.ModelAdmin):
 
 @admin.register(ProductImage)
 class ProductImageAdmin(admin.ModelAdmin):
-    list_display  = ['product', 'alt_text', 'order']
-    list_filter   = ['product']
-    search_fields = ['product__name', 'alt_text']
-    ordering      = ['product', 'order']
+    list_display        = ['product', 'alt_text', 'order']
+    list_select_related = ['product']
+    # RelatedOnly limits the filter dropdown to products that actually have
+    # images, instead of loading every product row into the sidebar.
+    list_filter         = [('product', admin.RelatedOnlyFieldListFilter)]
+    search_fields       = ['product__name', 'alt_text']
+    ordering            = ['product', 'order']
 
 
 class ProductAdminForm(forms.ModelForm):
@@ -392,6 +403,7 @@ class ProductAdminForm(forms.ModelForm):
 class ProductAdmin(admin.ModelAdmin):
     form                = ProductAdminForm
     list_display        = ['name', 'category', 'is_active', 'moq', 'created_at']
+    list_select_related = ['category']
     list_filter         = ['is_active', 'category']
     search_fields       = ['name', 'slug']
     prepopulated_fields = {'slug': ('name',)}
@@ -443,12 +455,14 @@ class VariationImageInline(admin.TabularInline):
 
 @admin.register(ProductVariation)
 class ProductVariationAdmin(admin.ModelAdmin):
-    form          = ProductVariationForm
-    list_display  = ['sku', 'product', 'size_set', 'color', 'b2b_price', 'per_piece_price', 'mrp', 'mrp_per_piece', 'stock_quantity']
-    list_filter   = ['product__category', 'size_set']
-    search_fields = ['sku', 'product__name', 'color']
-    ordering      = ['product', 'size_set__name']
-    inlines       = [VariationImageInline]
+    form                = ProductVariationForm
+    list_display        = ['sku', 'product', 'size_set', 'color', 'b2b_price', 'per_piece_price', 'mrp', 'mrp_per_piece', 'stock_quantity']
+    list_select_related = ['product', 'size_set']
+    autocomplete_fields = ['product']
+    list_filter         = ['product__category', 'size_set']
+    search_fields       = ['sku', 'product__name', 'color']
+    ordering            = ['product', 'size_set__name']
+    inlines             = [VariationImageInline]
 
     def get_urls(self):
         from django.urls import path

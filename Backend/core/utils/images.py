@@ -12,6 +12,7 @@ use CompressedImageField so that:
 import io
 import os
 
+import cloudinary.utils
 from django.core.exceptions import ValidationError
 from django.db import models
 from django.template.defaultfilters import filesizeformat
@@ -56,6 +57,31 @@ def validate_image_upload(file):
             'This file is not a supported image. '
             'Please upload a JPEG, PNG or WebP image.'
         )
+
+
+def thumbnail_url(image_field, width=96):
+    """
+    A small CDN-resized delivery URL for admin thumbnails (w_/f_auto/q_auto).
+
+    The image itself is unchanged — Cloudinary just serves a scaled copy on the
+    fly — so an admin list/inline downloads a few KB per thumb instead of the
+    multi-MB original. Same technique medialib's picker already uses. Falls back
+    to the raw `.url` if the field is empty or a transform URL can't be built.
+    """
+    if not image_field:
+        return ''
+    try:
+        public_id = os.path.splitext(image_field.name)[0]
+        url, _ = cloudinary.utils.cloudinary_url(
+            public_id, width=width, crop='limit',
+            fetch_format='auto', quality='auto', secure=True,
+        )
+        return url
+    except Exception:
+        try:
+            return image_field.url
+        except Exception:
+            return ''
 
 
 def compress_image(file, name):

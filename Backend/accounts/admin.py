@@ -5,17 +5,21 @@ from .models import CustomUser, AgentProfile, AgentPayment, Address
 
 @admin.register(AgentProfile)
 class AgentProfileAdmin(admin.ModelAdmin):
-    list_display  = ['user', 'agent_code', 'commission_percentage']
-    search_fields = ['user__email', 'agent_code']
-    ordering      = ['agent_code']
+    list_display        = ['user', 'agent_code', 'commission_percentage']
+    list_select_related = ['user']
+    autocomplete_fields = ['user']
+    search_fields       = ['user__email', 'agent_code']
+    ordering            = ['agent_code']
 
 
 @admin.register(AgentPayment)
 class AgentPaymentAdmin(admin.ModelAdmin):
-    list_display  = ['agent', 'amount', 'paid_on', 'utr_reference', 'created_at']
-    list_filter   = ['agent', 'paid_on']
-    search_fields = ['agent__email', 'utr_reference']
-    ordering      = ['-paid_on']
+    list_display        = ['agent', 'amount', 'paid_on', 'utr_reference', 'created_at']
+    list_select_related = ['agent']
+    autocomplete_fields = ['agent']
+    list_filter         = ['agent', 'paid_on']
+    search_fields       = ['agent__email', 'utr_reference']
+    ordering            = ['-paid_on']
     fieldsets = (
         ('Payout Details', {
             'fields': ('agent', 'amount', 'paid_on', 'utr_reference', 'notes'),
@@ -30,6 +34,8 @@ class CustomUserAdmin(UserAdmin):
         'is_verified_b2b', 'is_agent', 'agent_can_order', 'assigned_agent', 'is_staff', 'date_joined',
     ]
     readonly_fields = ['agent_can_order']
+    list_select_related = ['assigned_agent']
+    autocomplete_fields = ['assigned_agent']
     list_filter   = ['is_verified_b2b', 'is_agent', 'is_staff', 'is_active', 'agent_can_order']
     search_fields = ['email', 'company_name', 'gst_number', 'phone_number']
     ordering      = ['-date_joined']
@@ -60,6 +66,8 @@ class CustomUserAdmin(UserAdmin):
 
 @admin.register(Address)
 class AddressAdmin(admin.ModelAdmin):
-    list_display  = ['user', 'address_line_1', 'city', 'state', 'pincode', 'is_default_shipping', 'is_default_billing']
-    list_filter   = ['state', 'is_default_shipping', 'is_default_billing']
-    search_fields = ['user__email', 'city', 'pincode']
+    list_display        = ['user', 'address_line_1', 'city', 'state', 'pincode', 'is_default_shipping', 'is_default_billing']
+    list_select_related = ['user']
+    autocomplete_fields = ['user']
+    list_filter         = ['state', 'is_default_shipping', 'is_default_billing']
+    search_fields       = ['user__email', 'city', 'pincode']
