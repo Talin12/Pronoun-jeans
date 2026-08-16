@@ -56,6 +56,9 @@ export const createColor = (data) =>
 export const listSizeSets = () =>
   api.get('admin/size-sets/').then(r => r.data);
 
+export const createSizeSet = (data) =>
+  api.post('admin/size-sets/', data).then(r => r.data);
+
 // ── Media library ──────────────────────────────────────────────────────────
 export const listAssets = (params = {}) =>
   api.get('admin/media/assets/', { params }).then(r => r.data);

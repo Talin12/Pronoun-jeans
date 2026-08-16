@@ -37,12 +37,38 @@ class SizeSetBreakdownSerializer(serializers.ModelSerializer):
         fields = ['id', 'size_set', 'label', 'breakdown_string', 'pieces']
 
 
+class SizeSetBreakdownNestedSerializer(serializers.ModelSerializer):
+    """Breakdown as written inside a SizeSet create/update (no size_set FK)."""
+    class Meta:
+        model  = SizeSetBreakdown
+        fields = ['id', 'label', 'breakdown_string', 'pieces']
+
+
 class SizeSetSerializer(serializers.ModelSerializer):
-    breakdowns = SizeSetBreakdownSerializer(many=True, read_only=True)
+    breakdowns = SizeSetBreakdownNestedSerializer(many=True, required=False)
 
     class Meta:
         model  = SizeSet
         fields = ['id', 'name', 'is_active', 'order', 'breakdowns']
+
+    def create(self, validated):
+        breakdowns = validated.pop('breakdowns', [])
+        size_set = SizeSet.objects.create(**validated)
+        for b in breakdowns:
+            SizeSetBreakdown.objects.create(size_set=size_set, **b)
+        return size_set
+
+    def update(self, instance, validated):
+        breakdowns = validated.pop('breakdowns', None)
+        for k, v in validated.items():
+            setattr(instance, k, v)
+        instance.save()
+        if breakdowns is not None:
+            # Full replace — the panel always sends the complete breakdown list.
+            instance.breakdowns.all().delete()
+            for b in breakdowns:
+                SizeSetBreakdown.objects.create(size_set=instance, **b)
+        return instance
 
 
 class CategorySerializer(serializers.ModelSerializer):

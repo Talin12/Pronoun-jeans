@@ -96,9 +96,10 @@ class ColorViewSet(viewsets.ModelViewSet):
     queryset           = Color.objects.all().order_by('name')
 
 
-class SizeSetViewSet(viewsets.ReadOnlyModelViewSet):
-    """Read-only here — size sets & breakdowns are complex enough that they stay
-    managed in the Django admin for now; the panel just needs them for dropdowns."""
+class SizeSetViewSet(viewsets.ModelViewSet):
+    """Size sets + their breakdowns. Writable so the panel can create a size set
+    on the fly (matching bijnis' 'Create Custom' size set) — no need to bounce to
+    the Django admin mid-upload."""
     permission_classes = [IsSuperUser]
     serializer_class   = SizeSetSerializer
     queryset           = (SizeSet.objects.filter(is_active=True)

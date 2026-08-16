@@ -1,36 +1,35 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import {
-  ArrowLeft, Loader, Save, Trash2, Plus, Check, Image as ImageIcon, Layers, FileText, AlertCircle,
+  ArrowLeft, ArrowRight, Loader, Save, Trash2, Plus, Check, Lock,
+  Image as ImageIcon, Layers, FileText, ClipboardCheck, AlertCircle, X, ChevronDown, ChevronUp,
 } from 'lucide-react';
 import {
   createProduct, getProduct, updateProduct,
-  listCategories, listColors, listSizeSets,
+  listCategories, listColors, createColor, listSizeSets, createSizeSet,
   createVariation, deleteVariation,
 } from '../../api/adminApi';
 import MediaPicker from '../../components/admin/MediaPicker';
 
-const card = 'bg-white dark:bg-zinc-900 border border-gray-100 dark:border-white/5 rounded-2xl p-5 sm:p-6';
+const card    = 'bg-white dark:bg-zinc-900 border border-gray-100 dark:border-white/5 rounded-2xl p-5 sm:p-7';
 const labelCls = 'block text-xs font-bold uppercase tracking-wide text-gray-500 dark:text-zinc-400 mb-1.5';
 const inputCls = 'w-full px-3 py-2.5 rounded-xl border border-gray-200 dark:border-white/10 bg-gray-50 dark:bg-zinc-800 text-sm text-gray-900 dark:text-zinc-100 focus:outline-none focus:ring-2 focus:ring-accent/40';
+const btnPrimary   = 'inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-accent text-white text-sm font-bold hover:brightness-110 transition disabled:opacity-50';
+const btnGhost     = 'inline-flex items-center gap-2 px-5 py-2.5 rounded-xl border border-gray-200 dark:border-white/10 text-sm font-bold text-gray-600 dark:text-zinc-300 hover:bg-gray-50 dark:hover:bg-white/5 transition';
 
-const SectionHead = ({ icon: Icon, title, sub, done }) => (
-  <div className="flex items-center gap-3 mb-5">
-    <div className={`w-9 h-9 rounded-xl flex items-center justify-center ${done ? 'bg-green-100 dark:bg-green-500/15 text-green-600 dark:text-green-400' : 'bg-accent/10 text-accent'}`}>
-      {done ? <Check size={18} /> : <Icon size={18} />}
-    </div>
-    <div>
-      <h2 className="text-base font-black text-gray-900 dark:text-zinc-100">{title}</h2>
-      {sub && <p className="text-xs text-gray-400 dark:text-zinc-500">{sub}</p>}
-    </div>
-  </div>
-);
+const STEPS = [
+  { key: 'base',     label: 'Base Details',       icon: FileText },
+  { key: 'images',   label: 'Images',             icon: ImageIcon },
+  { key: 'variants', label: 'Variants & Pricing', icon: Layers },
+  { key: 'review',   label: 'Review & Publish',   icon: ClipboardCheck },
+];
 
 export default function AdminProductEditor() {
   const { id } = useParams();
   const isNew  = !id || id === 'new';
   const navigate = useNavigate();
 
+  const [step, setStep]      = useState('base');
   const [loading, setLoad]   = useState(!isNew);
   const [saving, setSaving]  = useState(false);
   const [error, setError]    = useState('');
@@ -43,12 +42,12 @@ export default function AdminProductEditor() {
     name: '', category: '', subcategories: [], description: '',
     fabric_details: '', moq: 10, is_active: false,
   });
-
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
 
   const loadRefs = useCallback(() => {
-    Promise.all([listCategories(), listColors(), listSizeSets()])
-      .then(([cats, cols, ss]) => { setCategories(cats); setColors(cols); setSizeSets(ss); });
+    listCategories().then(setCategories);
+    listColors().then(setColors);
+    listSizeSets().then(setSizeSets);
   }, []);
 
   const loadProduct = useCallback(() => {
@@ -72,32 +71,50 @@ export default function AdminProductEditor() {
   const mainCategories = categories.filter(c => !c.parent);
   const subCategories  = categories.filter(c => c.parent === Number(form.category));
 
-  const saveBase = () => {
+  const errMsg = (err, fallback) => {
+    const d = err.response?.data;
+    return d && typeof d === 'object'
+      ? Object.entries(d).map(([k, v]) => `${k}: ${v}`).join('  •  ')
+      : fallback;
+  };
+
+  const saveBase = (goNext = true) => {
     setSaving(true); setError('');
     const payload = { ...form, category: form.category || null, moq: Number(form.moq) || 0 };
     const req = isNew ? createProduct(payload) : updateProduct(id, payload);
-    req.then(p => {
-      if (isNew) navigate(`/admin/products/${p.id}`, { replace: true });
-    }).catch(err => {
-      const d = err.response?.data;
-      setError(d ? Object.entries(d).map(([k, v]) => `${k}: ${v}`).join('  •  ') : 'Save failed.');
-    }).finally(() => setSaving(false));
+    return req.then(p => {
+      if (isNew) { navigate(`/admin/products/${p.id}`, { replace: true }); }
+      else if (goNext) setStep('images');
+      return p;
+    }).catch(err => { setError(errMsg(err, 'Save failed.')); throw err; })
+      .finally(() => setSaving(false));
   };
+
+  const publish = (active) => {
+    setSaving(true); setError('');
+    updateProduct(id, { is_active: active })
+      .then(() => navigate('/admin/products'))
+      .catch(err => setError(errMsg(err, 'Failed to update.')))
+      .finally(() => setSaving(false));
+  };
+
+  const stepIndex = STEPS.findIndex(s => s.key === step);
+  const gotoStep  = (key) => { if (!isNew || key === 'base') setStep(key); };
 
   if (loading) return <div className="flex items-center justify-center py-20 text-gray-400"><Loader className="animate-spin" /></div>;
 
   return (
-    <div className="max-w-5xl mx-auto pb-16">
+    <div className="max-w-6xl mx-auto pb-16">
       <button onClick={() => navigate('/admin/products')}
         className="inline-flex items-center gap-1.5 text-sm font-semibold text-gray-500 dark:text-zinc-400 hover:text-gray-900 dark:hover:text-zinc-100 mb-4">
         <ArrowLeft size={16} /> Back to products
       </button>
 
       <h1 className="text-2xl font-black text-gray-900 dark:text-zinc-100 mb-1">
-        {isNew ? 'Upload New Product' : form.name || 'Edit Product'}
+        {isNew ? 'Upload New Product' : (form.name || 'Edit Product')}
       </h1>
       <p className="text-gray-500 dark:text-zinc-400 text-sm mb-6">
-        {isNew ? 'Fill in the basics and save — then add images and variants.' : 'Edit details, images, and variants.'}
+        {isNew ? 'Start with the basics — the next steps unlock once you save.' : 'Edit any step. Changes save per step.'}
       </p>
 
       {error && (
@@ -106,108 +123,182 @@ export default function AdminProductEditor() {
         </div>
       )}
 
-      <div className="space-y-5">
-        {/* ── Base details ── */}
-        <div className={card}>
-          <SectionHead icon={FileText} title="Base Details" sub="Name, category and basics" done={!isNew} />
-          <div className="grid sm:grid-cols-2 gap-4">
-            <div className="sm:col-span-2">
-              <label className={labelCls}>Product name *</label>
-              <input className={inputCls} value={form.name} onChange={e => set('name', e.target.value)} placeholder="e.g. Urban Rise Track Pant" />
-            </div>
-            <div>
-              <label className={labelCls}>Category</label>
-              <select className={inputCls} value={form.category} onChange={e => set('category', e.target.value ? Number(e.target.value) : '')}>
-                <option value="">— Select —</option>
-                {mainCategories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-              </select>
-            </div>
-            <div>
-              <label className={labelCls}>MOQ (min order qty)</label>
-              <input type="number" min="1" className={inputCls} value={form.moq} onChange={e => set('moq', e.target.value)} />
-            </div>
-            {subCategories.length > 0 && (
-              <div className="sm:col-span-2">
-                <label className={labelCls}>Sub-categories</label>
-                <div className="flex flex-wrap gap-2">
-                  {subCategories.map(sc => {
-                    const on = form.subcategories.includes(sc.id);
-                    return (
-                      <button key={sc.id} type="button"
-                        onClick={() => set('subcategories', on ? form.subcategories.filter(x => x !== sc.id) : [...form.subcategories, sc.id])}
-                        className={`px-3 py-1.5 rounded-full text-sm font-semibold border transition ${on ? 'bg-accent text-white border-accent' : 'border-gray-200 dark:border-white/10 text-gray-600 dark:text-zinc-300 hover:border-accent'}`}>
-                        {sc.name}
-                      </button>
-                    );
-                  })}
-                </div>
+      <div className="grid lg:grid-cols-[240px_1fr] gap-6">
+        {/* ── Left rail: Upload Progress ── */}
+        <aside className="lg:sticky lg:top-6 self-start">
+          <div className="bg-white dark:bg-zinc-900 border border-gray-100 dark:border-white/5 rounded-2xl p-4">
+            <p className="text-xs font-black uppercase tracking-widest text-gray-400 dark:text-zinc-500 px-2 mb-3">Upload Progress</p>
+            <nav className="space-y-1">
+              {STEPS.map((s, i) => {
+                const locked  = isNew && s.key !== 'base';
+                const current = s.key === step;
+                const done    = !isNew && i < stepIndex;
+                return (
+                  <button key={s.key} onClick={() => gotoStep(s.key)} disabled={locked}
+                    className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-semibold transition-colors text-left ${
+                      current ? 'bg-accent/10 text-accent'
+                      : locked ? 'text-gray-300 dark:text-zinc-600 cursor-not-allowed'
+                      : 'text-gray-600 dark:text-zinc-400 hover:bg-gray-50 dark:hover:bg-white/5'}`}>
+                    <span className={`w-6 h-6 rounded-lg flex items-center justify-center shrink-0 ${
+                      done ? 'bg-green-100 dark:bg-green-500/15 text-green-600 dark:text-green-400'
+                      : current ? 'bg-accent text-white' : 'bg-gray-100 dark:bg-white/5'}`}>
+                      {locked ? <Lock size={12} /> : done ? <Check size={13} /> : <s.icon size={13} />}
+                    </span>
+                    {s.label}
+                  </button>
+                );
+              })}
+            </nav>
+
+            {!isNew && (
+              <div className="mt-4 pt-4 border-t border-gray-100 dark:border-white/5 space-y-2">
+                <button onClick={() => publish(false)} disabled={saving} className={`${btnGhost} w-full justify-center`}>
+                  Save as Draft
+                </button>
+                <button onClick={() => publish(true)} disabled={saving} className={`${btnPrimary} w-full justify-center`}>
+                  {saving ? <Loader size={16} className="animate-spin" /> : <Check size={16} />} Publish
+                </button>
               </div>
             )}
-            <div className="sm:col-span-2">
-              <label className={labelCls}>Description</label>
-              <textarea rows={3} className={inputCls} value={form.description} onChange={e => set('description', e.target.value)} />
-            </div>
-            <div className="sm:col-span-2">
-              <label className={labelCls}>Fabric details</label>
-              <textarea rows={2} className={inputCls} value={form.fabric_details} onChange={e => set('fabric_details', e.target.value)} />
-            </div>
-            <label className="flex items-center gap-2 cursor-pointer">
-              <input type="checkbox" checked={form.is_active} onChange={e => set('is_active', e.target.checked)}
-                className="w-4 h-4 rounded accent-[color:var(--tw-accent,#e11d48)]" />
-              <span className="text-sm font-semibold text-gray-700 dark:text-zinc-300">Active (visible on storefront)</span>
-            </label>
           </div>
-          <div className="mt-5 flex justify-end">
-            <button onClick={saveBase} disabled={saving || !form.name}
-              className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-accent text-white text-sm font-bold hover:brightness-110 transition disabled:opacity-50">
-              {saving ? <Loader size={16} className="animate-spin" /> : <Save size={16} />}
-              {isNew ? 'Save & continue' : 'Save details'}
-            </button>
-          </div>
-        </div>
+        </aside>
 
-        {/* ── Images ── */}
-        <div className={card}>
-          <SectionHead icon={ImageIcon} title="Images" sub="Upload once, choose from the library" />
-          {isNew ? (
-            <p className="text-sm text-gray-400 dark:text-zinc-500 border border-dashed border-gray-200 dark:border-white/10 rounded-xl px-4 py-6 text-center">
-              Save the base details first — then a Cover and Gallery picker appear here.
-            </p>
-          ) : (
-            <div className="space-y-6">
-              <div>
-                <label className={labelCls}>Cover image (shown first to buyers)</label>
-                <MediaPicker type="product" id={Number(id)} role="primary" single folder="products" label="cover image" />
+        {/* ── Right pane ── */}
+        <section className="min-w-0">
+          {step === 'base' && (
+            <div className={card}>
+              <h2 className="text-lg font-black text-gray-900 dark:text-zinc-100 mb-5">Base Details</h2>
+              <div className="grid sm:grid-cols-2 gap-4">
+                <div className="sm:col-span-2">
+                  <label className={labelCls}>Product name *</label>
+                  <input className={inputCls} value={form.name} onChange={e => set('name', e.target.value)} placeholder="e.g. Urban Rise Track Pant" />
+                </div>
+                <div>
+                  <label className={labelCls}>Category</label>
+                  <select className={inputCls} value={form.category} onChange={e => set('category', e.target.value ? Number(e.target.value) : '')}>
+                    <option value="">— Select —</option>
+                    {mainCategories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label className={labelCls}>MOQ (min order qty)</label>
+                  <input type="number" min="1" className={inputCls} value={form.moq} onChange={e => set('moq', e.target.value)} />
+                </div>
+                {subCategories.length > 0 && (
+                  <div className="sm:col-span-2">
+                    <label className={labelCls}>Sub-categories</label>
+                    <div className="flex flex-wrap gap-2">
+                      {subCategories.map(sc => {
+                        const on = form.subcategories.includes(sc.id);
+                        return (
+                          <button key={sc.id} type="button"
+                            onClick={() => set('subcategories', on ? form.subcategories.filter(x => x !== sc.id) : [...form.subcategories, sc.id])}
+                            className={`px-3 py-1.5 rounded-full text-sm font-semibold border transition ${on ? 'bg-accent text-white border-accent' : 'border-gray-200 dark:border-white/10 text-gray-600 dark:text-zinc-300 hover:border-accent'}`}>
+                            {sc.name}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+                <div className="sm:col-span-2">
+                  <label className={labelCls}>Description</label>
+                  <textarea rows={3} className={inputCls} value={form.description} onChange={e => set('description', e.target.value)} />
+                </div>
+                <div className="sm:col-span-2">
+                  <label className={labelCls}>Fabric details</label>
+                  <textarea rows={2} className={inputCls} value={form.fabric_details} onChange={e => set('fabric_details', e.target.value)} />
+                </div>
               </div>
-              <div>
-                <label className={labelCls}>Gallery (drag to reorder)</label>
-                <MediaPicker type="product" id={Number(id)} role="gallery" folder="products/gallery" label="gallery images" />
+              <div className="mt-6 flex justify-between">
+                <button onClick={() => navigate('/admin/products')} className={btnGhost}>Cancel</button>
+                <button onClick={() => saveBase(true)} disabled={saving || !form.name} className={btnPrimary}>
+                  {saving ? <Loader size={16} className="animate-spin" /> : <Save size={16} />}
+                  {isNew ? 'Save & Continue' : 'Save & Next'} <ArrowRight size={16} />
+                </button>
               </div>
             </div>
           )}
-        </div>
 
-        {/* ── Variants ── */}
-        <div className={card}>
-          <SectionHead icon={Layers} title="Variants & Pricing" sub="Size sets, colours, price and stock" />
-          {isNew ? (
-            <p className="text-sm text-gray-400 dark:text-zinc-500 border border-dashed border-gray-200 dark:border-white/10 rounded-xl px-4 py-6 text-center">
-              Save the base details first to add variants.
-            </p>
-          ) : (
-            <VariantsEditor
-              productId={Number(id)} colors={colors} sizeSets={sizeSets}
-              variations={variations} onChange={setVariations} />
+          {step === 'images' && (
+            <div className={card}>
+              <h2 className="text-lg font-black text-gray-900 dark:text-zinc-100 mb-1">Images</h2>
+              <p className="text-sm text-gray-400 dark:text-zinc-500 mb-5">Upload once into the library, then click to choose. Reuse anywhere without re-uploading.</p>
+              <div className="space-y-6">
+                <div>
+                  <label className={labelCls}>Cover image (shown first to buyers)</label>
+                  <MediaPicker type="product" id={Number(id)} role="primary" single folder="products" label="cover image" />
+                </div>
+                <div>
+                  <label className={labelCls}>Gallery (drag to reorder)</label>
+                  <MediaPicker type="product" id={Number(id)} role="gallery" folder="products/gallery" label="gallery images" />
+                </div>
+              </div>
+              <div className="mt-6 flex justify-between">
+                <button onClick={() => setStep('base')} className={btnGhost}><ArrowLeft size={16} /> Back</button>
+                <button onClick={() => setStep('variants')} className={btnPrimary}>Next <ArrowRight size={16} /></button>
+              </div>
+            </div>
           )}
-        </div>
+
+          {step === 'variants' && (
+            <div className={card}>
+              <h2 className="text-lg font-black text-gray-900 dark:text-zinc-100 mb-1">Variants & Pricing</h2>
+              <p className="text-sm text-gray-400 dark:text-zinc-500 mb-5">Add each size-set / colour combination with its price, stock and images.</p>
+              <VariantsEditor
+                productId={Number(id)} colors={colors} sizeSets={sizeSets}
+                variations={variations} onChange={setVariations}
+                onColorsChange={setColors} onSizeSetsChange={setSizeSets} />
+              <div className="mt-6 flex justify-between">
+                <button onClick={() => setStep('images')} className={btnGhost}><ArrowLeft size={16} /> Back</button>
+                <button onClick={() => setStep('review')} className={btnPrimary}>Next <ArrowRight size={16} /></button>
+              </div>
+            </div>
+          )}
+
+          {step === 'review' && (
+            <div className={card}>
+              <h2 className="text-lg font-black text-gray-900 dark:text-zinc-100 mb-5">Review & Publish</h2>
+              <dl className="grid sm:grid-cols-2 gap-x-6 gap-y-4 text-sm">
+                <Row label="Name" value={form.name} />
+                <Row label="Category" value={mainCategories.find(c => c.id === Number(form.category))?.name || '—'} />
+                <Row label="MOQ" value={form.moq} />
+                <Row label="Variants" value={`${variations.length}`} />
+                <Row label="Status" value={form.is_active ? 'Active (live)' : 'Draft (hidden)'} />
+              </dl>
+              {!variations.length && (
+                <div className="flex items-start gap-2 bg-amber-50 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-500/20 text-amber-700 dark:text-amber-400 text-sm rounded-xl px-4 py-3 mt-5">
+                  <AlertCircle size={16} className="mt-0.5 shrink-0" /> No variants yet — buyers won't be able to order. Add at least one in the previous step.
+                </div>
+              )}
+              <div className="mt-6 flex flex-wrap justify-between gap-3">
+                <button onClick={() => setStep('variants')} className={btnGhost}><ArrowLeft size={16} /> Back</button>
+                <div className="flex gap-2">
+                  <button onClick={() => publish(false)} disabled={saving} className={btnGhost}>Save as Draft</button>
+                  <button onClick={() => publish(true)} disabled={saving} className={btnPrimary}>
+                    {saving ? <Loader size={16} className="animate-spin" /> : <Check size={16} />} Publish
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+        </section>
       </div>
     </div>
   );
 }
 
+const Row = ({ label, value }) => (
+  <div>
+    <dt className="text-xs font-bold uppercase tracking-wide text-gray-400 dark:text-zinc-500">{label}</dt>
+    <dd className="text-gray-900 dark:text-zinc-100 font-semibold mt-0.5">{value || '—'}</dd>
+  </div>
+);
+
 // ── Variants editor ──────────────────────────────────────────────────────────
-function VariantsEditor({ productId, colors, sizeSets, variations, onChange }) {
-  const [adding, setAdding] = useState(false);
+function VariantsEditor({ productId, colors, sizeSets, variations, onChange, onColorsChange, onSizeSetsChange }) {
+  const [adding, setAdding]   = useState(false);
+  const [expanded, setExpanded] = useState(null);
 
   const remove = (vid) => {
     if (!window.confirm('Delete this variant?')) return;
@@ -217,42 +308,43 @@ function VariantsEditor({ productId, colors, sizeSets, variations, onChange }) {
   return (
     <div>
       {variations.length > 0 && (
-        <div className="overflow-x-auto -mx-2 mb-4">
-          <table className="w-full text-sm min-w-[640px]">
-            <thead>
-              <tr className="text-left text-xs uppercase tracking-wide text-gray-400 dark:text-zinc-500">
-                <th className="px-2 py-2">SKU</th><th className="px-2 py-2">Size set</th>
-                <th className="px-2 py-2">Colour</th><th className="px-2 py-2">Per-piece</th>
-                <th className="px-2 py-2">Set price</th><th className="px-2 py-2">Stock</th><th></th>
-              </tr>
-            </thead>
-            <tbody>
-              {variations.map(v => (
-                <tr key={v.id} className="border-t border-gray-100 dark:border-white/5">
-                  <td className="px-2 py-2.5 font-semibold text-gray-900 dark:text-zinc-100">{v.sku}</td>
-                  <td className="px-2 py-2.5 text-gray-600 dark:text-zinc-300">{v.size_name || '—'}</td>
-                  <td className="px-2 py-2.5 text-gray-600 dark:text-zinc-300">{v.color_name || v.color || '—'}</td>
-                  <td className="px-2 py-2.5 text-gray-600 dark:text-zinc-300">₹{v.per_piece_price ?? '—'}</td>
-                  <td className="px-2 py-2.5 text-gray-600 dark:text-zinc-300">₹{v.b2b_price ?? '—'}</td>
-                  <td className="px-2 py-2.5 text-gray-600 dark:text-zinc-300">{v.stock_quantity}</td>
-                  <td className="px-2 py-2.5 text-right">
-                    <button onClick={() => remove(v.id)} className="p-1.5 text-gray-400 hover:text-red-500"><Trash2 size={15} /></button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+        <div className="space-y-2 mb-4">
+          {variations.map(v => (
+            <div key={v.id} className="border border-gray-100 dark:border-white/5 rounded-xl overflow-hidden">
+              <div className="flex items-center gap-3 p-3">
+                <span className="w-8 h-8 rounded-full border border-gray-200 dark:border-white/10 shrink-0"
+                      style={{ background: colors.find(c => c.name === (v.color_name || v.color))?.hex_code || '#e5e7eb' }} />
+                <div className="flex-1 min-w-0">
+                  <p className="font-bold text-gray-900 dark:text-zinc-100 truncate">{v.sku}</p>
+                  <p className="text-xs text-gray-500 dark:text-zinc-400">
+                    {(v.color_name || v.color || 'No colour')} · {v.size_name || 'No size'} · ₹{v.per_piece_price ?? '—'}/pc · set ₹{v.b2b_price ?? '—'} · stock {v.stock_quantity}
+                  </p>
+                </div>
+                <button onClick={() => setExpanded(expanded === v.id ? null : v.id)}
+                  className="inline-flex items-center gap-1 text-xs font-semibold text-accent hover:underline">
+                  <ImageIcon size={14} /> Images {expanded === v.id ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+                </button>
+                <button onClick={() => remove(v.id)} className="p-1.5 text-gray-400 hover:text-red-500"><Trash2 size={15} /></button>
+              </div>
+              {expanded === v.id && (
+                <div className="px-3 pb-3 pt-1 border-t border-gray-100 dark:border-white/5 bg-gray-50/50 dark:bg-white/[0.02]">
+                  <p className="text-xs text-gray-400 dark:text-zinc-500 my-2">Images for this colour/variant:</p>
+                  <MediaPicker type="variation" id={v.id} role="gallery" folder="variations/gallery" label="variant images" />
+                </div>
+              )}
+            </div>
+          ))}
         </div>
       )}
 
       {adding ? (
         <VariantForm
           productId={productId} colors={colors} sizeSets={sizeSets}
+          onColorsChange={onColorsChange} onSizeSetsChange={onSizeSetsChange}
           onCancel={() => setAdding(false)}
           onSaved={(v) => { onChange([...variations, v]); setAdding(false); }} />
       ) : (
-        <button onClick={() => setAdding(true)}
-          className="inline-flex items-center gap-2 px-4 py-2 rounded-xl border border-gray-200 dark:border-white/10 text-sm font-semibold text-accent hover:bg-accent/5 transition">
+        <button onClick={() => setAdding(true)} className={btnGhost}>
           <Plus size={16} /> Add variant
         </button>
       )}
@@ -260,13 +352,15 @@ function VariantsEditor({ productId, colors, sizeSets, variations, onChange }) {
   );
 }
 
-function VariantForm({ productId, colors, sizeSets, onCancel, onSaved }) {
+function VariantForm({ productId, colors, sizeSets, onColorsChange, onSizeSetsChange, onCancel, onSaved }) {
   const [v, setV] = useState({
     size_set: '', size_breakdown: '', color_palette: '', sku: '',
     per_piece_price: '', mrp_per_piece: '', stock_quantity: 0,
   });
   const [saving, setSaving] = useState(false);
   const [err, setErr] = useState('');
+  const [colorModal, setColorModal] = useState(false);
+  const [sizeModal, setSizeModal] = useState(false);
   const set = (k, val) => setV(s => ({ ...s, [k]: val }));
 
   const breakdowns = sizeSets.find(s => s.id === Number(v.size_set))?.breakdowns || [];
@@ -297,7 +391,10 @@ function VariantForm({ productId, colors, sizeSets, onCancel, onSaved }) {
           <input className={inputCls} value={v.sku} onChange={e => set('sku', e.target.value)} placeholder="Unique code" />
         </div>
         <div>
-          <label className={labelCls}>Size set</label>
+          <div className="flex items-center justify-between">
+            <label className={labelCls}>Size set</label>
+            <button type="button" onClick={() => setSizeModal(true)} className="text-xs font-bold text-accent hover:underline mb-1.5">+ New</button>
+          </div>
           <select className={inputCls} value={v.size_set} onChange={e => { set('size_set', e.target.value); set('size_breakdown', ''); }}>
             <option value="">— None —</option>
             {sizeSets.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
@@ -311,7 +408,10 @@ function VariantForm({ productId, colors, sizeSets, onCancel, onSaved }) {
           </select>
         </div>
         <div>
-          <label className={labelCls}>Colour</label>
+          <div className="flex items-center justify-between">
+            <label className={labelCls}>Colour</label>
+            <button type="button" onClick={() => setColorModal(true)} className="text-xs font-bold text-accent hover:underline mb-1.5">+ New</button>
+          </div>
           <select className={inputCls} value={v.color_palette} onChange={e => set('color_palette', e.target.value)}>
             <option value="">— None —</option>
             {colors.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
@@ -330,13 +430,134 @@ function VariantForm({ productId, colors, sizeSets, onCancel, onSaved }) {
           <input type="number" min="0" className={inputCls} value={v.stock_quantity} onChange={e => set('stock_quantity', e.target.value)} />
         </div>
       </div>
-      <p className="text-xs text-gray-400 dark:text-zinc-500 mt-2">Set total price is calculated automatically from per-piece × pieces in the breakdown.</p>
+      <p className="text-xs text-gray-400 dark:text-zinc-500 mt-2">Set total price = per-piece × pieces in the breakdown (calculated automatically).</p>
       <div className="flex justify-end gap-2 mt-4">
-        <button onClick={onCancel} className="px-4 py-2 rounded-xl border border-gray-200 dark:border-white/10 text-sm font-semibold text-gray-600 dark:text-zinc-300 hover:bg-gray-100 dark:hover:bg-white/5">Cancel</button>
-        <button onClick={save} disabled={saving || !v.sku}
-          className="inline-flex items-center gap-2 px-5 py-2 rounded-xl bg-accent text-white text-sm font-bold hover:brightness-110 transition disabled:opacity-50">
+        <button onClick={onCancel} className={btnGhost}>Cancel</button>
+        <button onClick={save} disabled={saving || !v.sku} className={btnPrimary}>
           {saving ? <Loader size={15} className="animate-spin" /> : <Check size={15} />} Save variant
         </button>
+      </div>
+
+      {colorModal && (
+        <AddColorModal onClose={() => setColorModal(false)}
+          onCreated={(c) => { onColorsChange(prev => [...prev, c].sort((a, b) => a.name.localeCompare(b.name))); set('color_palette', c.id); setColorModal(false); }} />
+      )}
+      {sizeModal && (
+        <CreateSizeSetModal onClose={() => setSizeModal(false)}
+          onCreated={(ss) => { onSizeSetsChange(prev => [...prev, ss]); set('size_set', ss.id); setSizeModal(false); }} />
+      )}
+    </div>
+  );
+}
+
+// ── Add colour modal ─────────────────────────────────────────────────────────
+function AddColorModal({ onClose, onCreated }) {
+  const [name, setName] = useState('');
+  const [hex, setHex]   = useState('#cccccc');
+  const [saving, setSaving] = useState(false);
+  const [err, setErr] = useState('');
+  const save = () => {
+    setSaving(true); setErr('');
+    createColor({ name: name.trim(), hex_code: hex })
+      .then(onCreated).catch(() => { setErr('Could not add colour (name may already exist).'); setSaving(false); });
+  };
+  return (
+    <ModalShell title="Add colour" onClose={onClose}>
+      {err && <p className="text-sm text-red-600 dark:text-red-400 mb-3">{err}</p>}
+      <div className="flex items-end gap-3">
+        <div className="flex-1">
+          <label className={labelCls}>Colour name</label>
+          <input className={inputCls} value={name} onChange={e => setName(e.target.value)} placeholder="e.g. Beige" />
+        </div>
+        <div>
+          <label className={labelCls}>Swatch</label>
+          <input type="color" value={hex} onChange={e => setHex(e.target.value)}
+            className="w-12 h-11 rounded-xl border border-gray-200 dark:border-white/10 bg-transparent cursor-pointer" />
+        </div>
+      </div>
+      <div className="flex justify-end gap-2 mt-5">
+        <button onClick={onClose} className={btnGhost}>Cancel</button>
+        <button onClick={save} disabled={saving || !name.trim()} className={btnPrimary}>
+          {saving ? <Loader size={15} className="animate-spin" /> : <Check size={15} />} Add
+        </button>
+      </div>
+    </ModalShell>
+  );
+}
+
+// ── Create size set modal (bijnis "Custom Size Set") ─────────────────────────
+function CreateSizeSetModal({ onClose, onCreated }) {
+  const [name, setName] = useState('');
+  const [rows, setRows] = useState([{ size: '', qty: 1 }]);
+  const [saving, setSaving] = useState(false);
+  const [err, setErr] = useState('');
+
+  const setRow = (i, k, val) => setRows(rs => rs.map((r, idx) => idx === i ? { ...r, [k]: val } : r));
+  const addRow = () => setRows(rs => [...rs, { size: '', qty: 1 }]);
+  const delRow = (i) => setRows(rs => rs.filter((_, idx) => idx !== i));
+
+  const valid = rows.filter(r => r.size.trim() && Number(r.qty) > 0);
+  const pieces = valid.reduce((s, r) => s + Number(r.qty), 0);
+  const breakdownString = valid.map(r => `${r.qty}x${r.size.trim()}`).join(', ');
+
+  const save = () => {
+    if (!name.trim() || !valid.length) return;
+    setSaving(true); setErr('');
+    createSizeSet({
+      name: name.trim(),
+      breakdowns: [{ label: breakdownString, breakdown_string: breakdownString, pieces }],
+    }).then(onCreated).catch(e => {
+      const d = e.response?.data;
+      setErr(d ? JSON.stringify(d) : 'Could not create size set.'); setSaving(false);
+    });
+  };
+
+  return (
+    <ModalShell title="Create custom size set" onClose={onClose}>
+      {err && <p className="text-sm text-red-600 dark:text-red-400 mb-3">{err}</p>}
+      <div className="mb-4">
+        <label className={labelCls}>Size set name</label>
+        <input className={inputCls} value={name} onChange={e => setName(e.target.value)} placeholder="e.g. 30 TO 36" />
+      </div>
+      <label className={labelCls}>Sizes & quantities</label>
+      <div className="space-y-2">
+        {rows.map((r, i) => (
+          <div key={i} className="flex items-center gap-2">
+            <input className={inputCls} value={r.size} onChange={e => setRow(i, 'size', e.target.value)} placeholder="Size (e.g. 30 or L)" />
+            <span className="text-gray-400">×</span>
+            <input type="number" min="1" className={`${inputCls} w-24`} value={r.qty} onChange={e => setRow(i, 'qty', e.target.value)} />
+            <span className="text-xs text-gray-400 w-8">pcs</span>
+            <button onClick={() => delRow(i)} disabled={rows.length === 1} className="p-1.5 text-gray-400 hover:text-red-500 disabled:opacity-30"><X size={16} /></button>
+          </div>
+        ))}
+      </div>
+      <button onClick={addRow} className="mt-2 inline-flex items-center gap-1.5 text-sm font-semibold text-accent hover:underline">
+        <Plus size={15} /> Add size
+      </button>
+      {valid.length > 0 && (
+        <p className="text-xs text-gray-500 dark:text-zinc-400 mt-3">
+          Breakdown: <span className="font-semibold text-gray-700 dark:text-zinc-200">{breakdownString}</span> · {pieces} pieces/set
+        </p>
+      )}
+      <div className="flex justify-end gap-2 mt-5">
+        <button onClick={onClose} className={btnGhost}>Cancel</button>
+        <button onClick={save} disabled={saving || !name.trim() || !valid.length} className={btnPrimary}>
+          {saving ? <Loader size={15} className="animate-spin" /> : <Check size={15} />} Create size set
+        </button>
+      </div>
+    </ModalShell>
+  );
+}
+
+function ModalShell({ title, onClose, children }) {
+  return (
+    <div className="fixed inset-0 z-[70] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm" onClick={onClose}>
+      <div className="bg-white dark:bg-zinc-900 rounded-2xl shadow-2xl w-full max-w-md p-5" onClick={e => e.stopPropagation()}>
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="text-base font-black text-gray-900 dark:text-zinc-100">{title}</h3>
+          <button onClick={onClose} className="p-1.5 text-gray-400 hover:text-gray-700 dark:hover:text-zinc-200"><X size={18} /></button>
+        </div>
+        {children}
       </div>
     </div>
   );
