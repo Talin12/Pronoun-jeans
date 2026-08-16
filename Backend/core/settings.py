@@ -133,6 +133,10 @@ STATICFILES_STORAGE = 'django.contrib.staticfiles.storage.StaticFilesStorage'
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 AUTH_USER_MODEL    = 'accounts.CustomUser'
 
+# Allow same-origin framing so Jazzmin's related-object modal (related_modal_active)
+# can load add/edit popups in an iframe; still blocks framing by other sites.
+X_FRAME_OPTIONS    = 'SAMEORIGIN'
+
 if not DEBUG:
     SECURE_PROXY_SSL_HEADER        = ('HTTP_X_FORWARDED_PROTO', 'https')
     SECURE_SSL_REDIRECT            = False  # Render handles SSL at load balancer
