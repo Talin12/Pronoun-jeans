@@ -323,7 +323,7 @@ JAZZMIN_UI_TWEAKS = {
 
     # ── Fonts & style ──────────────────────────────────────────────────────────
     'theme':                'default',        # AdminLTE base theme
-    'dark_mode_theme':      None,             # no dark mode switching
+    'default_theme_mode':   'light',          # fixed light theme (replaces deprecated dark_mode_theme)
     'button_classes': {
         'primary':   'btn-primary',
         'secondary': 'btn-secondary',
