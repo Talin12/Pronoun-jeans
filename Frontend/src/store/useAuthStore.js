@@ -16,9 +16,9 @@ const getInitialAuthState = () => {
   const decoded = decodeToken(token);
   if (!decoded || decoded.exp * 1000 < Date.now()) {
     localStorage.clear();
-    return { user: null, isAuthenticated: false, isAgent: false, impersonatedBuyer: null };
+    return { user: null, isAuthenticated: false, isAgent: false, isSuperuser: false, impersonatedBuyer: null };
   }
-  return { user: decoded, isAuthenticated: true, isAgent: decoded.is_agent ?? false, impersonatedBuyer: null };
+  return { user: decoded, isAuthenticated: true, isAgent: decoded.is_agent ?? false, isSuperuser: decoded.is_superuser ?? false, impersonatedBuyer: null };
 };
 
 export const useAuthStore = create((set, get) => ({
@@ -40,6 +40,7 @@ export const useAuthStore = create((set, get) => ({
       user:            decoded,
       isAuthenticated: true,
       isAgent:         decoded.is_agent ?? false,
+      isSuperuser:     decoded.is_superuser ?? false,
     });
   },
 
@@ -52,6 +53,7 @@ export const useAuthStore = create((set, get) => ({
       user:            decoded,
       isAuthenticated: true,
       isAgent:         decoded?.is_agent ?? false,
+      isSuperuser:     decoded?.is_superuser ?? false,
     });
     return decoded;
   },

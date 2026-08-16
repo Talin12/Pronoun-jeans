@@ -8,9 +8,7 @@ admin session; the picker JS sends the csrftoken cookie back as X-CSRFToken.
 """
 
 import json
-import os
 
-from django.apps import apps
 from django.contrib.admin.views.decorators import staff_member_required
 from django.core.paginator import Paginator
 from django.db.models import Q
@@ -19,7 +17,7 @@ from django.utils import timezone
 from django.views.decorators.http import require_GET, require_POST
 
 from . import presenters, services
-from .models import ATTACHABLE_TYPES, ROLE_CHOICES, MediaAsset, MediaAttachment
+from .models import ATTACHABLE_TYPES, ROLE_CHOICES, MediaAsset
 
 _VALID_TYPES = {t for t, _ in ATTACHABLE_TYPES}
 _VALID_ROLES = {r for r, _ in ROLE_CHOICES}
@@ -182,105 +180,11 @@ def asset_delete(request, asset_id):
     return JsonResponse({'ok': True, 'detached': usage if force else 0})
 
 
-# ─────────────────────────────────────────────────────────────────────────────
-# TEMPORARY PHASE 7 BRIDGE — REMOVE AT CUTOVER.
-#
-# Until the storefront renders from media_attachments (Phase 7 cutover), an image
-# picked from the library would render nowhere, because the frontend still reads
-# the legacy FileField columns. This bridge mirrors every attach/detach/reorder
-# into the corresponding legacy column(s) so picked images appear immediately.
-#
-# It is a PLAIN STRING ASSIGNMENT of the asset's existing Cloudinary public_id
-# (asset.storage_key) into the FileField — NO upload, NO file movement — exactly
-# the pattern the clone action uses (products/admin.py: `ni.image = img.image`).
-# A string-assigned FieldFile is `_committed=True`, so CompressedImageField.pre_save
-# never re-encodes or re-uploads it.
-#
-# DELETE this whole block (and its calls in entity_attach/detach/reorder) at the
-# Phase 7 cutover, once rendering reads media_attachments directly.
-# ─────────────────────────────────────────────────────────────────────────────
-
-# (attachable_type, role) → how to reflect it in the legacy schema.
-#   single: one FileField on a row found by pk == attachable_id
-#   multi : child rows (fk == attachable_id), ordered, one FileField each
-_LEGACY_MAP = {
-    ('product',       'primary'): {'kind': 'single', 'model': 'products.Product',          'field': 'image'},
-    ('product',       'gallery'): {'kind': 'multi',  'model': 'products.ProductImage',      'fk': 'product_id',   'field': 'image', 'order': 'order', 'alt': 'alt_text'},
-    ('product_color', 'gallery'): {'kind': 'single', 'model': 'products.ProductColorImage', 'field': 'image'},
-    ('variation',     'primary'): {'kind': 'single', 'model': 'products.ProductVariation',  'field': 'image'},
-    ('variation',     'gallery'): {'kind': 'multi',  'model': 'products.VariationImage',    'fk': 'variation_id', 'field': 'image', 'order': 'order', 'alt': 'alt_text'},
-    ('category',      'primary'): {'kind': 'single', 'model': 'products.Category',          'field': 'image'},
-    ('banner',        'primary'): {'kind': 'single', 'model': 'products.HeroSlide',         'field': 'image'},
-}
-
-
-def _pubid(name):
-    """Extensionless storage path, matching MediaAsset.storage_key from migration."""
-    return os.path.splitext(name or '')[0]
-
-
-def _sync_legacy(attachable_type, attachable_id, role):
-    """
-    PHASE 7 BRIDGE: reconcile the legacy column(s) for one (type, id, role) from
-    the current MediaAttachment set. Idempotent, and never touches purely-legacy
-    rows that were never in the library (matched via storage_key ↔ MediaAsset).
-    """
-    cfg = _LEGACY_MAP.get((attachable_type, role))
-    if not cfg:
-        return
-    Model = apps.get_model(cfg['model'])
-    field = cfg['field']
-
-    atts = list(
-        MediaAttachment.objects
-        .filter(attachable_type=attachable_type, attachable_id=attachable_id,
-                role=role, media__deleted_at__isnull=True)
-        .select_related('media').order_by('sort_order', 'id')
-    )
-    desired = [(a.media.storage_key, a.sort_order, a.media.alt_text or '') for a in atts]
-    desired_pubids = {sk for sk, _, _ in desired}
-
-    if cfg['kind'] == 'single':
-        obj = Model.objects.filter(pk=attachable_id).first()
-        if obj is None:
-            return
-        current = _pubid(getattr(obj, field).name)
-        if desired:
-            target = desired[0][0]           # lowest sort_order wins the single slot
-            if current != target:
-                setattr(obj, field, target)  # string assignment → no upload
-                obj.save(update_fields=[field])
-        elif current and MediaAsset.objects.filter(storage_key=current).exists():
-            # Detached and the value was a library-managed asset → clear it.
-            setattr(obj, field, '')
-            obj.save(update_fields=[field])
-        return
-
-    # multi
-    fk = cfg['fk']
-    existing = list(Model.objects.filter(**{fk: attachable_id}))
-    existing_by_pub = {_pubid(getattr(r, field).name): r for r in existing}
-
-    for sk, order, alt in desired:
-        row = existing_by_pub.get(sk)
-        if row is None:
-            Model.objects.create(**{
-                fk: attachable_id, field: sk,       # string assignment → no upload
-                cfg['order']: order, cfg['alt']: alt,
-            })
-        elif getattr(row, cfg['order']) != order:
-            setattr(row, cfg['order'], order)
-            row.save(update_fields=[cfg['order']])
-
-    # Remove legacy rows for assets no longer attached (but leave rows that were
-    # never part of the library untouched).
-    for pub, row in existing_by_pub.items():
-        if pub not in desired_pubids and MediaAsset.objects.filter(storage_key=pub).exists():
-            row.delete()
-# ── end Phase 7 bridge ───────────────────────────────────────────────────────
-
-
 # ── Attachment endpoints ──────────────────────────────────────────────────────
+#
+# The attach/detach/reorder mutation logic (and the Phase 7 legacy-column bridge)
+# lives in medialib.services so the JWT admin API can reuse it. These views are
+# thin: session auth + request parsing + JSON shaping only.
 
 def _valid_entity(attachable_type):
     return attachable_type in _VALID_TYPES
@@ -291,11 +195,7 @@ def _valid_entity(attachable_type):
 def entity_attachments(request, attachable_type, attachable_id):
     if not _valid_entity(attachable_type):
         return JsonResponse({'error': 'Unknown type'}, status=400)
-    qs = (MediaAttachment.objects
-          .filter(attachable_type=attachable_type, attachable_id=attachable_id,
-                  media__deleted_at__isnull=True)
-          .select_related('media')
-          .order_by('sort_order', 'id'))
+    qs = services.list_attachments(attachable_type, attachable_id)
     return JsonResponse({'attachments': [presenters.serialize_attachment(a) for a in qs]})
 
 
@@ -311,33 +211,12 @@ def entity_attach(request, attachable_type, attachable_id):
     if role not in _VALID_ROLES:
         return JsonResponse({'error': 'Unknown role'}, status=400)
 
-    live_ids = set(_live_assets().filter(id__in=media_ids).values_list('id', flat=True))
-    missing = [m for m in media_ids if m not in live_ids]
-    if missing:
-        return JsonResponse({'error': f'Unknown or deleted media: {missing}'}, status=400)
+    try:
+        created = services.attach_assets(attachable_type, attachable_id, media_ids, role)
+    except ValueError as e:
+        return JsonResponse({'error': str(e)}, status=400)
 
-    # For a single-slot role like 'primary', replace any existing primary.
-    if role == 'primary':
-        MediaAttachment.objects.filter(
-            attachable_type=attachable_type, attachable_id=attachable_id, role='primary',
-        ).exclude(media_id__in=media_ids).delete()
-
-    base = (MediaAttachment.objects
-            .filter(attachable_type=attachable_type, attachable_id=attachable_id, role=role)
-            .order_by('-sort_order').values_list('sort_order', flat=True).first()) or 0
-
-    created = []
-    for offset, mid in enumerate(media_ids, start=1):
-        att, was_created = MediaAttachment.objects.get_or_create(
-            media_id=mid, attachable_type=attachable_type,
-            attachable_id=attachable_id, role=role,
-            defaults={'sort_order': base + offset},
-        )
-        created.append(presenters.serialize_attachment(att))
-
-    _sync_legacy(attachable_type, attachable_id, role)  # PHASE 7 BRIDGE — remove at cutover
-
-    return JsonResponse({'attachments': created})
+    return JsonResponse({'attachments': [presenters.serialize_attachment(a) for a in created]})
 
 
 @staff_member_required
@@ -346,26 +225,8 @@ def entity_reorder(request, attachable_type, attachable_id):
     if not _valid_entity(attachable_type):
         return JsonResponse({'error': 'Unknown type'}, status=400)
     data = _body(request)
-    order = data.get('order') or []  # list of attachment ids in the new order
-    lookup = {
-        a.id: a for a in MediaAttachment.objects.filter(
-            id__in=order, attachable_type=attachable_type, attachable_id=attachable_id,
-        )
-    }
-    to_update = []
-    for idx, att_id in enumerate(order):
-        att = lookup.get(att_id)
-        if att and att.sort_order != idx:
-            att.sort_order = idx
-            to_update.append(att)
-    if to_update:
-        MediaAttachment.objects.bulk_update(to_update, ['sort_order'])
-
-    # PHASE 7 BRIDGE — keep legacy row ordering in step; remove at cutover.
-    for r in {a.role for a in lookup.values()}:
-        _sync_legacy(attachable_type, attachable_id, r)
-
-    return JsonResponse({'ok': True, 'updated': len(to_update)})
+    updated = services.reorder_assets(attachable_type, attachable_id, data.get('order') or [])
+    return JsonResponse({'ok': True, 'updated': updated})
 
 
 @staff_member_required
@@ -375,23 +236,13 @@ def entity_detach(request, attachable_type, attachable_id):
     if not _valid_entity(attachable_type):
         return JsonResponse({'error': 'Unknown type'}, status=400)
     data = _body(request)
-    qs = MediaAttachment.objects.filter(
-        attachable_type=attachable_type, attachable_id=attachable_id,
-    )
-    if 'attachment_id' in data:
-        qs = qs.filter(id=data['attachment_id'])
-    elif 'media_id' in data:
-        qs = qs.filter(media_id=data['media_id'])
-        if data.get('role'):
-            qs = qs.filter(role=data['role'])
-    else:
-        return JsonResponse({'error': 'attachment_id or media_id required'}, status=400)
-
-    affected_roles = set(qs.values_list('role', flat=True))  # capture before delete
-    deleted, _ = qs.delete()
-
-    # PHASE 7 BRIDGE — clear the corresponding legacy field(s); remove at cutover.
-    for r in affected_roles:
-        _sync_legacy(attachable_type, attachable_id, r)
-
+    try:
+        deleted = services.detach_assets(
+            attachable_type, attachable_id,
+            attachment_id=data.get('attachment_id'),
+            media_id=data.get('media_id'),
+            role=data.get('role'),
+        )
+    except ValueError as e:
+        return JsonResponse({'error': str(e)}, status=400)
     return JsonResponse({'ok': True, 'detached': deleted})

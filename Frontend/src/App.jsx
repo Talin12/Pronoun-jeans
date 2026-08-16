@@ -6,6 +6,8 @@ import Footer from './components/layout/Footer';
 import WhatsAppCTA from './components/ui/WhatsAppCTA';
 import AgentRoute from './components/auth/AgentRoute';
 import AgentLayout from './components/agent/AgentLayout';
+import AdminRoute from './components/auth/AdminRoute';
+import AdminLayout from './components/admin/AdminLayout';
 
 import Home from './pages/Home';
 import Login from './pages/Login';
@@ -26,6 +28,11 @@ import AgentBuyers       from './pages/agent/AgentBuyers';
 import AgentOrders       from './pages/agent/AgentOrders';
 import AgentCommissions  from './pages/agent/AgentCommissions';
 import AgentSampleOrders from './pages/agent/AgentSampleOrders';
+
+import AdminDashboard     from './pages/admin/AdminDashboard';
+import AdminProducts      from './pages/admin/AdminProducts';
+import AdminProductEditor from './pages/admin/AdminProductEditor';
+import AdminCategories    from './pages/admin/AdminCategories';
 
 const ProtectedRoute = ({ children }) => {
   const { isAuthenticated } = useAuthStore();
@@ -55,6 +62,22 @@ function App() {
           <Route path="orders"      element={<AgentOrders />} />
           <Route path="commissions" element={<AgentCommissions />} />
           <Route path="samples"     element={<AgentSampleOrders />} />
+        </Route>
+
+        {/* ── Custom admin panel — superuser only, full-screen layout ── */}
+        <Route
+          path="/admin"
+          element={
+            <AdminRoute>
+              <AdminLayout />
+            </AdminRoute>
+          }
+        >
+          <Route index                 element={<AdminDashboard />} />
+          <Route path="products"        element={<AdminProducts />} />
+          <Route path="products/new"    element={<AdminProductEditor />} />
+          <Route path="products/:id"    element={<AdminProductEditor />} />
+          <Route path="categories"      element={<AdminCategories />} />
         </Route>
 
         {/* ── All other pages — with Navbar + Footer ── */}

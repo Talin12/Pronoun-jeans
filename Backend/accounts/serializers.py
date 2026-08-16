@@ -12,6 +12,7 @@ class B2BTokenObtainPairSerializer(TokenObtainPairSerializer):
         token['is_verified_b2b'] = getattr(user, 'is_verified_b2b', False)
         token['is_agent']        = getattr(user, 'is_agent', False)
         token['is_staff']        = user.is_staff
+        token['is_superuser']    = user.is_superuser
         try:
             token['agent_code'] = user.agent_profile.agent_code
         except Exception:

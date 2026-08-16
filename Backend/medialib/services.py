@@ -25,11 +25,12 @@ import hashlib
 import io
 import os
 
+from django.apps import apps
 from PIL import Image
 
 from core.utils.images import compress_image
 from . import storage
-from .models import MediaAsset
+from .models import MediaAsset, MediaAttachment
 
 # Real image formats we accept (checked against the decoded signature, not the
 # client-supplied extension or Content-Type).
@@ -157,3 +158,183 @@ def ingest_upload(file, *, uploaded_by=None, folder=None, filename=None,
         uploaded_by       = uploaded_by,
     )
     return asset, False
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Attachment operations (shared by the Django-admin picker views AND the JWT
+# admin API). Each mutation reconciles the corresponding legacy FileField
+# column(s) via sync_legacy() so picked images render on the storefront
+# immediately — see the Phase 7 bridge note below.
+# ─────────────────────────────────────────────────────────────────────────────
+
+def live_assets():
+    return MediaAsset.objects.filter(deleted_at__isnull=True)
+
+
+def list_attachments(attachable_type, attachable_id):
+    return (MediaAttachment.objects
+            .filter(attachable_type=attachable_type, attachable_id=attachable_id,
+                    media__deleted_at__isnull=True)
+            .select_related('media')
+            .order_by('sort_order', 'id'))
+
+
+def attach_assets(attachable_type, attachable_id, media_ids, role='gallery'):
+    """
+    Attach media assets to an entity under a role. For the single-slot 'primary'
+    role, any existing primary not in `media_ids` is replaced. Returns the newly
+    created/existing MediaAttachment rows. Raises ValueError on unknown media.
+    """
+    live_ids = set(live_assets().filter(id__in=media_ids).values_list('id', flat=True))
+    missing = [m for m in media_ids if m not in live_ids]
+    if missing:
+        raise ValueError(f'Unknown or deleted media: {missing}')
+
+    if role == 'primary':
+        MediaAttachment.objects.filter(
+            attachable_type=attachable_type, attachable_id=attachable_id, role='primary',
+        ).exclude(media_id__in=media_ids).delete()
+
+    base = (MediaAttachment.objects
+            .filter(attachable_type=attachable_type, attachable_id=attachable_id, role=role)
+            .order_by('-sort_order').values_list('sort_order', flat=True).first()) or 0
+
+    created = []
+    for offset, mid in enumerate(media_ids, start=1):
+        att, _ = MediaAttachment.objects.get_or_create(
+            media_id=mid, attachable_type=attachable_type,
+            attachable_id=attachable_id, role=role,
+            defaults={'sort_order': base + offset},
+        )
+        created.append(att)
+
+    sync_legacy(attachable_type, attachable_id, role)  # PHASE 7 BRIDGE
+    return created
+
+
+def detach_assets(attachable_type, attachable_id, *, attachment_id=None, media_id=None, role=None):
+    """Detach media from an entity. Never deletes the underlying asset. Returns count."""
+    qs = MediaAttachment.objects.filter(
+        attachable_type=attachable_type, attachable_id=attachable_id,
+    )
+    if attachment_id is not None:
+        qs = qs.filter(id=attachment_id)
+    elif media_id is not None:
+        qs = qs.filter(media_id=media_id)
+        if role:
+            qs = qs.filter(role=role)
+    else:
+        raise ValueError('attachment_id or media_id required')
+
+    affected_roles = set(qs.values_list('role', flat=True))
+    deleted, _ = qs.delete()
+
+    for r in affected_roles:
+        sync_legacy(attachable_type, attachable_id, r)  # PHASE 7 BRIDGE
+    return deleted
+
+
+def reorder_assets(attachable_type, attachable_id, order):
+    """`order` is a list of attachment ids in the desired order. Returns updated count."""
+    lookup = {
+        a.id: a for a in MediaAttachment.objects.filter(
+            id__in=order, attachable_type=attachable_type, attachable_id=attachable_id,
+        )
+    }
+    to_update = []
+    for idx, att_id in enumerate(order):
+        att = lookup.get(att_id)
+        if att and att.sort_order != idx:
+            att.sort_order = idx
+            to_update.append(att)
+    if to_update:
+        MediaAttachment.objects.bulk_update(to_update, ['sort_order'])
+
+    for r in {a.role for a in lookup.values()}:
+        sync_legacy(attachable_type, attachable_id, r)  # PHASE 7 BRIDGE
+    return len(to_update)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# PHASE 7 BRIDGE — REMOVE AT CUTOVER.
+#
+# Until the storefront renders from media_attachments, an image picked from the
+# library would render nowhere because the frontend still reads the legacy
+# FileField columns. This mirrors every attach/detach/reorder into the
+# corresponding legacy column(s) so picked images appear immediately. It is a
+# PLAIN STRING ASSIGNMENT of the asset's Cloudinary public_id into the FileField
+# — NO upload, NO file movement. Delete this block and its callers at cutover.
+# ─────────────────────────────────────────────────────────────────────────────
+
+LEGACY_MAP = {
+    ('product',       'primary'): {'kind': 'single', 'model': 'products.Product',          'field': 'image'},
+    ('product',       'gallery'): {'kind': 'multi',  'model': 'products.ProductImage',      'fk': 'product_id',   'field': 'image', 'order': 'order', 'alt': 'alt_text'},
+    ('product_color', 'gallery'): {'kind': 'single', 'model': 'products.ProductColorImage', 'field': 'image'},
+    ('variation',     'primary'): {'kind': 'single', 'model': 'products.ProductVariation',  'field': 'image'},
+    ('variation',     'gallery'): {'kind': 'multi',  'model': 'products.VariationImage',    'fk': 'variation_id', 'field': 'image', 'order': 'order', 'alt': 'alt_text'},
+    ('category',      'primary'): {'kind': 'single', 'model': 'products.Category',          'field': 'image'},
+    ('banner',        'primary'): {'kind': 'single', 'model': 'products.HeroSlide',         'field': 'image'},
+}
+
+
+def _pubid(name):
+    """Extensionless storage path, matching MediaAsset.storage_key from migration."""
+    return os.path.splitext(name or '')[0]
+
+
+def sync_legacy(attachable_type, attachable_id, role):
+    """
+    PHASE 7 BRIDGE: reconcile the legacy column(s) for one (type, id, role) from
+    the current MediaAttachment set. Idempotent, and never touches purely-legacy
+    rows that were never in the library (matched via storage_key ↔ MediaAsset).
+    """
+    cfg = LEGACY_MAP.get((attachable_type, role))
+    if not cfg:
+        return
+    Model = apps.get_model(cfg['model'])
+    field = cfg['field']
+
+    atts = list(
+        MediaAttachment.objects
+        .filter(attachable_type=attachable_type, attachable_id=attachable_id,
+                role=role, media__deleted_at__isnull=True)
+        .select_related('media').order_by('sort_order', 'id')
+    )
+    desired = [(a.media.storage_key, a.sort_order, a.media.alt_text or '') for a in atts]
+    desired_pubids = {sk for sk, _, _ in desired}
+
+    if cfg['kind'] == 'single':
+        obj = Model.objects.filter(pk=attachable_id).first()
+        if obj is None:
+            return
+        current = _pubid(getattr(obj, field).name)
+        if desired:
+            target = desired[0][0]           # lowest sort_order wins the single slot
+            if current != target:
+                setattr(obj, field, target)  # string assignment → no upload
+                obj.save(update_fields=[field])
+        elif current and MediaAsset.objects.filter(storage_key=current).exists():
+            setattr(obj, field, '')
+            obj.save(update_fields=[field])
+        return
+
+    # multi
+    fk = cfg['fk']
+    existing = list(Model.objects.filter(**{fk: attachable_id}))
+    existing_by_pub = {_pubid(getattr(r, field).name): r for r in existing}
+
+    for sk, order, alt in desired:
+        row = existing_by_pub.get(sk)
+        if row is None:
+            Model.objects.create(**{
+                fk: attachable_id, field: sk,       # string assignment → no upload
+                cfg['order']: order, cfg['alt']: alt,
+            })
+        elif getattr(row, cfg['order']) != order:
+            setattr(row, cfg['order'], order)
+            row.save(update_fields=[cfg['order']])
+
+    for pub, row in existing_by_pub.items():
+        if pub not in desired_pubids and MediaAsset.objects.filter(storage_key=pub).exists():
+            row.delete()
+# ── end Phase 7 bridge ───────────────────────────────────────────────────────

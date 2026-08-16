@@ -6,7 +6,7 @@ import { ShoppingBag, LogOut, Menu, X } from 'lucide-react';
 import ThemeToggle from '../ui/ThemeToggle';
 
 const Navbar = () => {
-  const { isAuthenticated, user, logout, impersonatedBuyer, clearImpersonatedBuyer } = useAuthStore();
+  const { isAuthenticated, isSuperuser, user, logout, impersonatedBuyer, clearImpersonatedBuyer } = useAuthStore();
   const { cartCount, cartTotal, fetchCart } = useCartStore();
   const navigate  = useNavigate();
   const location  = useLocation();
@@ -28,6 +28,7 @@ const Navbar = () => {
     { to: '/catalog',   label: 'Catalog'  },
     { to: '/history',   label: 'Orders'   },
     ...(isAuthenticated ? [{ to: '/dashboard', label: 'Dashboard' }] : []),
+    ...(isSuperuser ? [{ to: '/admin', label: 'Admin' }] : []),
   ];
 
   return (
