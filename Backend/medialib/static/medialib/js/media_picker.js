@@ -117,8 +117,17 @@
       card.appendChild(img);
       if (!asset.alt_text) card.appendChild(el('span', { class: 'mp-noalt', title: 'No alt text set', text: 'alt?' }));
       card.addEventListener('click', function () {
-        if (state.selected.has(asset.id)) { state.selected.delete(asset.id); card.classList.remove('sel'); }
-        else { state.selected.set(asset.id, asset); card.classList.add('sel'); }
+        // Single-select mode (e.g. a Cover image): picking one clears the rest.
+        if (state.ctx && state.ctx.single) {
+          const already = state.selected.has(asset.id);
+          state.selected.clear();
+          state.grid.querySelectorAll('.mp-card.sel').forEach(function (c) { c.classList.remove('sel'); });
+          if (!already) { state.selected.set(asset.id, asset); card.classList.add('sel'); }
+        } else if (state.selected.has(asset.id)) {
+          state.selected.delete(asset.id); card.classList.remove('sel');
+        } else {
+          state.selected.set(asset.id, asset); card.classList.add('sel');
+        }
         updateSel();
       });
       if (state.selected.has(asset.id)) card.classList.add('sel');
@@ -163,7 +172,8 @@
             if (res) {
               status.textContent = res.deduplicated ? 'Already in library — reusing existing image' : 'uploaded';
               status.className = 'mp-upstatus ' + (res.deduplicated ? 'dedup' : 'ok');
-              // auto-select the uploaded/deduped asset
+              // auto-select the uploaded/deduped asset (single mode keeps only the latest)
+              if (state.ctx && state.ctx.single) state.selected.clear();
               state.selected.set(res.asset.id, res.asset);
               updateSel();
             } else {
@@ -218,10 +228,14 @@
     const id = container.dataset.id;
     const role = container.dataset.role || 'gallery';
     const folder = container.dataset.folder || '';
+    const single = container.dataset.single === 'true';
     const entityBase = base + type + '/' + id + '/';
 
     const strip = el('div', { class: 'mp-strip' });
-    const addBtn = el('button', { type: 'button', class: 'mp-add', text: '+ Choose from library' });
+    const addBtn = el('button', {
+      type: 'button', class: 'mp-add',
+      text: single ? '+ Choose cover from library' : '+ Choose from library',
+    });
     container.appendChild(strip);
     container.appendChild(addBtn);
 
@@ -274,9 +288,12 @@
       openPicker({
         apiBase: base,
         folder: folder,
+        single: single,
         onConfirm: function (mediaIds) {
+          // A single-slot role (e.g. cover) only ever attaches one asset.
+          const ids = single ? mediaIds.slice(0, 1) : mediaIds;
           return api(entityBase + 'attach/', {
-            method: 'POST', json: { media_ids: mediaIds, role: role },
+            method: 'POST', json: { media_ids: ids, role: role },
           }).then(load);
         },
       });

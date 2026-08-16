@@ -409,20 +409,32 @@ class ProductAdmin(admin.ModelAdmin):
     prepopulated_fields = {'slug': ('name',)}
     ordering            = ['-created_at']
     actions             = [clone_products]
-    inlines             = [ProductImageInline, ProductColorImageInline, ProductVariationInline]
-    readonly_fields     = ['media_library_gallery']
+    # Product-level images are managed by the two Media Library pickers below
+    # (Cover + Gallery), so the old per-row ProductImage inline is gone — it
+    # edited the very same ProductImage rows the Gallery picker now manages,
+    # just more clumsily. Per-colour images and variation pricing stay.
+    inlines             = [ProductColorImageInline, ProductVariationInline]
+    readonly_fields     = ['cover_image_library', 'media_library_gallery']
 
     fieldsets = (
         ('Product Info', {
             'fields': ('name', 'slug', 'category', 'subcategories', 'description', 'fabric_details', 'is_active', 'moq'),
         }),
-        ('Media', {
-            'fields': ('image',),
+        ('Product Images — upload once, choose from the library', {
+            'fields': ('cover_image_library', 'media_library_gallery'),
+            'description': (
+                '<b>How it works:</b> click “Choose from library”, then drag &amp; drop your '
+                'photos in the pop-up to upload them once — after that you just click to pick them, '
+                'here or on any other product (no re-uploading).<br>'
+                '<b>Cover</b> is the main image buyers see first. <b>Gallery</b> is the rest of the '
+                'photos; drag them to reorder. Alt text is set once on the image and reused everywhere (an SEO win).'
+            ),
         }),
-        ('Media Library (shared — upload once, reuse anywhere)', {
-            'fields': ('media_library_gallery',),
-            'description': 'Pick images from the shared library instead of re-uploading. '
-                           'Alt text is edited on the image itself and reused everywhere it appears (an SEO win).',
+        ('Main image — legacy field (optional)', {
+            'classes': ('collapse',),
+            'fields': ('image',),
+            'description': 'Older single-file main image. You can ignore this — picking a '
+                           'Cover above sets the main image automatically.',
         }),
     )
 
@@ -430,17 +442,36 @@ class ProductAdmin(admin.ModelAdmin):
         css = {'all': ('medialib/css/media_picker.css',)}
         js  = ('medialib/js/media_picker.js',)
 
+    def _save_first_hint(self, what):
+        from django.utils.safestring import mark_safe
+        return mark_safe(
+            '<span style="color:#999;">Fill in the name &amp; category above, click '
+            '<b>“Save and continue editing”</b> at the bottom, then pick your '
+            f'{what} here.</span>'
+        )
+
+    def cover_image_library(self, obj):
+        from django.utils.html import format_html
+        if not obj or not obj.pk:
+            return self._save_first_hint('cover image')
+        return format_html(
+            '<div class="media-picker-field" data-api-base="/admin/medialib/api/" '
+            'data-type="product" data-id="{}" data-role="primary" data-single="true" '
+            'data-folder="products"></div>',
+            obj.pk,
+        )
+    cover_image_library.short_description = 'Cover image'
+
     def media_library_gallery(self, obj):
         from django.utils.html import format_html
-        from django.utils.safestring import mark_safe
         if not obj or not obj.pk:
-            return mark_safe('<span style="color:#999;">Save the product first to add library images.</span>')
+            return self._save_first_hint('gallery images')
         return format_html(
             '<div class="media-picker-field" data-api-base="/admin/medialib/api/" '
             'data-type="product" data-id="{}" data-role="gallery" data-folder="products/gallery"></div>',
             obj.pk,
         )
-    media_library_gallery.short_description = 'Shared gallery'
+    media_library_gallery.short_description = 'Gallery images'
 
 
 class VariationImageInline(admin.TabularInline):
