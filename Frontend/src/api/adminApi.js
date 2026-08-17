@@ -73,11 +73,21 @@ export const listColors = () =>
 export const createColor = (data) =>
   api.post('admin/colors/', data).then(r => r.data);
 
-export const listSizeSets = () =>
-  api.get('admin/size-sets/').then(r => r.data);
+/** Active sets only by default — pass true on the management page, where a
+ *  deactivated set must stay visible so it can be switched back on. */
+export const listSizeSets = (includeInactive = false) =>
+  api.get('admin/size-sets/', includeInactive ? { params: { include_inactive: 'true' } } : undefined)
+     .then(r => r.data);
 
 export const createSizeSet = (data) =>
   api.post('admin/size-sets/', data).then(r => r.data);
+
+export const updateSizeSet = (id, data) =>
+  api.patch(`admin/size-sets/${id}/`, data).then(r => r.data);
+
+/** 409 with {error} when the set is in use — deactivate it instead. */
+export const deleteSizeSet = (id) =>
+  api.delete(`admin/size-sets/${id}/`).then(r => r.data);
 
 // ── Media library ──────────────────────────────────────────────────────────
 export const listAssets = (params = {}) =>

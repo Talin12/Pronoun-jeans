@@ -34,6 +34,7 @@ import AdminProducts      from './pages/admin/AdminProducts';
 import AdminProductEditor from './pages/admin/AdminProductEditor';
 import AdminCategories    from './pages/admin/AdminCategories';
 import AdminCategoryProducts from './pages/admin/AdminCategoryProducts';
+import AdminSizeSets       from './pages/admin/AdminSizeSets';
 import AdminMedia          from './pages/admin/AdminMedia';
 import AdminUsers          from './pages/admin/AdminUsers';
 import AdminUserProfile    from './pages/admin/AdminUserProfile';
@@ -83,6 +84,7 @@ function App() {
           <Route path="products/:id"    element={<AdminProductEditor />} />
           <Route path="categories"      element={<AdminCategories />} />
           <Route path="categories/:id"  element={<AdminCategoryProducts />} />
+          <Route path="size-sets"       element={<AdminSizeSets />} />
           <Route path="media"           element={<AdminMedia />} />
           <Route path="users"           element={<AdminUsers />} />
           <Route path="users/new"       element={<AdminUserProfile />} />

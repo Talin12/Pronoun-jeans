@@ -63,23 +63,39 @@ class SizeSetBreakdownSerializer(serializers.ModelSerializer):
 
 
 class SizeSetBreakdownNestedSerializer(serializers.ModelSerializer):
-    """Breakdown as written inside a SizeSet create/update (no size_set FK)."""
+    """
+    Breakdown as written inside a SizeSet create/update (no size_set FK).
+
+    `id` is writable on purpose: an update matches rows by it so an edit
+    modifies breakdowns in place. Recreating them would hand out new ids, and
+    ProductVariation.size_breakdown is SET_NULL — every variation using the set
+    would quietly lose its breakdown.
+    """
+    id = serializers.IntegerField(required=False)
+
     class Meta:
         model  = SizeSetBreakdown
         fields = ['id', 'label', 'breakdown_string', 'pieces']
 
 
 class SizeSetSerializer(serializers.ModelSerializer):
-    breakdowns = SizeSetBreakdownNestedSerializer(many=True, required=False)
+    breakdowns      = SizeSetBreakdownNestedSerializer(many=True, required=False)
+    variation_count = serializers.SerializerMethodField()
 
     class Meta:
         model  = SizeSet
-        fields = ['id', 'name', 'is_active', 'order', 'breakdowns']
+        fields = ['id', 'name', 'is_active', 'order', 'breakdowns', 'variation_count']
+
+    def get_variation_count(self, obj):
+        """How many variations use this set — the panel warns before removing."""
+        count = getattr(obj, 'variation_count_annotated', None)
+        return count if count is not None else obj.variations.count()
 
     def create(self, validated):
         breakdowns = validated.pop('breakdowns', [])
         size_set = SizeSet.objects.create(**validated)
         for b in breakdowns:
+            b.pop('id', None)                      # ids are ours to assign
             SizeSetBreakdown.objects.create(size_set=size_set, **b)
         return size_set
 
@@ -89,11 +105,41 @@ class SizeSetSerializer(serializers.ModelSerializer):
             setattr(instance, k, v)
         instance.save()
         if breakdowns is not None:
-            # Full replace — the panel always sends the complete breakdown list.
-            instance.breakdowns.all().delete()
-            for b in breakdowns:
-                SizeSetBreakdown.objects.create(size_set=instance, **b)
+            self._sync_breakdowns(instance, breakdowns)
         return instance
+
+    def _sync_breakdowns(self, instance, rows):
+        """
+        Reconcile breakdowns by id: update the ones sent, create the new ones,
+        remove the ones left out. A removal that variations still point at is
+        refused rather than silently nulling them — deactivate the set, or move
+        those variations first.
+        """
+        existing = {b.id: b for b in instance.breakdowns.all()}
+        seen     = set()
+
+        for row in rows:
+            row = dict(row)
+            bid = row.pop('id', None)
+            current = existing.get(bid) if bid is not None else None
+            if current is not None:
+                for k, v in row.items():
+                    setattr(current, k, v)
+                current.save()
+                seen.add(current.id)
+            else:
+                SizeSetBreakdown.objects.create(size_set=instance, **row)
+
+        dropped  = [b for bid, b in existing.items() if bid not in seen]
+        in_use   = [b for b in dropped if b.variations.exists()]
+        if in_use:
+            raise serializers.ValidationError({'breakdowns': [
+                f'"{b.label}" is used by {b.variations.count()} variation(s) and '
+                f'cannot be removed. Move those variations to another breakdown first.'
+                for b in in_use
+            ]})
+        for b in dropped:
+            b.delete()
 
 
 class CategorySerializer(serializers.ModelSerializer):

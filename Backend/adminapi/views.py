@@ -327,8 +327,36 @@ class SizeSetViewSet(viewsets.ModelViewSet):
     the Django admin mid-upload."""
     permission_classes = [IsSuperUser]
     serializer_class   = SizeSetSerializer
-    queryset           = (SizeSet.objects.filter(is_active=True)
-                          .prefetch_related('breakdowns').order_by('order', 'name'))
+
+    def get_queryset(self):
+        qs = (SizeSet.objects
+              .prefetch_related('breakdowns')
+              .annotate(variation_count_annotated=Count('variations', distinct=True))
+              .order_by('order', 'name'))
+        # Active-only by default — that is what the variant dropdowns want. The
+        # Size Sets management page passes ?include_inactive=true so a
+        # deactivated set stays visible and can be switched back on.
+        if self.request.query_params.get('include_inactive') != 'true':
+            qs = qs.filter(is_active=True)
+        return qs
+
+    def destroy(self, request, *args, **kwargs):
+        """
+        Deleting a set in use would SET_NULL every variation's size — the model
+        says to deactivate instead, so refuse and say so. Unused sets delete
+        normally (their breakdowns cascade).
+        """
+        size_set = self.get_object()
+        used = size_set.variations.count()
+        if used:
+            return Response(
+                {'error': f'"{size_set.name}" is used by {used} variation(s). '
+                          f'Deactivate it instead — that hides it from the size '
+                          f'dropdown without changing existing products.',
+                 'variation_count': used},
+                status=409,
+            )
+        return super().destroy(request, *args, **kwargs)
 
 
 # ── Media (JWT) ────────────────────────────────────────────────────────────────
