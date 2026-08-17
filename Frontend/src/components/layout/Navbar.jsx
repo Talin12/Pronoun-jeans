@@ -4,6 +4,7 @@ import { useAuthStore } from '../../store/useAuthStore';
 import { useCartStore } from '../../store/useCartStore';
 import { ShoppingBag, LogOut, Menu, X } from 'lucide-react';
 import ThemeToggle from '../ui/ThemeToggle';
+import ResponsiveImage from '../shared/ResponsiveImage';
 
 const Navbar = () => {
   const { isAuthenticated, isSuperuser, user, logout, impersonatedBuyer, clearImpersonatedBuyer } = useAuthStore();
@@ -55,9 +56,14 @@ const Navbar = () => {
 
         {/* Logo */}
         <Link to="/" className="flex items-center">
-          <img
+          {/* Displayed 48px tall; 200px covers 3x screens. On every page, so
+              serving the full-size PNG here was the most-repeated waste. */}
+          <ResponsiveImage
             src="https://res.cloudinary.com/dvs95yf9s/image/upload/v1779774242/Screenshot_2026-05-26_at_11.12.34_AM-removebg-preview_ukte3f.png"
             alt="Pronoun Jeans"
+            widths={[200, 400]}
+            sizes="160px"
+            priority
             className="h-12 w-auto dark:[filter:brightness(0)_invert(1)]"
           />
         </Link>

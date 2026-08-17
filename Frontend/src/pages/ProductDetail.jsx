@@ -308,7 +308,9 @@ const ProductDetail = () => {
                   {thumbs.map(t => (
                     <button key={t.key} onClick={() => setMainImage(t.src)}
                       className={`w-20 h-20 shrink-0 rounded-xl overflow-hidden border-2 transition-all ${mainImage === t.src ? 'border-accent' : 'border-transparent hover:border-gray-300 dark:hover:border-zinc-600'}`}>
-                      <img src={t.src} alt={t.alt} className="w-full h-full object-cover"
+                      {/* 80px on screen — a 200px derivative, not the original. */}
+                      <ResponsiveImage src={t.src} alt={t.alt} widths={[200, 400]} sizes="80px"
+                        className="w-full h-full object-cover"
                         onError={(e) => { e.target.style.display = 'none'; }} />
                     </button>
                   ))}

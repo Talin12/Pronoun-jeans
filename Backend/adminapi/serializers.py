@@ -29,6 +29,25 @@ def _image_url(field):
         return None
 
 
+def _thumb_url(field, width=400):
+    """
+    A CDN-resized delivery URL (w_/f_auto/q_auto) for panel thumbnails.
+
+    The panel renders these at 56-200px, so linking the original meant a list of
+    24 products pulled 24 full-size photos — tens of MB, and painful on a phone.
+    Cloudinary generates the small AVIF/WebP copy on first request; nothing extra
+    is stored.
+
+    The transform is inserted into the URL the storage backend already produced,
+    rather than rebuilt from the file's name: names are relative to the storage's
+    `media/` prefix, and rebuilding without it yields a 404.
+    """
+    url = _image_url(field)
+    if not url or '/upload/' not in url:
+        return url
+    return url.replace('/upload/', f'/upload/f_auto,q_auto,w_{width},c_limit/', 1)
+
+
 # ── Reference data (dropdowns) ─────────────────────────────────────────────────
 
 class ColorSerializer(serializers.ModelSerializer):
@@ -158,7 +177,7 @@ class ProductListSerializer(serializers.ModelSerializer):
                   'is_active', 'moq', 'thumb', 'variation_count', 'created_at']
 
     def get_thumb(self, obj):
-        return _image_url(obj.image)
+        return _thumb_url(obj.image, width=400)
 
 
 class ProductDetailSerializer(serializers.ModelSerializer):

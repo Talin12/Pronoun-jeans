@@ -9,6 +9,7 @@ import {
   Upload, Hash, Clock, Pencil, Info, Package,
 } from 'lucide-react';
 import api from '../api/axios';
+import ResponsiveImage from '../components/shared/ResponsiveImage';
 import { useCartStore } from '../store/useCartStore';
 import { useAuthStore } from '../store/useAuthStore';
 
@@ -198,9 +199,13 @@ const ProductThumb = ({ src, alt, className = '' }) => {
   const [errored, setErrored] = useState(false);
   if (src && !errored) {
     return (
-      <img
+      // Rendered at 56-64px, so ask the CDN for a 200px AVIF/WebP rather than
+      // pulling the full-size original for every line in the cart.
+      <ResponsiveImage
         src={src}
         alt={alt || ''}
+        widths={[200, 400]}
+        sizes="64px"
         onError={() => setErrored(true)}
         className={`object-cover ${className}`}
       />
