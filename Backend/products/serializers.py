@@ -89,7 +89,7 @@ class ProductVariationSerializer(serializers.ModelSerializer):
         return obj.size_set.name if obj.size_set else ''
 
     def get_set_breakdown(self, obj):
-        """Returns the breakdown string e.g. '1xL, 1xXL, 1xXXL, 1x3XL'."""
+        """Returns the breakdown string e.g. '1xL, 1xXL, 1x2XL, 1x3XL'."""
         return obj.size_breakdown.breakdown_string if obj.size_breakdown else ''
 
     def get_margin_percentage(self, obj):

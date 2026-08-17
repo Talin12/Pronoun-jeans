@@ -2,8 +2,9 @@
   'use strict';
 
   // ── Master size order ─────────────────────────────────────────────────────
+  // 2XL, not XXL — the run reads 2XL, 3XL, 4XL without switching notation.
   const ALL_SIZES = [
-    'XS', 'S', 'M', 'L', 'XL', 'XXL', '3XL', '4XL', '5XL',
+    'XS', 'S', 'M', 'L', 'XL', '2XL', '3XL', '4XL', '5XL',
     '26', '28', '30', '32', '34', '36', '38', '40', '42', '44', '46',
   ];
 

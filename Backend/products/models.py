@@ -140,8 +140,8 @@ class SizeSetBreakdown(models.Model):
     """
     A reusable breakdown option for a SizeSet.
     e.g. for 'L TO 3XL':
-        label            = '1xL, 1xXL, 1xXXL, 1x3XL'
-        breakdown_string = '1xL, 1xXL, 1xXXL, 1x3XL'
+        label            = '1xL, 1xXL, 1x2XL, 1x3XL'
+        breakdown_string = '1xL, 1xXL, 1x2XL, 1x3XL'
     Multiple breakdowns can exist per SizeSet so the admin can pick
     the right distribution for each product variation.
     """
@@ -149,7 +149,7 @@ class SizeSetBreakdown(models.Model):
                                          related_name='breakdowns')
     label            = models.CharField(max_length=255,
                                         help_text='Human-readable label shown in the dropdown, '
-                                                  'e.g. "1xL, 2xXL, 1xXXL, 1x3XL"')
+                                                  'e.g. "1xL, 2xXL, 1x2XL, 1x3XL"')
     breakdown_string = models.CharField(max_length=255,
                                         help_text='Exact string stored on the variation and '
                                                   'shown to buyers in the tooltip. '
@@ -157,7 +157,7 @@ class SizeSetBreakdown(models.Model):
     pieces           = models.PositiveIntegerField(
         default=1,
         validators=[MinValueValidator(1)],
-        help_text='Total garment pieces in this breakdown, e.g. "1xL, 1xXL, 1xXXL, 1x3XL" = 4. '
+        help_text='Total garment pieces in this breakdown, e.g. "1xL, 1xXL, 1x2XL, 1x3XL" = 4. '
                   'Used to auto-calculate a variation\'s total MRP/price from its per-piece price.',
     )
 
@@ -280,7 +280,7 @@ class ProductVariation(models.Model):
 
     @property
     def set_breakdown(self):
-        """Returns the breakdown string, e.g. '1xL, 1xXL, 1xXXL, 1x3XL'."""
+        """Returns the breakdown string, e.g. '1xL, 1xXL, 1x2XL, 1x3XL'."""
         return self.size_breakdown.breakdown_string if self.size_breakdown else ''
 
     @property

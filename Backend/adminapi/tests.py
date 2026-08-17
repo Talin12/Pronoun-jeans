@@ -268,3 +268,79 @@ class SizeSetAdminTests(TestCase):
         c = APIClient()
         c.force_authenticate(user=plain)
         self.assertIn(c.get(self.url).status_code, (401, 403))
+
+
+class XxlRenameTests(TestCase):
+    """
+    The 0022 data migration renames XXL to 2XL in stored size text.
+
+    Exercised through the same helpers the migration uses, so the tricky part —
+    not mangling XXXL, and not colliding with existing rows — is pinned down.
+    """
+
+    def setUp(self):
+        from products.migrations import __name__ as _  # noqa: F401
+        import importlib
+        self.mod = importlib.import_module('products.migrations.0022_size_xxl_to_2xl')
+
+    def _sub(self, value):
+        pattern, replacement = self.mod.XXL_TO_2XL
+        return pattern.sub(replacement, value)
+
+    def _unsub(self, value):
+        pattern, replacement = self.mod.TWO_XL_TO_XXL
+        return pattern.sub(replacement, value)
+
+    def test_plain_xxl_is_renamed(self):
+        self.assertEqual(self._sub('S TO XXL'), 'S TO 2XL')
+
+    def test_xxl_inside_a_breakdown_is_renamed(self):
+        self.assertEqual(self._sub('1xL, 1xXL, 1xXXL, 1x3XL'), '1xL, 1xXL, 1x2XL, 1x3XL')
+
+    def test_xxxl_is_left_alone(self):
+        """XXXL means 3XL and must not become X2XL."""
+        self.assertEqual(self._sub('L TO XXXL'), 'L TO XXXL')
+        self.assertEqual(self._sub('1xXXXL'), '1xXXXL')
+
+    def test_xl_is_untouched(self):
+        self.assertEqual(self._sub('1xL, 2xXL'), '1xL, 2xXL')
+
+    def test_already_renamed_text_is_stable(self):
+        self.assertEqual(self._sub('S TO 2XL'), 'S TO 2XL')
+
+    def test_reverse_restores_the_old_spelling(self):
+        for original in ('S TO XXL', '1xL, 1xXXL, 1x3XL'):
+            self.assertEqual(self._unsub(self._sub(original)), original)
+
+    def test_reverse_leaves_3xl_alone(self):
+        self.assertEqual(self._unsub('1x3XL, 1x2XL'), '1x3XL, 1xXXL')
+
+    def test_migration_renames_rows(self):
+        ss = SizeSet.objects.create(name='S TO XXL')
+        SizeSetBreakdown.objects.create(size_set=ss, label='1xL, 1xXXL',
+                                        breakdown_string='1xL, 1xXXL', pieces=2)
+        self.mod.forwards(_FakeApps(), None)
+
+        ss.refresh_from_db()
+        self.assertEqual(ss.name, 'S TO 2XL')
+        row = ss.breakdowns.get()
+        self.assertEqual(row.breakdown_string, '1xL, 1x2XL')
+        self.assertEqual(row.label, '1xL, 1x2XL')
+
+    def test_migration_skips_a_name_collision(self):
+        """Both spellings already present: leave them, don't break uniqueness."""
+        old = SizeSet.objects.create(name='S TO XXL')
+        SizeSet.objects.create(name='S TO 2XL')
+        self.mod.forwards(_FakeApps(), None)
+
+        old.refresh_from_db()
+        self.assertEqual(old.name, 'S TO XXL')          # untouched
+        self.assertEqual(SizeSet.objects.count(), 2)
+
+
+class _FakeApps:
+    """Stands in for the migration's `apps` registry, using the real models."""
+
+    def get_model(self, app_label, model_name):
+        from django.apps import apps as django_apps
+        return django_apps.get_model(app_label, model_name)

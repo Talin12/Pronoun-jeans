@@ -17,7 +17,7 @@ const btnGhost = 'inline-flex items-center gap-2 px-4 py-2.5 rounded-xl border b
  * Size sets and their breakdowns.
  *
  * A set ("L TO 3XL") names a range; its breakdowns are the distributions a
- * variation can be sold in ("1xL, 1xXL, 1xXXL, 1x3XL" = 4 pieces). Both the
+ * variation can be sold in ("1xL, 1xXL, 1x2XL, 1x3XL" = 4 pieces). Both the
  * string and the article count come from SizeRangeBuilder — you pick the two
  * ends of the range and tick sizes, never typing either. Pieces drive variation
  * pricing, so a hand-typed count that disagreed with the string would misprice.

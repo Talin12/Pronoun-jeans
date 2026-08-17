@@ -5,15 +5,16 @@
  * SizeRangeBuilder is the UI over it.
  */
 
-// The lettered scale, smallest to largest. Matches the historic SIZE_CHOICES:
-// XXL then 3XL (not XXXL), so a generated range reads the way existing sets do.
+// The lettered scale, smallest to largest. Numbered from 2XL up, so the run
+// reads 2XL, 3XL, 4XL rather than switching notation partway.
 export const LETTER_SCALE = [
-  'XXS', 'XS', 'S', 'M', 'L', 'XL', 'XXL', '3XL', '4XL', '5XL', '6XL', '7XL', '8XL',
+  'XXS', 'XS', 'S', 'M', 'L', 'XL', '2XL', '3XL', '4XL', '5XL', '6XL', '7XL', '8XL',
 ];
 
-// Spellings buyers and staff actually type, mapped onto the scale above.
+// Spellings buyers and staff actually type, mapped onto the scale above. XXL is
+// kept as an alias because older sets and habits still use it.
 const LETTER_ALIASES = {
-  '2XL': 'XXL', 'XXXL': '3XL', 'XXXXL': '4XL', 'XXXXXL': '5XL',
+  'XXL': '2XL', 'XXXL': '3XL', 'XXXXL': '4XL', 'XXXXXL': '5XL',
   'SMALL': 'S', 'MEDIUM': 'M', 'LARGE': 'L',
 };
 

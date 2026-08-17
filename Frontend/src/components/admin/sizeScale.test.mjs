@@ -19,9 +19,10 @@ t('nonsense rejected', () => assert.equal(detectScale('abc', 'def'), null));
 t('empty rejected', () => assert.equal(detectScale('', ''), null));
 
 // ── aliases ───────────────────────────────────────────────────────────────────
-t('2XL is XXL', () => assert.equal(normalizeLetter('2XL'), 'XXL'));
+t('2XL is canonical', () => assert.equal(normalizeLetter('2XL'), '2XL'));
+t('legacy XXL maps to 2XL', () => assert.equal(normalizeLetter('XXL'), '2XL'));
 t('XXXL is 3XL', () => assert.equal(normalizeLetter('XXXL'), '3XL'));
-t('spaces and dashes ignored', () => assert.equal(normalizeLetter(' 2 xl '), 'XXL'));
+t('spaces and dashes ignored', () => assert.equal(normalizeLetter(' x-x-l '), '2XL'));
 
 // ── numeric expansion ─────────────────────────────────────────────────────────
 t('30-36 by 2', () =>
@@ -39,23 +40,23 @@ t('runaway range is capped', () =>
 
 // ── letter expansion ──────────────────────────────────────────────────────────
 t('L to 3XL matches the historic set', () =>
-  assert.deepEqual(expandRange('L', '3XL'), ['L', 'XL', 'XXL', '3XL']));
-t('S to XXL', () =>
-  assert.deepEqual(expandRange('S', 'XXL'), ['S', 'M', 'L', 'XL', 'XXL']));
-t('aliases expand correctly', () =>
-  assert.deepEqual(expandRange('L', '2XL'), ['L', 'XL', 'XXL']));
+  assert.deepEqual(expandRange('L', '3XL'), ['L', 'XL', '2XL', '3XL']));
+t('S to 2XL', () =>
+  assert.deepEqual(expandRange('S', '2XL'), ['S', 'M', 'L', 'XL', '2XL']));
+t('legacy XXL as a range end still expands', () =>
+  assert.deepEqual(expandRange('L', 'XXL'), ['L', 'XL', '2XL']));
 t('reversed letters still ascend', () =>
-  assert.deepEqual(expandRange('3XL', 'L'), ['L', 'XL', 'XXL', '3XL']));
+  assert.deepEqual(expandRange('3XL', 'L'), ['L', 'XL', '2XL', '3XL']));
 
 // ── breakdown string + article count ──────────────────────────────────────────
-const sizes = [{ size: 'L', qty: 1 }, { size: 'XL', qty: 2 }, { size: 'XXL', qty: 1 }];
+const sizes = [{ size: 'L', qty: 1 }, { size: 'XL', qty: 2 }, { size: '2XL', qty: 1 }];
 t('breakdown string matches the stored format', () =>
-  assert.equal(toBreakdownString(sizes), '1xL, 2xXL, 1xXXL'));
+  assert.equal(toBreakdownString(sizes), '1xL, 2xXL, 1x2XL'));
 t('article count sums quantities', () =>
   assert.equal(countPieces(sizes), 4));
 t('zero-qty sizes are excluded from both', () => {
   const withZero = [...sizes, { size: '3XL', qty: 0 }];
-  assert.equal(toBreakdownString(withZero), '1xL, 2xXL, 1xXXL');
+  assert.equal(toBreakdownString(withZero), '1xL, 2xXL, 1x2XL');
   assert.equal(countPieces(withZero), 4);
 });
 t('numeric breakdown reads correctly', () =>
@@ -64,7 +65,7 @@ t('numeric breakdown reads correctly', () =>
 // ── naming ────────────────────────────────────────────────────────────────────
 t('numeric name', () => assert.equal(suggestName('30', '36'), '30 TO 36'));
 t('letter name', () => assert.equal(suggestName('L', '3XL'), 'L TO 3XL'));
-t('alias normalised in name', () => assert.equal(suggestName('L', '2XL'), 'L TO XXL'));
+t('legacy XXL normalised in the name', () => assert.equal(suggestName('L', 'XXL'), 'L TO 2XL'));
 t('reversed ends named low-to-high', () => assert.equal(suggestName('36', '30'), '30 TO 36'));
 t('single size names itself', () => assert.equal(suggestName('32', '32'), '32'));
 t('unreadable range has no name', () => assert.equal(suggestName('30', 'XL'), ''));
