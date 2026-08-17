@@ -197,7 +197,10 @@ def _valid_entity(attachable_type):
 def entity_attachments(request, attachable_type, attachable_id):
     if not _valid_entity(attachable_type):
         return JsonResponse({'error': 'Unknown type'}, status=400)
-    qs = services.list_attachments(attachable_type, attachable_id)
+    role = request.GET.get('role')
+    if role and role not in _VALID_ROLES:
+        return JsonResponse({'error': 'Unknown role'}, status=400)
+    qs = services.list_attachments(attachable_type, attachable_id, role=role)
     return JsonResponse({'attachments': [presenters.serialize_attachment(a) for a in qs]})
 
 

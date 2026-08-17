@@ -15,6 +15,11 @@ import {
  * duplicate reuses the existing asset (dedup) instead of erroring. Mirrors the
  * Django-admin picker, but JWT-authed via /api/admin/media/*.
  *
+ * One picker owns exactly one `role`, and lists/detaches only that role. The
+ * cover (role="primary") and the gallery are separate slots on the same
+ * product: removing a gallery image leaves the cover alone, and vice versa.
+ * The same asset may sit in both — detaching it from one keeps the other.
+ *
  * `categoryId` preselects that library section, so adding images to a boxer
  * product starts from the Boxers photos and "All images" is one click away.
  */
@@ -27,13 +32,15 @@ export default function MediaPicker({
   const [loading, setLoad]  = useState(false);
   const dragId = useRef(null);
 
+  // Scoped to this picker's role: the cover and the gallery are independent
+  // slots, so each picker shows and removes only its own attachments.
   const load = useCallback(() => {
     if (!id) return;
     setLoad(true);
-    getAttachments(type, id)
+    getAttachments(type, id, role)
       .then(d => setItems(d.attachments || []))
       .finally(() => setLoad(false));
-  }, [type, id]);
+  }, [type, id, role]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -129,7 +136,9 @@ export default function MediaPicker({
           className="w-24 h-24 rounded-xl border-2 border-dashed border-gray-300 dark:border-white/15 text-gray-400 dark:text-zinc-500 hover:border-accent hover:text-accent flex flex-col items-center justify-center gap-1 transition-colors"
         >
           <ImagePlus size={22} />
-          <span className="text-[11px] font-semibold">{single ? 'Set cover' : 'Add'}</span>
+          <span className="text-[11px] font-semibold">
+            {single ? (items.length ? 'Replace' : 'Set cover') : 'Add'}
+          </span>
         </button>
       </div>
       {loading && <p className="text-xs text-gray-400 flex items-center gap-1"><Loader size={12} className="animate-spin" /> loading…</p>}

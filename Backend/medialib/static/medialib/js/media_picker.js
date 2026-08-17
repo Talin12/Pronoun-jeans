@@ -270,7 +270,10 @@
     }
 
     function load() {
-      return api(entityBase + 'attachments/').then(function (data) {
+      // Scoped to this widget's role, so a cover placement and a gallery
+      // placement on the same object never list — or detach — each other's
+      // attachments.
+      return api(entityBase + 'attachments/?role=' + encodeURIComponent(role)).then(function (data) {
         items = data.attachments || [];
         render();
       });

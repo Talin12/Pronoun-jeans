@@ -493,7 +493,12 @@ class EntityAttachmentsView(APIView):
     def get(self, request, attachable_type, attachable_id):
         if not _valid_entity(attachable_type):
             return Response({'error': 'Unknown type'}, status=400)
-        qs = services.list_attachments(attachable_type, attachable_id)
+        # ?role=primary|gallery — one slot only, so a role-bound picker never
+        # renders (and never offers to remove) another slot's attachments.
+        role = request.query_params.get('role')
+        if role and role not in _VALID_ROLES:
+            return Response({'error': 'Unknown role'}, status=400)
+        qs = services.list_attachments(attachable_type, attachable_id, role=role)
         return Response({'attachments': [presenters.serialize_attachment(a) for a in qs]})
 
 

@@ -143,8 +143,11 @@ export const categorizeAssets = (mediaIds, { add = [], remove = [] } = {}) =>
   api.post('admin/media/assets/categorize/', { media_ids: mediaIds, add, remove })
     .then(r => r.data);
 
-export const getAttachments = (type, id) =>
-  api.get(`admin/media/${type}/${id}/attachments/`).then(r => r.data);
+// `role` scopes the result to one slot (cover vs gallery). Omit it only when you
+// genuinely want every slot — a picker bound to a role must always pass it.
+export const getAttachments = (type, id, role) =>
+  api.get(`admin/media/${type}/${id}/attachments/`, role ? { params: { role } } : undefined)
+     .then(r => r.data);
 
 export const attachMedia = (type, id, mediaIds, role = 'gallery') =>
   api.post(`admin/media/${type}/${id}/attach/`, { media_ids: mediaIds, role }).then(r => r.data);

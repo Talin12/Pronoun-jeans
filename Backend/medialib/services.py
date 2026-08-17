@@ -208,12 +208,21 @@ def categorize_assets(media_ids, *, add=(), remove=()):
     return len(assets)
 
 
-def list_attachments(attachable_type, attachable_id):
-    return (MediaAttachment.objects
-            .filter(attachable_type=attachable_type, attachable_id=attachable_id,
-                    media__deleted_at__isnull=True)
-            .select_related('media')
-            .order_by('sort_order', 'id'))
+def list_attachments(attachable_type, attachable_id, role=None):
+    """
+    Attachments for an entity, newest-role-agnostic by default.
+
+    Pass `role` to get one slot only. A picker bound to a role MUST do this:
+    the cover ('primary') and the gallery are independent slots, and a picker
+    that renders the unfiltered list would offer a remove button that detaches
+    another slot's attachment — taking the cover away with a gallery image.
+    """
+    qs = (MediaAttachment.objects
+          .filter(attachable_type=attachable_type, attachable_id=attachable_id,
+                  media__deleted_at__isnull=True)
+          .select_related('media')
+          .order_by('sort_order', 'id'))
+    return qs.filter(role=role) if role else qs
 
 
 def attach_assets(attachable_type, attachable_id, media_ids, role='gallery'):
