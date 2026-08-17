@@ -38,6 +38,9 @@ export const deleteVariation = (id) =>
 export const listCategories = () =>
   api.get('admin/categories/').then(r => r.data);
 
+export const getCategory = (id) =>
+  api.get(`admin/categories/${id}/`).then(r => r.data);
+
 export const createCategory = (data) =>
   api.post('admin/categories/', data).then(r => r.data);
 
