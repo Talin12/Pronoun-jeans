@@ -227,11 +227,13 @@ export default function AdminProductEditor() {
               <div className="space-y-6">
                 <div>
                   <label className={labelCls}>Cover image (shown first to buyers)</label>
-                  <MediaPicker type="product" id={Number(id)} role="primary" single folder="products" label="cover image" />
+                  <MediaPicker type="product" id={Number(id)} role="primary" single folder="products" label="cover image"
+                    categoryId={Number(form.category) || null} />
                 </div>
                 <div>
                   <label className={labelCls}>Gallery (drag to reorder)</label>
-                  <MediaPicker type="product" id={Number(id)} role="gallery" folder="products/gallery" label="gallery images" />
+                  <MediaPicker type="product" id={Number(id)} role="gallery" folder="products/gallery" label="gallery images"
+                    categoryId={Number(form.category) || null} />
                 </div>
               </div>
               <div className="mt-6 flex justify-between">
@@ -247,6 +249,7 @@ export default function AdminProductEditor() {
               <p className="text-sm text-gray-400 dark:text-zinc-500 mb-5">Add each size-set / colour combination with its price, stock and images.</p>
               <VariantsEditor
                 productId={Number(id)} colors={colors} sizeSets={sizeSets}
+                categoryId={Number(form.category) || null}
                 variations={variations} onChange={setVariations}
                 onColorsChange={setColors} onSizeSetsChange={setSizeSets} />
               <div className="mt-6 flex justify-between">
@@ -296,7 +299,7 @@ const Row = ({ label, value }) => (
 );
 
 // ── Variants editor ──────────────────────────────────────────────────────────
-function VariantsEditor({ productId, colors, sizeSets, variations, onChange, onColorsChange, onSizeSetsChange }) {
+function VariantsEditor({ productId, colors, sizeSets, categoryId, variations, onChange, onColorsChange, onSizeSetsChange }) {
   const [adding, setAdding]   = useState(false);
   const [expanded, setExpanded] = useState(null);
 
@@ -329,7 +332,8 @@ function VariantsEditor({ productId, colors, sizeSets, variations, onChange, onC
               {expanded === v.id && (
                 <div className="px-3 pb-3 pt-1 border-t border-gray-100 dark:border-white/5 bg-gray-50/50 dark:bg-white/[0.02]">
                   <p className="text-xs text-gray-400 dark:text-zinc-500 my-2">Images for this colour/variant:</p>
-                  <MediaPicker type="variation" id={v.id} role="gallery" folder="variations/gallery" label="variant images" />
+                  <MediaPicker type="variation" id={v.id} role="gallery" folder="variations/gallery" label="variant images"
+                    categoryId={categoryId} />
                 </div>
               )}
             </div>

@@ -26,6 +26,7 @@ import io
 import os
 
 from django.apps import apps
+from django.db.models import Q
 from PIL import Image
 
 from core.utils.images import compress_image
@@ -103,9 +104,13 @@ def _final_bytes(file, filename, source_format):
 
 
 def ingest_upload(file, *, uploaded_by=None, folder=None, filename=None,
-                  title='', alt_text=''):
+                  title='', alt_text='', categories=None):
     """
     Ingest one uploaded image, deduplicating by content hash.
+
+    `categories` is an iterable of Category ids — the library sections the image
+    should appear under. They are ADDED, never replaced, so re-uploading a photo
+    into a second section files it under both instead of moving it.
 
     Returns (asset, deduplicated: bool).
     Raises MediaValidationError on an invalid/oversized/unsupported file.
@@ -126,6 +131,8 @@ def ingest_upload(file, *, uploaded_by=None, folder=None, filename=None,
             # would reject that anyway).
             existing.deleted_at = None
             existing.save(update_fields=['deleted_at', 'updated_at'])
+        if categories:
+            existing.categories.add(*categories)
         return existing, True
 
     # ── New content: store it and record the asset ────────────────────────────
@@ -157,6 +164,8 @@ def ingest_upload(file, *, uploaded_by=None, folder=None, filename=None,
         variants          = variants,
         uploaded_by       = uploaded_by,
     )
+    if categories:
+        asset.categories.add(*categories)
     return asset, False
 
 
@@ -169,6 +178,31 @@ def ingest_upload(file, *, uploaded_by=None, folder=None, filename=None,
 
 def live_assets():
     return MediaAsset.objects.filter(deleted_at__isnull=True)
+
+
+def in_category(qs, category_id):
+    """
+    Narrow an asset queryset to one library section. A main category also covers
+    its sub-categories, so "Men" shows everything filed under "Men → Boxers".
+    """
+    return qs.filter(
+        Q(categories__id=category_id) | Q(categories__parent_id=category_id)
+    ).distinct()
+
+
+def categorize_assets(media_ids, *, add=(), remove=()):
+    """
+    File existing assets into library sections (or take them out again). Sections
+    are additive per asset, so this never disturbs memberships it wasn't asked
+    about. Returns the number of assets touched.
+    """
+    assets = list(live_assets().filter(id__in=media_ids))
+    for asset in assets:
+        if add:
+            asset.categories.add(*add)
+        if remove:
+            asset.categories.remove(*remove)
+    return len(assets)
 
 
 def list_attachments(attachable_type, attachable_id):

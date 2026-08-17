@@ -1,7 +1,8 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { ImagePlus, Loader, Search, Trash2, UploadCloud, X, Star } from 'lucide-react';
+import { FolderTree, ImagePlus, Loader, Search, UploadCloud, X, Star } from 'lucide-react';
 import {
-  attachMedia, detachMedia, getAttachments, listAssets, reorderMedia, uploadAssets,
+  attachMedia, detachMedia, getAttachments, listAssets, listMediaSections,
+  reorderMedia, uploadAssets,
 } from '../../api/adminApi';
 
 /**
@@ -11,9 +12,13 @@ import {
  * plus a "Choose from library" modal with Library + Upload tabs. Uploading a
  * duplicate reuses the existing asset (dedup) instead of erroring. Mirrors the
  * Django-admin picker, but JWT-authed via /api/admin/media/*.
+ *
+ * `categoryId` preselects that library section, so adding images to a boxer
+ * product starts from the Boxers photos and "All images" is one click away.
  */
 export default function MediaPicker({
   type, id, role = 'gallery', single = false, folder = '', label = 'Images',
+  categoryId = null,
 }) {
   const [items, setItems]   = useState([]);
   const [open, setOpen]     = useState(false);
@@ -105,6 +110,7 @@ export default function MediaPicker({
         <LibraryModal
           folder={folder}
           single={single}
+          categoryId={categoryId}
           onClose={() => setOpen(false)}
           onConfirm={(ids) => handleAttach(ids).then(() => setOpen(false))}
         />
@@ -114,7 +120,7 @@ export default function MediaPicker({
 }
 
 // ── Library + Upload modal ─────────────────────────────────────────────────
-function LibraryModal({ folder, single, onClose, onConfirm }) {
+function LibraryModal({ folder, single, categoryId, onClose, onConfirm }) {
   const [tab, setTab]         = useState('library');
   const [assets, setAssets]   = useState([]);
   const [page, setPage]       = useState(1);
@@ -123,25 +129,32 @@ function LibraryModal({ folder, single, onClose, onConfirm }) {
   const [selected, setSel]    = useState(new Map());
   const [loading, setLoad]    = useState(false);
   const [uploads, setUploads] = useState([]);
+  const [sections, setSecs]   = useState([]);
+  // Which library section we are browsing/uploading into. '' = All images.
+  const [section, setSection] = useState(categoryId ? String(categoryId) : '');
   const fileRef = useRef(null);
+
+  useEffect(() => {
+    listMediaSections().then(d => setSecs(d.sections || [])).catch(() => setSecs([]));
+  }, []);
 
   const fetchAssets = useCallback((reset) => {
     setLoad(true);
     const p = reset ? 1 : page;
-    listAssets({ page: p, search })
+    listAssets({ page: p, search, ...(section ? { category: section } : {}) })
       .then(d => {
         setAssets(prev => reset ? (d.results || []) : [...prev, ...(d.results || [])]);
         setHasNext(d.has_next);
         setPage(p + 1);
       })
       .finally(() => setLoad(false));
-  }, [page, search]);
+  }, [page, search, section]);
 
   useEffect(() => {
     const t = setTimeout(() => fetchAssets(true), 200);
     return () => clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [search]);
+  }, [search, section]);
 
   const toggle = (asset) => {
     setSel(prev => {
@@ -156,7 +169,7 @@ function LibraryModal({ folder, single, onClose, onConfirm }) {
     if (!files || !files.length) return;
     const names = Array.from(files).map(f => ({ name: f.name, status: 'uploading…' }));
     setUploads(prev => [...names, ...prev]);
-    uploadAssets(files, folder).then(d => {
+    uploadAssets(files, folder, section || undefined).then(d => {
       const results = d.results || [];
       setUploads(prev => prev.map(u => {
         const match = results.find(r => r.asset.original_filename === u.name);
@@ -188,6 +201,28 @@ function LibraryModal({ folder, single, onClose, onConfirm }) {
               }`}>{t}</button>
           ))}
           <button onClick={onClose} className="ml-auto p-1.5 text-gray-400 hover:text-gray-700 dark:hover:text-zinc-200"><X size={20} /></button>
+        </div>
+
+        {/* Section — which slice of the library we browse and upload into */}
+        <div className="flex items-center gap-2 px-4 py-2.5 border-b border-gray-100 dark:border-white/5 bg-gray-50/60 dark:bg-white/[0.02]">
+          <FolderTree size={15} className="text-accent shrink-0" />
+          <span className="text-xs font-bold uppercase tracking-wide text-gray-500 dark:text-zinc-400">Section</span>
+          <select value={section} onChange={e => setSection(e.target.value)}
+            className="ml-1 px-3 py-1.5 rounded-lg border border-gray-200 dark:border-white/10 bg-white dark:bg-zinc-900 text-sm font-semibold text-gray-900 dark:text-zinc-100 focus:outline-none focus:ring-2 focus:ring-accent/40">
+            <option value="">All images</option>
+            {sections.filter(s => !s.parent).map(m => (
+              <optgroup key={m.id} label={m.name}>
+                <option value={m.id}>{m.name} ({m.count})</option>
+                {sections.filter(s => s.parent === m.id).map(s => (
+                  <option key={s.id} value={s.id}>{m.name} → {s.name} ({s.count})</option>
+                ))}
+              </optgroup>
+            ))}
+          </select>
+          {section && (
+            <button onClick={() => setSection('')}
+              className="text-xs font-semibold text-gray-400 hover:text-accent">show all</button>
+          )}
         </div>
 
         {/* Body */}
@@ -234,8 +269,13 @@ function LibraryModal({ folder, single, onClose, onConfirm }) {
                 className="border-2 border-dashed border-gray-300 dark:border-white/15 rounded-2xl py-12 text-center cursor-pointer hover:border-accent hover:bg-accent/5 transition-colors"
               >
                 <UploadCloud size={36} className="mx-auto text-gray-400 mb-2" />
-                <p className="text-sm font-semibold text-gray-600 dark:text-zinc-300">Drag images here, or click to browse</p>
-                <p className="text-xs text-gray-400 mt-1">JPG, PNG, WebP, AVIF · up to 15 MB · uploaded once, reused anywhere</p>
+                <p className="text-sm font-semibold text-gray-600 dark:text-zinc-300">
+                  Drag images here, or click to browse — they go to{' '}
+                  <span className="text-accent">
+                    {sections.find(s => String(s.id) === section)?.name || 'All images'}
+                  </span>
+                </p>
+                <p className="text-xs text-gray-400 mt-1">JPG, PNG, WebP, AVIF · up to 15 MB · many at once · uploaded once, reused anywhere</p>
                 <input ref={fileRef} type="file" multiple accept="image/*" className="hidden"
                        onChange={(e) => { doUpload(e.target.files); e.target.value = ''; }} />
               </div>

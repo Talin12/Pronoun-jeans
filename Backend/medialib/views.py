@@ -33,7 +33,9 @@ def _body(request):
 
 
 def _live_assets():
-    return MediaAsset.objects.filter(deleted_at__isnull=True)
+    # 'categories' is prefetched because serialize_asset lists an asset's
+    # library sections — without it the grid would issue a query per image.
+    return MediaAsset.objects.filter(deleted_at__isnull=True).prefetch_related('categories')
 
 
 # ── Asset endpoints ───────────────────────────────────────────────────────────

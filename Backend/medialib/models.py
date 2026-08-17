@@ -65,6 +65,15 @@ class MediaAsset(models.Model):
     tags              = models.JSONField(default=list, blank=True)
     folder            = models.CharField(max_length=255, blank=True, null=True)
 
+    # Library sections. An asset with no categories lives only in "All images";
+    # adding it to Boxers makes it show up in that section too. Many-to-many
+    # because dedup collapses a re-upload into the existing asset — the same
+    # photo genuinely can belong to more than one section.
+    categories        = models.ManyToManyField(
+        'products.Category', blank=True, related_name='media_assets',
+        help_text='Library sections this image appears under.',
+    )
+
     # Cloudinary transform recipes/URLs (w_/f_auto/q_auto). NOT stored derivative
     # files — Cloudinary generates them on first request, so this is instant.
     variants          = models.JSONField(default=dict, blank=True)

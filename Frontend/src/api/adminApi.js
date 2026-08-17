@@ -66,14 +66,25 @@ export const createSizeSet = (data) =>
 export const listAssets = (params = {}) =>
   api.get('admin/media/assets/', { params }).then(r => r.data);
 
-export const uploadAssets = (files, folder) => {
+/** Library sections — "All images" plus one per category, with counts. */
+export const listMediaSections = () =>
+  api.get('admin/media/sections/').then(r => r.data);
+
+/** `categoryId` files the upload under that section as well as All images. */
+export const uploadAssets = (files, folder, categoryId) => {
   const fd = new FormData();
   Array.from(files).forEach(f => fd.append('files', f));
   if (folder) fd.append('folder', folder);
+  if (categoryId) fd.append('categories', categoryId);
   return api.post('admin/media/assets/upload/', fd, {
     headers: { 'Content-Type': 'multipart/form-data' },
   }).then(r => r.data);
 };
+
+/** File images already in the library into (or out of) a section. */
+export const categorizeAssets = (mediaIds, { add = [], remove = [] } = {}) =>
+  api.post('admin/media/assets/categorize/', { media_ids: mediaIds, add, remove })
+    .then(r => r.data);
 
 export const getAttachments = (type, id) =>
   api.get(`admin/media/${type}/${id}/attachments/`).then(r => r.data);

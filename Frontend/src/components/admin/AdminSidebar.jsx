@@ -1,12 +1,13 @@
 import React from 'react';
 import { NavLink } from 'react-router-dom';
-import { LayoutDashboard, Package, FolderTree, LogOut, ExternalLink } from 'lucide-react';
+import { LayoutDashboard, Package, FolderTree, Images, LogOut, ExternalLink } from 'lucide-react';
 import { useAuthStore } from '../../store/useAuthStore';
 
 const NAV_ITEMS = [
   { to: '/admin',            end: true, icon: LayoutDashboard, label: 'Dashboard'  },
   { to: '/admin/products',              icon: Package,         label: 'Products'   },
   { to: '/admin/categories',            icon: FolderTree,      label: 'Categories' },
+  { to: '/admin/media',                 icon: Images,          label: 'Media Library' },
 ];
 
 const AdminSidebar = ({ onClose }) => {

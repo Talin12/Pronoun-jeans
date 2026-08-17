@@ -46,6 +46,8 @@ def serialize_asset(asset, *, with_usage=False):
         'title':             asset.title,
         'tags':              asset.tags or [],
         'folder':            asset.folder or '',
+        # Library sections. Cheap when the caller prefetched 'categories'.
+        'categories':        [{'id': c.id, 'name': c.name} for c in asset.categories.all()],
         'created_at':        asset.created_at.isoformat() if asset.created_at else None,
     }
     if with_usage:

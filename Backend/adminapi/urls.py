@@ -16,8 +16,10 @@ urlpatterns = [
     path('', include(router.urls)),
 
     # Media library (JWT + superuser)
-    path('media/assets/',        views.MediaAssetListView.as_view(), name='admin-media-assets'),
-    path('media/assets/upload/', views.MediaUploadView.as_view(),    name='admin-media-upload'),
+    path('media/assets/',            views.MediaAssetListView.as_view(), name='admin-media-assets'),
+    path('media/assets/upload/',     views.MediaUploadView.as_view(),    name='admin-media-upload'),
+    path('media/assets/categorize/', views.MediaCategorizeView.as_view(), name='admin-media-categorize'),
+    path('media/sections/',          views.MediaSectionsView.as_view(),  name='admin-media-sections'),
     path('media/<str:attachable_type>/<int:attachable_id>/attachments/',
          views.EntityAttachmentsView.as_view(), name='admin-media-attachments'),
     path('media/<str:attachable_type>/<int:attachable_id>/attach/',
