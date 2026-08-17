@@ -508,3 +508,121 @@ class LegacyBridgeTests(TestCase):
         names = set(ProductImage.objects.filter(product=p).values_list('image', flat=True))
         self.assertIn('legacy/only.jpg', names)   # untouched
         upload_mock.assert_not_called()
+
+
+# ── Cover and gallery are independent slots ───────────────────────────────────
+
+@mock.patch('cloudinary.uploader.upload', side_effect=AssertionError('Cloudinary upload must NOT happen'))
+class RoleScopedListingTests(TestCase):
+    """
+    The cover ('primary') and the gallery are separate slots on one product.
+
+    Regression: the attachments endpoint ignored role, so both pickers in the
+    product editor rendered the same combined list — and removing what looked
+    like a gallery image detached the cover instead.
+    """
+
+    def setUp(self):
+        self.client, self.user = _staff_client()
+        from products.models import Product
+        self.product = Product.objects.create(name='P', slug='p')
+
+    def _asset(self, key):
+        return MediaAsset.objects.create(storage_key=key, file_hash=key.ljust(64, 'x')[:64],
+                                         original_filename='x.jpg', mime_type='image/jpeg')
+
+    def _attach(self, media_ids, role):
+        return self.client.post(f'/admin/medialib/api/product/{self.product.id}/attach/',
+                                data={'media_ids': media_ids, 'role': role},
+                                content_type='application/json')
+
+    def _list(self, role=None):
+        url = f'/admin/medialib/api/product/{self.product.id}/attachments/'
+        if role:
+            url += f'?role={role}'
+        return self.client.get(url).json()['attachments']
+
+    def test_each_role_lists_only_its_own_attachments(self, _upload):
+        cover = self._asset('media/products/cover')
+        g1    = self._asset('media/products/gallery/one')
+        g2    = self._asset('media/products/gallery/two')
+        self._attach([cover.id], 'primary')
+        self._attach([g1.id, g2.id], 'gallery')
+
+        self.assertEqual([a['media']['storage_key'] for a in self._list('primary')],
+                         ['media/products/cover'])
+        self.assertEqual([a['media']['storage_key'] for a in self._list('gallery')],
+                         ['media/products/gallery/one', 'media/products/gallery/two'])
+        # Unfiltered still returns everything, for callers that want all slots.
+        self.assertEqual(len(self._list()), 3)
+
+    def test_removing_a_gallery_image_leaves_the_cover(self, _upload):
+        cover = self._asset('media/products/cover')
+        g1    = self._asset('media/products/gallery/one')
+        self._attach([cover.id], 'primary')
+        self._attach([g1.id], 'gallery')
+
+        gallery_att = self._list('gallery')[0]['id']
+        self.client.post(f'/admin/medialib/api/product/{self.product.id}/detach/',
+                         data={'attachment_id': gallery_att}, content_type='application/json')
+
+        self.assertEqual([a['media']['storage_key'] for a in self._list('primary')],
+                         ['media/products/cover'])
+        self.product.refresh_from_db()
+        self.assertEqual(self.product.image.name, 'media/products/cover')
+
+    def test_replacing_the_cover_leaves_the_gallery(self, _upload):
+        old   = self._asset('media/products/cover-old')
+        new   = self._asset('media/products/cover-new')
+        g1    = self._asset('media/products/gallery/one')
+        self._attach([old.id], 'primary')
+        self._attach([g1.id], 'gallery')
+        self._attach([new.id], 'primary')          # single slot — replaces
+
+        self.assertEqual([a['media']['storage_key'] for a in self._list('primary')],
+                         ['media/products/cover-new'])
+        self.assertEqual([a['media']['storage_key'] for a in self._list('gallery')],
+                         ['media/products/gallery/one'])
+
+    def test_same_asset_in_both_slots_detaches_independently(self, _upload):
+        """A photo used as the cover AND in the gallery is two rows, not one."""
+        a = self._asset('media/products/shared')
+        self._attach([a.id], 'primary')
+        self._attach([a.id], 'gallery')
+        self.assertEqual(len(self._list()), 2)
+
+        gallery_att = self._list('gallery')[0]['id']
+        self.client.post(f'/admin/medialib/api/product/{self.product.id}/detach/',
+                         data={'attachment_id': gallery_att}, content_type='application/json')
+
+        self.assertEqual(self._list('gallery'), [])
+        self.assertEqual([x['media']['storage_key'] for x in self._list('primary')],
+                         ['media/products/shared'])
+        self.product.refresh_from_db()
+        self.assertEqual(self.product.image.name, 'media/products/shared')
+
+    def test_unknown_role_is_rejected(self, _upload):
+        r = self.client.get(f'/admin/medialib/api/product/{self.product.id}/attachments/?role=bogus')
+        self.assertEqual(r.status_code, 400)
+
+    def test_cover_is_a_single_slot_even_if_many_are_posted(self, _upload):
+        """The server enforces one cover — the UI limit is not the only guard."""
+        a = self._asset('media/products/one')
+        b = self._asset('media/products/two')
+        self._attach([a.id, b.id], 'primary')
+
+        self.assertEqual([x['media']['storage_key'] for x in self._list('primary')],
+                         ['media/products/one'])
+
+    def test_a_multi_primary_entity_heals_on_the_next_cover_pick(self, _upload):
+        """Rows predating the single-slot guard collapse to one, not accumulate."""
+        a, b, c = (self._asset('media/products/a'), self._asset('media/products/b'),
+                   self._asset('media/products/c'))
+        for asset in (a, b):                       # simulate legacy multi-primary data
+            MediaAttachment.objects.create(media=asset, attachable_type='product',
+                                           attachable_id=self.product.id, role='primary')
+        self.assertEqual(len(self._list('primary')), 2)
+
+        self._attach([c.id], 'primary')
+        self.assertEqual([x['media']['storage_key'] for x in self._list('primary')],
+                         ['media/products/c'])

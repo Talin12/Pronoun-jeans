@@ -227,9 +227,13 @@ def list_attachments(attachable_type, attachable_id, role=None):
 
 def attach_assets(attachable_type, attachable_id, media_ids, role='gallery'):
     """
-    Attach media assets to an entity under a role. For the single-slot 'primary'
-    role, any existing primary not in `media_ids` is replaced. Returns the newly
+    Attach media assets to an entity under a role. Returns the newly
     created/existing MediaAttachment rows. Raises ValueError on unknown media.
+
+    'primary' is a SINGLE slot and is enforced as one here, not just in the UI:
+    the cover is whatever was picked last, and every other primary row is
+    dropped. Enforcing it server-side also heals entities that ended up with
+    several primaries — the next cover pick collapses them back to one.
     """
     live_ids = set(live_assets().filter(id__in=media_ids).values_list('id', flat=True))
     missing = [m for m in media_ids if m not in live_ids]
@@ -237,6 +241,7 @@ def attach_assets(attachable_type, attachable_id, media_ids, role='gallery'):
         raise ValueError(f'Unknown or deleted media: {missing}')
 
     if role == 'primary':
+        media_ids = media_ids[:1]
         MediaAttachment.objects.filter(
             attachable_type=attachable_type, attachable_id=attachable_id, role='primary',
         ).exclude(media_id__in=media_ids).delete()
