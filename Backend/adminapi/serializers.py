@@ -176,7 +176,10 @@ class ProductDetailSerializer(serializers.ModelSerializer):
         return _image_url(obj.image)
 
     def validate(self, attrs):
-        if not attrs.get('slug'):
+        # Only auto-slug on create or when the name itself changes. A partial
+        # update (e.g. the Active toggle on the product list) must never quietly
+        # re-slug a live product and break its storefront URL.
+        if not attrs.get('slug') and (self.instance is None or 'name' in attrs):
             base = slugify(attrs.get('name') or getattr(self.instance, 'name', ''))
             slug = base or 'product'
             n = 2

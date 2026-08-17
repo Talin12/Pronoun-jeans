@@ -3,20 +3,43 @@ import { useNavigate } from 'react-router-dom';
 import {
   Plus, Search, Loader, Package, ChevronLeft, ChevronRight, ImageOff, Pencil,
 } from 'lucide-react';
-import { listProducts } from '../../api/adminApi';
+import { listProducts, updateProduct } from '../../api/adminApi';
 
-const StatusPill = ({ active }) =>
-  active ? (
-    <span className="inline-flex items-center bg-green-50 dark:bg-green-500/10 text-green-700 dark:text-green-400 border border-green-200 dark:border-green-500/20 text-xs font-bold px-2.5 py-0.5 rounded-full">Active</span>
-  ) : (
-    <span className="inline-flex items-center bg-gray-100 dark:bg-white/5 text-gray-500 dark:text-zinc-400 border border-gray-200 dark:border-white/10 text-xs font-bold px-2.5 py-0.5 rounded-full">Inactive</span>
-  );
+/** The Active/Inactive pill doubles as the switch — one click publishes or
+ *  unpublishes a product, no trip through the editor. */
+const StatusToggle = ({ active, busy, onToggle }) => (
+  <button
+    type="button"
+    role="switch"
+    aria-checked={active}
+    aria-label={active ? 'Active — click to deactivate' : 'Inactive — click to activate'}
+    title={active ? 'Active — click to deactivate' : 'Inactive — click to activate'}
+    disabled={busy}
+    onClick={onToggle}
+    className={`inline-flex items-center gap-2 shrink-0 pl-1.5 pr-3 py-1 rounded-full border text-xs font-bold transition disabled:cursor-wait ${
+      active
+        ? 'bg-green-50 dark:bg-green-500/10 text-green-700 dark:text-green-400 border-green-200 dark:border-green-500/20 hover:bg-green-100 dark:hover:bg-green-500/20'
+        : 'bg-gray-100 dark:bg-white/5 text-gray-500 dark:text-zinc-400 border-gray-200 dark:border-white/10 hover:bg-gray-200 dark:hover:bg-white/10'
+    }`}
+  >
+    <span className={`relative w-7 h-4 rounded-full transition-colors ${active ? 'bg-green-500' : 'bg-gray-300 dark:bg-zinc-600'}`}>
+      {busy ? (
+        <Loader size={12} className="animate-spin absolute top-0.5 left-2 text-white" />
+      ) : (
+        <span className={`absolute top-0.5 w-3 h-3 rounded-full bg-white shadow transition-all ${active ? 'left-3.5' : 'left-0.5'}`} />
+      )}
+    </span>
+    {active ? 'Active' : 'Inactive'}
+  </button>
+);
 
 export default function AdminProducts() {
   const [data, setData]     = useState({ results: [], count: 0 });
   const [loading, setLoad]  = useState(true);
   const [search, setSearch] = useState('');
   const [page, setPage]     = useState(1);
+  const [busyId, setBusy]   = useState(null);
+  const [error, setError]   = useState('');
   const navigate = useNavigate();
 
   const fetch = useCallback(() => {
@@ -31,6 +54,25 @@ export default function AdminProducts() {
     const t = setTimeout(fetch, 200);
     return () => clearTimeout(t);
   }, [fetch]);
+
+  const setActive = (id, value) =>
+    setData(d => ({ ...d, results: d.results.map(r => (r.id === id ? { ...r, is_active: value } : r)) }));
+
+  // Optimistic: flip the pill immediately, roll it back if the PATCH fails.
+  const toggleActive = async (p) => {
+    const next = !p.is_active;
+    setBusy(p.id);
+    setError('');
+    setActive(p.id, next);
+    try {
+      await updateProduct(p.id, { is_active: next });
+    } catch {
+      setActive(p.id, p.is_active);
+      setError(`Could not ${next ? 'activate' : 'deactivate'} “${p.name}”. Please try again.`);
+    } finally {
+      setBusy(null);
+    }
+  };
 
   const pageSize = 24;
   const totalPages = Math.max(1, Math.ceil((data.count || 0) / pageSize));
@@ -58,6 +100,12 @@ export default function AdminProducts() {
           className="w-full pl-9 pr-3 py-2.5 rounded-xl border border-gray-200 dark:border-white/10 bg-white dark:bg-zinc-900 text-sm text-gray-900 dark:text-zinc-100 focus:outline-none focus:ring-2 focus:ring-accent/40" />
       </div>
 
+      {error && (
+        <div className="mb-4 px-4 py-3 rounded-xl border border-red-200 dark:border-red-500/20 bg-red-50 dark:bg-red-500/10 text-sm font-semibold text-red-700 dark:text-red-400">
+          {error}
+        </div>
+      )}
+
       {loading ? (
         <div className="flex items-center justify-center py-20 text-gray-400"><Loader className="animate-spin" /></div>
       ) : !data.results.length ? (
@@ -80,7 +128,8 @@ export default function AdminProducts() {
                   {p.category_name || 'No category'} · {p.variation_count} variation{p.variation_count !== 1 ? 's' : ''} · MOQ {p.moq}
                 </p>
               </div>
-              <StatusPill active={p.is_active} />
+              <StatusToggle active={p.is_active} busy={busyId === p.id}
+                onToggle={() => toggleActive(p)} />
               <button onClick={() => navigate(`/admin/products/${p.id}`)}
                 className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl border border-gray-200 dark:border-white/10 text-sm font-semibold text-gray-700 dark:text-zinc-200 hover:bg-gray-50 dark:hover:bg-white/5 transition shrink-0">
                 <Pencil size={15} /> Edit
