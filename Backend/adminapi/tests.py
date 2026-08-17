@@ -14,7 +14,7 @@ from rest_framework.test import APIClient
 
 from medialib.models import MediaAsset, MediaAttachment
 from products.models import (
-    Product, ProductVariation, SizeSet, SizeSetBreakdown,
+    Color, Product, ProductVariation, SizeSet, SizeSetBreakdown,
 )
 
 
@@ -344,3 +344,80 @@ class _FakeApps:
     def get_model(self, app_label, model_name):
         from django.apps import apps as django_apps
         return django_apps.get_model(app_label, model_name)
+
+
+class ProductCodeTests(TestCase):
+    """
+    Product.code — a short admin-assigned code used as the SKU prefix.
+
+    Without it the prefix came from the slug, which is derived from the full
+    product name and makes long, unreadable SKUs.
+    """
+
+    def setUp(self):
+        self.client, self.user = _superuser_client()
+        self.url = '/api/admin/products/'
+
+    def _create(self, **extra):
+        payload = {'name': 'Urban Rise Track Pant', 'moq': 10}
+        payload.update(extra)
+        return self.client.post(self.url, payload, format='json')
+
+    def test_code_is_saved_and_returned(self):
+        r = self._create(code='PJ100')
+        self.assertEqual(r.status_code, 201, r.content)
+        self.assertEqual(r.json()['code'], 'PJ100')
+        self.assertEqual(Product.objects.get().code, 'PJ100')
+
+    def test_code_is_upper_cased_and_cleaned(self):
+        r = self._create(code=' pj 100/a ')
+        self.assertEqual(r.status_code, 201, r.content)
+        self.assertEqual(r.json()['code'], 'PJ-100A')
+
+    def test_blank_code_becomes_null(self):
+        r = self._create(code='')
+        self.assertEqual(r.status_code, 201, r.content)
+        self.assertIsNone(Product.objects.get().code)
+
+    def test_two_products_may_both_have_no_code(self):
+        """'' would trip the unique index on the second one; NULL does not."""
+        self.assertEqual(self._create(code='').status_code, 201)
+        r = self._create(name='Another Pant', code='')
+        self.assertEqual(r.status_code, 201, r.content)
+        self.assertEqual(Product.objects.filter(code__isnull=True).count(), 2)
+
+    def test_duplicate_code_is_rejected(self):
+        self.assertEqual(self._create(code='PJ100').status_code, 201)
+        r = self._create(name='Another Pant', code='pj100')
+        self.assertEqual(r.status_code, 400)
+        self.assertIn('code', r.json())
+
+    def test_a_product_keeps_its_own_code_on_update(self):
+        pid = self._create(code='PJ100').json()['id']
+        r = self.client.patch(f'{self.url}{pid}/', {'code': 'PJ100'}, format='json')
+        self.assertEqual(r.status_code, 200, r.content)
+
+    def test_code_is_used_as_the_sku_prefix(self):
+        pid = self._create(code='PJ100').json()['id']
+        color = Color.objects.create(name='Black', hex_code='#000000')
+        r = self.client.post('/api/admin/variations/bulk/', {
+            'product': pid, 'colors': [color.id], 'size_sets': [],
+            'per_piece_price': '100.00', 'stock_quantity': 5,
+        }, format='json')
+        self.assertEqual(r.status_code, 201, r.content)
+
+        skus = list(ProductVariation.objects.filter(product_id=pid).values_list('sku', flat=True))
+        self.assertTrue(skus)
+        self.assertTrue(all(s.startswith('PJ100-') for s in skus), skus)
+
+    def test_slug_is_still_the_fallback_without_a_code(self):
+        pid = self._create(code='').json()['id']
+        color = Color.objects.create(name='Black', hex_code='#000000')
+        r = self.client.post('/api/admin/variations/bulk/', {
+            'product': pid, 'colors': [color.id], 'size_sets': [],
+            'per_piece_price': '100.00', 'stock_quantity': 5,
+        }, format='json')
+        self.assertEqual(r.status_code, 201, r.content)
+
+        sku = ProductVariation.objects.filter(product_id=pid).values_list('sku', flat=True)[0]
+        self.assertTrue(sku.startswith('URBANRISETRA-'), sku)   # from the slug, as before

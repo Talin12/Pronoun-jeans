@@ -20,6 +20,11 @@ const inputCls = 'w-full px-3 py-2.5 rounded-xl border border-gray-200 dark:bord
 const btnPrimary   = 'inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-accent text-white text-sm font-bold hover:brightness-110 transition disabled:opacity-50';
 const btnGhost     = 'inline-flex items-center gap-2 px-5 py-2.5 rounded-xl border border-gray-200 dark:border-white/10 text-sm font-bold text-gray-600 dark:text-zinc-300 hover:bg-gray-50 dark:hover:bg-white/5 transition';
 
+// Mirrors _sku_token / _unique_sku on the server, so the preview shown next to
+// the product code is the shape the generated SKUs actually take.
+const skuToken   = (v, len = 6) => String(v || '').toUpperCase().replace(/[^A-Z0-9]+/g, '').slice(0, len);
+const skuPreview = (code) => `${skuToken(code, 12) || 'SKU'}-COLOUR-SIZE`;
+
 const STEPS = [
   { key: 'base',     label: 'Base Details',       icon: FileText },
   { key: 'images',   label: 'Images',             icon: ImageIcon },
@@ -45,7 +50,7 @@ export default function AdminProductEditor() {
   const [variations, setVariations] = useState([]);
 
   const [form, setForm] = useState({
-    name: '', category: '', subcategories: [], description: '',
+    name: '', code: '', category: '', subcategories: [], description: '',
     fabric_details: '', moq: 10, is_active: false,
   });
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
@@ -62,7 +67,7 @@ export default function AdminProductEditor() {
     getProduct(id)
       .then(p => {
         setForm({
-          name: p.name || '', category: p.category || '',
+          name: p.name || '', code: p.code || '', category: p.category || '',
           subcategories: p.subcategories || [], description: p.description || '',
           fabric_details: p.fabric_details || '', moq: p.moq ?? 10, is_active: p.is_active,
         });
@@ -192,9 +197,22 @@ export default function AdminProductEditor() {
             <div className={card}>
               <h2 className="text-lg font-black text-gray-900 dark:text-zinc-100 mb-5">Base Details</h2>
               <div className="grid sm:grid-cols-2 gap-4">
-                <div className="sm:col-span-2">
+                <div>
                   <label className={labelCls}>Product name *</label>
                   <input className={inputCls} value={form.name} onChange={e => set('name', e.target.value)} placeholder="e.g. Urban Rise Track Pant" />
+                </div>
+                <div>
+                  <label className={labelCls}>Product code</label>
+                  {/* Upper-cased as you type: this becomes the SKU prefix, and
+                      SKUs are upper case everywhere else in the catalogue. */}
+                  <input className={inputCls} value={form.code}
+                         onChange={e => set('code', e.target.value.toUpperCase())}
+                         placeholder="e.g. PJ100" />
+                  <p className="text-xs text-gray-400 dark:text-zinc-500 mt-1.5">
+                    Used to build SKUs{form.code.trim()
+                      ? <> — e.g. <span className="font-semibold text-gray-600 dark:text-zinc-300">{skuPreview(form.code)}</span></>
+                      : '. Falls back to the product name if left blank.'}
+                  </p>
                 </div>
                 <div>
                   <label className={labelCls}>Category</label>

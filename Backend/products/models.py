@@ -53,6 +53,15 @@ class Product(models.Model):
         help_text='Sub-categories (within the selected category) this product should also appear under.',
     )
     name           = models.CharField(max_length=255)
+    # Short human-assigned code (e.g. "PJ100"). Used as the SKU prefix when
+    # building variants, which is otherwise derived from the slug and comes out
+    # long and unreadable. Optional, but unique when set — NULL rather than ''
+    # for the blanks, so any number of products can be left without one.
+    code           = models.CharField(
+        max_length=32, unique=True, null=True, blank=True,
+        help_text='Short code used as the SKU prefix, e.g. "PJ100". '
+                  'Letters, digits and hyphens.',
+    )
     slug           = models.SlugField(unique=True, max_length=255)
     description    = models.TextField(blank=True)
     fabric_details = models.TextField(blank=True, null=True)

@@ -265,7 +265,10 @@ class ProductVariationViewSet(viewsets.ModelViewSet):
         if len(colors) * len(pairs) == 0:
             return Response({'error': 'Nothing to create.'}, status=400)
 
-        prefix = (data.get('sku_prefix') or product.slug or 'SKU')
+        # The product code is what the admin assigned for exactly this purpose,
+        # so it wins over the slug — which is derived from the full name and
+        # produces long, unreadable SKUs.
+        prefix = (data.get('sku_prefix') or product.code or product.slug or 'SKU')
         prefix = _sku_token(prefix, 12) or 'SKU'
 
         taken = set(ProductVariation.objects.values_list('sku', flat=True))

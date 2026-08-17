@@ -8,6 +8,8 @@ should. Image management is handled out-of-band via the media endpoints, so
 these serializers treat images as read-only convenience data.
 """
 
+import re
+
 from django.contrib.auth import get_user_model
 from django.contrib.auth.password_validation import validate_password
 from django.core.exceptions import ValidationError as DjangoValidationError
@@ -219,7 +221,7 @@ class ProductListSerializer(serializers.ModelSerializer):
 
     class Meta:
         model  = Product
-        fields = ['id', 'name', 'slug', 'category', 'category_name',
+        fields = ['id', 'name', 'code', 'slug', 'category', 'category_name',
                   'is_active', 'moq', 'thumb', 'variation_count', 'created_at']
 
     def get_thumb(self, obj):
@@ -234,17 +236,32 @@ class ProductDetailSerializer(serializers.ModelSerializer):
     class Meta:
         model  = Product
         fields = [
-            'id', 'name', 'slug', 'category', 'category_name', 'subcategories',
+            'id', 'name', 'code', 'slug', 'category', 'category_name', 'subcategories',
             'description', 'fabric_details', 'is_active', 'moq',
             'image', 'image_url', 'variations', 'created_at',
         ]
         extra_kwargs = {
             'slug':  {'required': False},
+            'code':  {'required': False},
             'image': {'write_only': True, 'required': False},
         }
 
     def get_image_url(self, obj):
         return _image_url(obj.image)
+
+    def validate_code(self, value):
+        """
+        Normalise to the form SKUs are built from: upper case, no spaces.
+
+        Blank comes back as None, not '' — the column is unique, and '' on a
+        second product would collide where NULL does not.
+        """
+        code = re.sub(r'[^A-Z0-9-]', '', (value or '').upper().replace(' ', '-'))
+        if not code:
+            return None
+        if Product.objects.exclude(pk=getattr(self.instance, 'pk', None)).filter(code=code).exists():
+            raise serializers.ValidationError(f'"{code}" is already used by another product.')
+        return code
 
     def validate(self, attrs):
         # Only auto-slug on create or when the name itself changes. A partial
