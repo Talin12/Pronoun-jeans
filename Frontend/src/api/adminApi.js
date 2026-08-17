@@ -5,6 +5,19 @@
  */
 import api from './axios';
 
+// ── Users, permissions & verification ──────────────────────────────────────
+export const listUsers = (params = {}) =>
+  api.get('admin/users/', { params }).then(r => r.data);
+
+export const getUser = (id) =>
+  api.get(`admin/users/${id}/`).then(r => r.data);
+
+export const createUser = (data) =>
+  api.post('admin/users/', data).then(r => r.data);
+
+export const updateUser = (id, data) =>
+  api.patch(`admin/users/${id}/`, data).then(r => r.data);
+
 // ── Products ───────────────────────────────────────────────────────────────
 export const listProducts = (params = {}) =>
   api.get('admin/products/', { params }).then(r => r.data);
@@ -27,6 +40,10 @@ export const listVariations = (productId) =>
 
 export const createVariation = (data) =>
   api.post('admin/variations/', data).then(r => r.data);
+
+/** Creates the whole colour × size grid at once. Returns {created, skipped}. */
+export const bulkCreateVariations = (data) =>
+  api.post('admin/variations/bulk/', data).then(r => r.data);
 
 export const updateVariation = (id, data) =>
   api.patch(`admin/variations/${id}/`, data).then(r => r.data);

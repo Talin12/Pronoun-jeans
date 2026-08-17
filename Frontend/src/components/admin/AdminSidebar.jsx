@@ -1,6 +1,8 @@
 import React from 'react';
 import { NavLink } from 'react-router-dom';
-import { LayoutDashboard, Package, FolderTree, Images, LogOut, ExternalLink, X } from 'lucide-react';
+import {
+  LayoutDashboard, Package, FolderTree, Images, Users, LogOut, ExternalLink, X,
+} from 'lucide-react';
 import { useAuthStore } from '../../store/useAuthStore';
 
 const NAV_ITEMS = [
@@ -8,6 +10,7 @@ const NAV_ITEMS = [
   { to: '/admin/products',              icon: Package,         label: 'Products'   },
   { to: '/admin/categories',            icon: FolderTree,      label: 'Categories' },
   { to: '/admin/media',                 icon: Images,          label: 'Media Library' },
+  { to: '/admin/users',                 icon: Users,           label: 'Users' },
 ];
 
 const AdminSidebar = ({ onClose }) => {

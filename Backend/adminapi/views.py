@@ -7,8 +7,15 @@ the custom panel behave identically to the Django-admin picker (dedup + the
 Phase 7 legacy-column bridge), and therefore render on the storefront at once.
 """
 
+import re
+from decimal import Decimal, InvalidOperation
+
+from django.contrib.auth import get_user_model
+from django.db import transaction
 from django.db.models import Count, Q
 from rest_framework import filters, viewsets
+from rest_framework.decorators import action
+from rest_framework.exceptions import ValidationError as DRFValidationError
 from rest_framework.pagination import PageNumberPagination
 from rest_framework.parsers import FormParser, MultiPartParser
 from rest_framework.response import Response
@@ -24,10 +31,31 @@ from .permissions import IsSuperUser
 from .serializers import (
     CategorySerializer, ColorSerializer, ProductDetailSerializer,
     ProductListSerializer, ProductVariationSerializer, SizeSetSerializer,
+    UserDetailSerializer, UserListSerializer,
 )
 
 _VALID_TYPES = {t for t, _ in ATTACHABLE_TYPES}
 _VALID_ROLES = {r for r, _ in ROLE_CHOICES}
+
+
+def _sku_token(value, length=6):
+    """Uppercase alphanumeric slice of a name, for building readable SKUs."""
+    return re.sub(r'[^A-Z0-9]+', '', (value or '').upper())[:length]
+
+
+def _unique_sku(prefix, color, size_set, taken):
+    """PREFIX-COLOUR-SIZE, with a numeric suffix if that is already in use."""
+    parts = [prefix]
+    if color is not None:
+        parts.append(_sku_token(color.name) or 'C')
+    if size_set is not None:
+        parts.append(_sku_token(size_set.name) or 'S')
+    base = '-'.join(p for p in parts if p)
+    sku, n = base, 2
+    while sku in taken:
+        sku = f'{base}-{n}'
+        n += 1
+    return sku
 
 
 class AdminPagination(PageNumberPagination):
@@ -82,6 +110,92 @@ class ProductViewSet(viewsets.ModelViewSet):
         return ProductDetailSerializer
 
 
+class UserViewSet(viewsets.ModelViewSet):
+    """
+    People management: B2B verification, permissions, agent setup.
+
+    No destroy() — removing a user would cascade into their orders, so the panel
+    deactivates instead. Two guards protect the signed-in superuser from locking
+    themselves (or the last superuser) out of the panel.
+    """
+    permission_classes = [IsSuperUser]
+    pagination_class   = AdminPagination
+    filter_backends    = [filters.SearchFilter, filters.OrderingFilter]
+    search_fields      = ['email', 'username', 'company_name', 'gst_number',
+                          'phone_number', 'first_name', 'last_name']
+    ordering_fields    = ['date_joined', 'email', 'last_login']
+    ordering           = ['-date_joined']
+    http_method_names  = ['get', 'post', 'patch', 'put', 'head', 'options']
+
+    _FLAGS = {
+        'verified': 'is_verified_b2b',
+        'agent':    'is_agent',
+        'active':   'is_active',
+        'staff':    'is_staff',
+    }
+
+    def get_queryset(self):
+        User = get_user_model()
+        qs = (User.objects
+              .select_related('assigned_agent', 'agent_profile')
+              .prefetch_related('addresses'))
+
+        # ?role=buyer|agent|staff — the three groups the panel thinks in.
+        role = self.request.query_params.get('role')
+        if role == 'agent':
+            qs = qs.filter(is_agent=True)
+        elif role == 'staff':
+            qs = qs.filter(Q(is_staff=True) | Q(is_superuser=True))
+        elif role == 'buyer':
+            qs = qs.filter(is_agent=False, is_staff=False, is_superuser=False)
+
+        # ?verified=true&active=false … booleans on the flags above.
+        for param, field in self._FLAGS.items():
+            raw = self.request.query_params.get(param)
+            if raw in ('true', 'false'):
+                qs = qs.filter(**{field: raw == 'true'})
+        return qs
+
+    def get_serializer_class(self):
+        return UserListSerializer if self.action == 'list' else UserDetailSerializer
+
+    def perform_update(self, serializer):
+        self._guard_self_lockout(serializer)
+        self._guard_last_superuser(serializer)
+        serializer.save()
+
+    def _guard_self_lockout(self, serializer):
+        """You cannot revoke your own access — that would end the session with
+        no way back in except the Django admin or a shell."""
+        target = serializer.instance
+        if target is None or target.pk != self.request.user.pk:
+            return
+        for field in ('is_superuser', 'is_active', 'is_staff'):
+            if serializer.validated_data.get(field) is False:
+                raise DRFValidationError({
+                    field: 'You cannot remove this from your own account. '
+                           'Ask another superuser to do it.',
+                })
+
+    def _guard_last_superuser(self, serializer):
+        """Never let the final superuser be demoted or deactivated."""
+        target = serializer.instance
+        if target is None or not target.is_superuser:
+            return
+        losing = (serializer.validated_data.get('is_superuser') is False
+                  or serializer.validated_data.get('is_active') is False)
+        if not losing:
+            return
+        User = get_user_model()
+        others = (User.objects.filter(is_superuser=True, is_active=True)
+                  .exclude(pk=target.pk).exists())
+        if not others:
+            raise DRFValidationError({
+                'is_superuser': 'This is the last active superuser — promote '
+                                'someone else before changing this account.',
+            })
+
+
 class ProductVariationViewSet(viewsets.ModelViewSet):
     permission_classes = [IsSuperUser]
     serializer_class   = ProductVariationSerializer
@@ -93,6 +207,102 @@ class ProductVariationViewSet(viewsets.ModelViewSet):
         if product_id:
             qs = qs.filter(product_id=product_id)
         return qs
+
+    @action(detail=False, methods=['post'], url_path='bulk')
+    def bulk(self, request):
+        """
+        Create the whole colour × size grid in one call.
+
+        The panel sends the colours and the size sets it wants; every
+        combination becomes a variation sharing one price and stock figure.
+        Combinations that already exist are skipped, not errored — re-running
+        the builder to add one more colour is a normal thing to do, and
+        (product, size_set, color) is unique anyway.
+        """
+        data       = request.data
+        product_id = data.get('product')
+        color_ids  = data.get('colors') or []
+        combos     = data.get('size_sets') or []   # [{size_set, size_breakdown}]
+
+        product = Product.objects.filter(pk=product_id).first()
+        if product is None:
+            return Response({'error': 'Unknown product.'}, status=400)
+
+        per_piece = data.get('per_piece_price')
+        if per_piece in (None, ''):
+            return Response(
+                {'per_piece_price': 'Enter a per-piece price — the set total is '
+                                    'calculated from it.'}, status=400)
+        try:
+            per_piece = Decimal(str(per_piece))
+            mrp_piece = (Decimal(str(data['mrp_per_piece']))
+                         if data.get('mrp_per_piece') not in (None, '') else None)
+            stock     = int(data.get('stock_quantity') or 0)
+        except (InvalidOperation, TypeError, ValueError):
+            return Response({'error': 'Price and stock must be numbers.'}, status=400)
+
+        colors = list(Color.objects.filter(id__in=color_ids)) if color_ids else [None]
+        if color_ids and len(colors) != len(set(color_ids)):
+            return Response({'colors': 'One or more colours no longer exist.'}, status=400)
+
+        pairs = []
+        for c in combos:
+            size_set = SizeSet.objects.filter(pk=c.get('size_set')).first()
+            if size_set is None:
+                return Response({'size_sets': 'One or more size sets no longer exist.'},
+                                status=400)
+            breakdown = None
+            if c.get('size_breakdown'):
+                breakdown = size_set.breakdowns.filter(pk=c['size_breakdown']).first()
+                if breakdown is None:
+                    return Response(
+                        {'size_sets': f'That breakdown does not belong to {size_set.name}.'},
+                        status=400)
+            pairs.append((size_set, breakdown))
+        if not pairs:
+            pairs = [(None, None)]
+
+        if len(colors) * len(pairs) == 0:
+            return Response({'error': 'Nothing to create.'}, status=400)
+
+        prefix = (data.get('sku_prefix') or product.slug or 'SKU')
+        prefix = _sku_token(prefix, 12) or 'SKU'
+
+        taken = set(ProductVariation.objects.values_list('sku', flat=True))
+        existing = set(
+            ProductVariation.objects
+            .filter(product=product)
+            .values_list('size_set_id', 'color')
+        )
+
+        created, skipped = [], []
+        with transaction.atomic():
+            for color in colors:
+                for size_set, breakdown in pairs:
+                    key = (size_set.id if size_set else None, color.name if color else None)
+                    if key in existing:
+                        skipped.append({
+                            'color':    color.name if color else None,
+                            'size_set': size_set.name if size_set else None,
+                        })
+                        continue
+
+                    sku = _unique_sku(prefix, color, size_set, taken)
+                    variation = ProductVariation(
+                        product=product, size_set=size_set, size_breakdown=breakdown,
+                        color_palette=color, sku=sku,
+                        per_piece_price=per_piece, mrp_per_piece=mrp_piece,
+                        stock_quantity=stock,
+                    )
+                    variation.save()
+                    taken.add(sku)
+                    existing.add(key)
+                    created.append(variation)
+
+        return Response({
+            'created': ProductVariationSerializer(created, many=True).data,
+            'skipped': skipped,
+        }, status=201 if created else 200)
 
 
 class CategoryViewSet(viewsets.ModelViewSet):

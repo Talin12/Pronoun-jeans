@@ -35,6 +35,8 @@ import AdminProductEditor from './pages/admin/AdminProductEditor';
 import AdminCategories    from './pages/admin/AdminCategories';
 import AdminCategoryProducts from './pages/admin/AdminCategoryProducts';
 import AdminMedia          from './pages/admin/AdminMedia';
+import AdminUsers          from './pages/admin/AdminUsers';
+import AdminUserProfile    from './pages/admin/AdminUserProfile';
 
 const ProtectedRoute = ({ children }) => {
   const { isAuthenticated } = useAuthStore();
@@ -82,6 +84,9 @@ function App() {
           <Route path="categories"      element={<AdminCategories />} />
           <Route path="categories/:id"  element={<AdminCategoryProducts />} />
           <Route path="media"           element={<AdminMedia />} />
+          <Route path="users"           element={<AdminUsers />} />
+          <Route path="users/new"       element={<AdminUserProfile />} />
+          <Route path="users/:id"       element={<AdminUserProfile />} />
         </Route>
 
         {/* ── All other pages — with Navbar + Footer ── */}

@@ -10,6 +10,7 @@ import {
   createVariation, deleteVariation,
 } from '../../api/adminApi';
 import MediaPicker from '../../components/admin/MediaPicker';
+import BulkVariantBuilder from '../../components/admin/BulkVariantBuilder';
 
 const card    = 'bg-white dark:bg-zinc-900 border border-gray-100 dark:border-white/5 rounded-2xl p-5 sm:p-7';
 const labelCls = 'block text-xs font-bold uppercase tracking-wide text-gray-500 dark:text-zinc-400 mb-1.5';
@@ -269,7 +270,8 @@ export default function AdminProductEditor() {
               <h2 className="text-lg font-black text-gray-900 dark:text-zinc-100 mb-1">Variants & Pricing</h2>
               <p className="text-sm text-gray-400 dark:text-zinc-500 mb-5">Add each size-set / colour combination with its price, stock and images.</p>
               <VariantsEditor
-                productId={Number(id)} colors={colors} sizeSets={sizeSets}
+                productId={Number(id)} productName={form.name}
+                colors={colors} sizeSets={sizeSets}
                 categoryId={Number(form.category) || null}
                 variations={variations} onChange={setVariations}
                 onColorsChange={setColors} onSizeSetsChange={setSizeSets} />
@@ -320,9 +322,14 @@ const Row = ({ label, value }) => (
 );
 
 // ── Variants editor ──────────────────────────────────────────────────────────
-function VariantsEditor({ productId, colors, sizeSets, categoryId, variations, onChange, onColorsChange, onSizeSetsChange }) {
+function VariantsEditor({ productId, productName, colors, sizeSets, categoryId, variations, onChange, onColorsChange, onSizeSetsChange }) {
   const [adding, setAdding]   = useState(false);
+  const [bulk, setBulk]       = useState(false);
   const [expanded, setExpanded] = useState(null);
+  const [note, setNote]       = useState('');
+  // The builder opens these modals through its own "+ New" buttons.
+  const [colorModal, setColorModal] = useState(false);
+  const [sizeModal, setSizeModal]   = useState(false);
 
   const remove = (vid) => {
     if (!window.confirm('Delete this variant?')) return;
@@ -366,16 +373,52 @@ function VariantsEditor({ productId, colors, sizeSets, categoryId, variations, o
         </div>
       )}
 
-      {adding ? (
+      {note && (
+        <p className="text-sm font-semibold text-green-700 dark:text-green-400 mb-3">{note}</p>
+      )}
+
+      {bulk ? (
+        <BulkVariantBuilder
+          productId={productId} productName={productName} categoryId={categoryId}
+          colors={colors} sizeSets={sizeSets}
+          onAddColor={() => setColorModal(true)}
+          onAddSizeSet={() => setSizeModal(true)}
+          onCancel={() => setBulk(false)}
+          onCreated={(created, skipped) => {
+            onChange([...variations, ...created]);
+            setBulk(false);
+            setNote(
+              `Created ${created.length} variant${created.length !== 1 ? 's' : ''}`
+              + (skipped.length ? ` · ${skipped.length} already existed and were skipped` : '')
+            );
+          }} />
+      ) : adding ? (
         <VariantForm
           productId={productId} colors={colors} sizeSets={sizeSets}
           onColorsChange={onColorsChange} onSizeSetsChange={onSizeSetsChange}
           onCancel={() => setAdding(false)}
           onSaved={(v) => { onChange([...variations, v]); setAdding(false); }} />
       ) : (
-        <button onClick={() => setAdding(true)} className={btnGhost}>
-          <Plus size={16} /> Add variant
-        </button>
+        <div className="flex flex-wrap gap-2">
+          <button onClick={() => { setNote(''); setBulk(true); }} className={btnPrimary}>
+            <Layers size={16} /> Build all variants
+          </button>
+          <button onClick={() => { setNote(''); setAdding(true); }} className={btnGhost}>
+            <Plus size={16} /> Add one variant
+          </button>
+        </div>
+      )}
+
+      {colorModal && (
+        <AddColorModal onClose={() => setColorModal(false)}
+          onCreated={(c) => {
+            onColorsChange(prev => [...prev, c].sort((a, b) => a.name.localeCompare(b.name)));
+            setColorModal(false);
+          }} />
+      )}
+      {sizeModal && (
+        <CreateSizeSetModal onClose={() => setSizeModal(false)}
+          onCreated={(ss) => { onSizeSetsChange(prev => [...prev, ss]); setSizeModal(false); }} />
       )}
     </div>
   );

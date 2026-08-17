@@ -6,6 +6,7 @@ from rest_framework.routers import DefaultRouter
 from . import views
 
 router = DefaultRouter()
+router.register(r'users',      views.UserViewSet,             basename='admin-user')
 router.register(r'products',   views.ProductViewSet,          basename='admin-product')
 router.register(r'variations', views.ProductVariationViewSet, basename='admin-variation')
 router.register(r'categories', views.CategoryViewSet,         basename='admin-category')

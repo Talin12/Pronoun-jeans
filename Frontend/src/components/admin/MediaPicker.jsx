@@ -147,8 +147,14 @@ export default function MediaPicker({
   );
 }
 
-// ── Library + Upload modal ─────────────────────────────────────────────────
-function LibraryModal({ folder, single, categoryId, onClose, onConfirm }) {
+/**
+ * Library + Upload modal.
+ *
+ * Exported because the bulk variant builder picks images before the variants
+ * they belong to exist — it collects asset ids and attaches them afterwards,
+ * rather than attaching to an entity as MediaPicker does.
+ */
+export function LibraryModal({ folder, single, categoryId, onClose, onConfirm }) {
   const [tab, setTab]         = useState('library');
   const [assets, setAssets]   = useState([]);
   const [page, setPage]       = useState(1);
@@ -328,8 +334,12 @@ function LibraryModal({ folder, single, categoryId, onClose, onConfirm }) {
         {/* Footer */}
         <div className="flex items-center justify-between px-4 py-3 border-t border-gray-100 dark:border-white/5">
           <span className="text-sm text-gray-500 dark:text-zinc-400">{selected.size} selected</span>
+          {/* onConfirm's second argument is the full asset objects, for callers
+              that want thumbnails before anything is attached. */}
           <button
-            onClick={() => selected.size ? onConfirm(Array.from(selected.keys())) : onClose()}
+            onClick={() => selected.size
+              ? onConfirm(Array.from(selected.keys()), Array.from(selected.values()))
+              : onClose()}
             className="px-5 py-2 rounded-xl bg-accent text-white text-sm font-bold hover:brightness-110 transition">
             {selected.size ? `Add ${selected.size}` : 'Done'}
           </button>
