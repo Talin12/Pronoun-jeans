@@ -66,11 +66,12 @@ export default function AdminProducts() {
         </button>
       </div>
 
+      {/* text-base on phones: under 16px makes iOS Safari zoom in on focus. */}
       <div className="relative mb-6 max-w-md">
         <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
         <input value={search} onChange={e => { setPage(1); setSearch(e.target.value); }}
           placeholder="Search by product name or SKU…"
-          className="w-full pl-9 pr-3 py-2.5 rounded-xl border border-gray-200 dark:border-white/10 bg-white dark:bg-zinc-900 text-sm text-gray-900 dark:text-zinc-100 focus:outline-none focus:ring-2 focus:ring-accent/40" />
+          className="w-full pl-9 pr-3 py-2.5 rounded-xl border border-gray-200 dark:border-white/10 bg-white dark:bg-zinc-900 text-base sm:text-sm text-gray-900 dark:text-zinc-100 focus:outline-none focus:ring-2 focus:ring-accent/40" />
       </div>
 
       {error && (
@@ -90,8 +91,8 @@ export default function AdminProducts() {
         <div className="grid gap-3">
           {data.results.map(p => (
             <div key={p.id}
-              className="flex items-center gap-4 bg-white dark:bg-zinc-900 border border-gray-100 dark:border-white/5 rounded-2xl p-3 hover:shadow-md transition-shadow">
-              <div className="w-16 h-16 rounded-xl overflow-hidden bg-gray-100 dark:bg-zinc-800 shrink-0 flex items-center justify-center">
+              className="flex flex-wrap items-center gap-x-4 gap-y-3 bg-white dark:bg-zinc-900 border border-gray-100 dark:border-white/5 rounded-2xl p-3 hover:shadow-md transition-shadow">
+              <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-xl overflow-hidden bg-gray-100 dark:bg-zinc-800 shrink-0 flex items-center justify-center">
                 {p.thumb ? <img src={p.thumb} alt={p.name} className="w-full h-full object-cover" />
                          : <ImageOff size={20} className="text-gray-300" />}
               </div>
@@ -101,12 +102,16 @@ export default function AdminProducts() {
                   {p.category_name || 'No category'} · {p.variation_count} variation{p.variation_count !== 1 ? 's' : ''} · MOQ {p.moq}
                 </p>
               </div>
-              <StatusToggle active={p.is_active} busy={busyId === p.id}
-                onToggle={() => toggleActive(p)} />
-              <button onClick={() => navigate(`/admin/products/${p.id}`)}
-                className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl border border-gray-200 dark:border-white/10 text-sm font-semibold text-gray-700 dark:text-zinc-200 hover:bg-gray-50 dark:hover:bg-white/5 transition shrink-0">
-                <Pencil size={15} /> Edit
-              </button>
+              {/* On a phone these drop to a full-width row of their own rather
+                  than squeezing the product name to nothing. */}
+              <div className="flex items-center gap-2 w-full sm:w-auto">
+                <StatusToggle active={p.is_active} busy={busyId === p.id}
+                  onToggle={() => toggleActive(p)} />
+                <button onClick={() => navigate(`/admin/products/${p.id}`)}
+                  className="inline-flex items-center justify-center gap-1.5 ml-auto sm:ml-0 px-4 py-2.5 rounded-xl border border-gray-200 dark:border-white/10 text-sm font-semibold text-gray-700 dark:text-zinc-200 hover:bg-gray-50 dark:hover:bg-white/5 transition shrink-0">
+                  <Pencil size={15} /> Edit
+                </button>
+              </div>
             </div>
           ))}
         </div>

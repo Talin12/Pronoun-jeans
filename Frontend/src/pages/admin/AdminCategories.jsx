@@ -5,7 +5,8 @@ import {
 } from 'lucide-react';
 import { listCategories, createCategory, deleteCategory } from '../../api/adminApi';
 
-const inputCls = 'w-full px-3 py-2.5 rounded-xl border border-gray-200 dark:border-white/10 bg-gray-50 dark:bg-zinc-800 text-sm text-gray-900 dark:text-zinc-100 focus:outline-none focus:ring-2 focus:ring-accent/40';
+// text-base on phones: anything under 16px makes iOS Safari zoom in on focus.
+const inputCls = 'w-full px-3 py-2.5 rounded-xl border border-gray-200 dark:border-white/10 bg-gray-50 dark:bg-zinc-800 text-base sm:text-sm text-gray-900 dark:text-zinc-100 focus:outline-none focus:ring-2 focus:ring-accent/40';
 
 export default function AdminCategories() {
   const [cats, setCats]     = useState([]);
@@ -82,11 +83,13 @@ export default function AdminCategories() {
               <div key={main.id} className="bg-white dark:bg-zinc-900 border border-gray-100 dark:border-white/5 rounded-2xl p-4">
                 <div className="flex items-center justify-between">
                   <button onClick={() => open(main.id)} title={`View products in ${main.name}`}
-                    className="flex items-center gap-2 font-bold text-gray-900 dark:text-zinc-100 hover:text-accent transition text-left">
-                    <FolderTree size={16} className="text-accent" /> {main.name}
-                    <ChevronRight size={15} className="text-gray-400" />
+                    className="flex items-center gap-2 min-w-0 py-1 font-bold text-gray-900 dark:text-zinc-100 hover:text-accent transition text-left">
+                    <FolderTree size={16} className="text-accent shrink-0" />
+                    <span className="truncate">{main.name}</span>
+                    <ChevronRight size={15} className="text-gray-400 shrink-0" />
                   </button>
-                  <button onClick={() => remove(main.id)} className="p-1.5 text-gray-400 hover:text-red-500"><Trash2 size={15} /></button>
+                  <button onClick={() => remove(main.id)} aria-label={`Delete ${main.name}`}
+                    className="p-2.5 -mr-1 text-gray-400 hover:text-red-500 shrink-0"><Trash2 size={15} /></button>
                 </div>
 
                 {subs.length > 0 && (
@@ -99,7 +102,8 @@ export default function AdminCategories() {
                           {s.name}
                           <ChevronRight size={13} className="text-gray-400" />
                         </button>
-                        <button onClick={() => remove(s.id)} className="w-5 h-5 rounded-full hover:bg-red-100 dark:hover:bg-red-500/20 text-gray-400 hover:text-red-500 flex items-center justify-center">×</button>
+                        <button onClick={() => remove(s.id)} aria-label={`Delete ${s.name}`}
+                          className="w-7 h-7 rounded-full hover:bg-red-100 dark:hover:bg-red-500/20 text-gray-400 hover:text-red-500 flex items-center justify-center shrink-0">×</button>
                       </span>
                     ))}
                   </div>

@@ -101,16 +101,19 @@ export default function AdminMedia() {
     ? (sections.find(s => s.id === active)?.name || 'Category')
     : 'All images';
 
+  // Chips in a scrolling strip on phones, a vertical rail from lg up.
   const SectionButton = ({ id, name, count, indent }) => (
     <button onClick={() => setActive(id)}
-      className={`w-full flex items-center justify-between gap-2 px-3 py-2 rounded-xl text-sm font-semibold transition text-left ${
-        indent ? 'pl-8' : ''
+      className={`shrink-0 lg:w-full flex items-center justify-between gap-2 px-3 py-2 rounded-xl text-sm font-semibold transition text-left whitespace-nowrap border lg:border-0 ${
+        indent ? 'lg:pl-8' : ''
       } ${
         active === id
-          ? 'bg-accent/10 text-accent'
-          : 'text-gray-600 dark:text-zinc-400 hover:bg-gray-50 dark:hover:bg-white/5'
+          ? 'bg-accent/10 text-accent border-accent/30'
+          : 'text-gray-600 dark:text-zinc-400 border-gray-200 dark:border-white/10 hover:bg-gray-50 dark:hover:bg-white/5'
       }`}>
-      <span className="truncate">{name}</span>
+      <span className="truncate">
+        {indent && <span className="lg:hidden text-gray-400">↳ </span>}{name}
+      </span>
       <span className="text-xs text-gray-400 shrink-0">{count}</span>
     </button>
   );
@@ -121,18 +124,21 @@ export default function AdminMedia() {
       <h1 className="text-2xl font-black text-gray-900 dark:text-zinc-100 mb-6">{PAGE_TITLE}</h1>
 
       <div className="grid lg:grid-cols-[15rem_1fr] gap-6 items-start">
-        {/* Sections */}
-        <div className="bg-white dark:bg-zinc-900 border border-gray-100 dark:border-white/5 rounded-2xl p-3">
-          <p className="px-3 pt-1 pb-2 text-xs font-bold uppercase tracking-wide text-gray-400">Sections</p>
-          <button onClick={() => setActive(null)}
-            className={`w-full flex items-center justify-between gap-2 px-3 py-2 rounded-xl text-sm font-bold transition text-left ${
-              active === null ? 'bg-accent/10 text-accent' : 'text-gray-700 dark:text-zinc-300 hover:bg-gray-50 dark:hover:bg-white/5'
-            }`}>
-            <span className="flex items-center gap-2"><Images size={15} /> All images</span>
-            <span className="text-xs text-gray-400">{total}</span>
-          </button>
+        {/* Sections — sticky scrolling strip on phones, rail on desktop */}
+        <div className="lg:bg-white lg:dark:bg-zinc-900 lg:border border-gray-100 dark:border-white/5 rounded-2xl lg:p-3 sticky top-0 z-10 bg-gray-50 dark:bg-zinc-950 py-2 lg:static lg:py-3">
+          <p className="hidden lg:block px-3 pt-1 pb-2 text-xs font-bold uppercase tracking-wide text-gray-400">Sections</p>
 
-          <div className="mt-1 space-y-0.5">
+          <div className="flex lg:block gap-2 lg:gap-0 overflow-x-auto -mx-4 px-4 lg:mx-0 lg:px-0 lg:overflow-visible">
+            <button onClick={() => setActive(null)}
+              className={`shrink-0 lg:w-full flex items-center justify-between gap-2 px-3 py-2 rounded-xl text-sm font-bold transition text-left whitespace-nowrap border lg:border-0 ${
+                active === null
+                  ? 'bg-accent/10 text-accent border-accent/30'
+                  : 'text-gray-700 dark:text-zinc-300 border-gray-200 dark:border-white/10 hover:bg-gray-50 dark:hover:bg-white/5'
+              }`}>
+              <span className="flex items-center gap-2"><Images size={15} /> All images</span>
+              <span className="text-xs text-gray-400">{total}</span>
+            </button>
+
             {mains.map(m => (
               <React.Fragment key={m.id}>
                 <SectionButton id={m.id} name={m.name} count={m.count} />
@@ -141,12 +147,13 @@ export default function AdminMedia() {
                 ))}
               </React.Fragment>
             ))}
-            {!mains.length && (
-              <p className="px-3 py-2 text-xs text-gray-400">
-                No categories yet — add one under Categories.
-              </p>
-            )}
           </div>
+
+          {!mains.length && (
+            <p className="px-3 py-2 text-xs text-gray-400">
+              No categories yet — add one under Categories.
+            </p>
+          )}
         </div>
 
         {/* Section contents */}
@@ -160,7 +167,7 @@ export default function AdminMedia() {
               <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
               <input value={search} onChange={e => setSearch(e.target.value)}
                 placeholder="Search filename, title, alt, tag…"
-                className="w-full pl-9 pr-3 py-2 rounded-xl border border-gray-200 dark:border-white/10 bg-white dark:bg-zinc-900 text-sm text-gray-900 dark:text-zinc-100 focus:outline-none focus:ring-2 focus:ring-accent/40" />
+                className="w-full pl-9 pr-3 py-2.5 rounded-xl border border-gray-200 dark:border-white/10 bg-white dark:bg-zinc-900 text-base sm:text-sm text-gray-900 dark:text-zinc-100 focus:outline-none focus:ring-2 focus:ring-accent/40" />
             </div>
           </div>
 
@@ -212,7 +219,7 @@ export default function AdminMedia() {
               </span>
               <select defaultValue="" disabled={busy}
                 onChange={e => { fileInto(e.target.value); e.target.value = ''; }}
-                className="px-3 py-1.5 rounded-xl border border-gray-200 dark:border-white/10 bg-white dark:bg-zinc-900 text-sm">
+                className="px-3 py-2 rounded-xl border border-gray-200 dark:border-white/10 bg-white dark:bg-zinc-900 text-base sm:text-sm">
                 <option value="">Choose section…</option>
                 {mains.map(m => (
                   <optgroup key={m.id} label={m.name}>

@@ -1,5 +1,7 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { FolderTree, ImagePlus, Loader, Search, UploadCloud, X, Star } from 'lucide-react';
+import {
+  ChevronLeft, ChevronRight, FolderTree, ImagePlus, Loader, Search, UploadCloud, X, Star,
+} from 'lucide-react';
 import {
   attachMedia, detachMedia, getAttachments, listAssets, listMediaSections,
   reorderMedia, uploadAssets,
@@ -43,15 +45,23 @@ export default function MediaPicker({
     return attachMedia(type, id, ids, role).then(load);
   };
 
-  // drag reorder
-  const onDrop = (targetId) => {
-    const from = items.findIndex(a => a.id === dragId.current);
-    const to   = items.findIndex(a => a.id === targetId);
-    if (from < 0 || to < 0 || from === to) return;
+  const applyOrder = (from, to) => {
+    if (from < 0 || to < 0 || to >= items.length || from === to) return;
     const order = items.map(a => a.id);
     order.splice(to, 0, order.splice(from, 1)[0]);
     setItems(order.map(oid => items.find(a => a.id === oid)));  // optimistic
     reorderMedia(type, id, order).then(load);
+  };
+
+  // drag reorder (desktop)
+  const onDrop = (targetId) =>
+    applyOrder(items.findIndex(a => a.id === dragId.current),
+               items.findIndex(a => a.id === targetId));
+
+  // HTML5 drag events don't fire on touch, so phones reorder with these.
+  const nudge = (attId, delta) => {
+    const from = items.findIndex(a => a.id === attId);
+    applyOrder(from, from + delta);
   };
 
   if (!id) {
@@ -84,14 +94,32 @@ export default function MediaPicker({
                 <Star size={9} className="fill-white" /> cover
               </span>
             )}
+            {/* Detach stays visible on touch: with no hover on a phone, a
+                hover-only control would make images impossible to remove. */}
             <button
               type="button"
               onClick={() => handleDetach(att.id)}
-              className="absolute top-1 right-1 w-6 h-6 rounded-full bg-black/60 hover:bg-red-600 text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+              className="absolute top-1 right-1 w-7 h-7 rounded-full bg-black/60 hover:bg-red-600 text-white flex items-center justify-center opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity"
               title="Remove"
             >
               <X size={14} />
             </button>
+
+            {/* Touch reordering — hidden once hover-drag is available. */}
+            {!single && items.length > 1 && (
+              <div className="sm:hidden absolute bottom-1 inset-x-1 flex justify-between">
+                <button type="button" onClick={() => nudge(att.id, -1)} aria-label="Move earlier"
+                  className="w-6 h-6 rounded-full bg-black/60 text-white flex items-center justify-center disabled:opacity-30"
+                  disabled={items[0]?.id === att.id}>
+                  <ChevronLeft size={14} />
+                </button>
+                <button type="button" onClick={() => nudge(att.id, 1)} aria-label="Move later"
+                  className="w-6 h-6 rounded-full bg-black/60 text-white flex items-center justify-center disabled:opacity-30"
+                  disabled={items[items.length - 1]?.id === att.id}>
+                  <ChevronRight size={14} />
+                </button>
+              </div>
+            )}
           </div>
         ))}
 
@@ -188,9 +216,10 @@ function LibraryModal({ folder, single, categoryId, onClose, onConfirm }) {
   };
 
   return (
-    <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm"
+    <div className="fixed inset-0 z-[60] flex items-end sm:items-center justify-center sm:p-4 bg-black/50 backdrop-blur-sm"
          onClick={onClose}>
-      <div className="bg-white dark:bg-zinc-900 rounded-2xl shadow-2xl w-full max-w-3xl max-h-[85vh] flex flex-col overflow-hidden"
+      {/* Full-height sheet on a phone, centred dialog from sm up. */}
+      <div className="bg-white dark:bg-zinc-900 rounded-t-2xl sm:rounded-2xl shadow-2xl w-full max-w-3xl h-[92vh] sm:h-auto sm:max-h-[85vh] flex flex-col overflow-hidden"
            onClick={(e) => e.stopPropagation()}>
         {/* Header / tabs */}
         <div className="flex items-center gap-1 px-4 py-3 border-b border-gray-100 dark:border-white/5">
@@ -206,9 +235,9 @@ function LibraryModal({ folder, single, categoryId, onClose, onConfirm }) {
         {/* Section — which slice of the library we browse and upload into */}
         <div className="flex items-center gap-2 px-4 py-2.5 border-b border-gray-100 dark:border-white/5 bg-gray-50/60 dark:bg-white/[0.02]">
           <FolderTree size={15} className="text-accent shrink-0" />
-          <span className="text-xs font-bold uppercase tracking-wide text-gray-500 dark:text-zinc-400">Section</span>
+          <span className="hidden sm:inline text-xs font-bold uppercase tracking-wide text-gray-500 dark:text-zinc-400">Section</span>
           <select value={section} onChange={e => setSection(e.target.value)}
-            className="ml-1 px-3 py-1.5 rounded-lg border border-gray-200 dark:border-white/10 bg-white dark:bg-zinc-900 text-sm font-semibold text-gray-900 dark:text-zinc-100 focus:outline-none focus:ring-2 focus:ring-accent/40">
+            className="flex-1 sm:flex-none min-w-0 sm:ml-1 px-3 py-2 rounded-lg border border-gray-200 dark:border-white/10 bg-white dark:bg-zinc-900 text-base sm:text-sm font-semibold text-gray-900 dark:text-zinc-100 focus:outline-none focus:ring-2 focus:ring-accent/40">
             <option value="">All images</option>
             {sections.filter(s => !s.parent).map(m => (
               <optgroup key={m.id} label={m.name}>
@@ -233,7 +262,7 @@ function LibraryModal({ folder, single, categoryId, onClose, onConfirm }) {
                 <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
                 <input value={search} onChange={e => setSearch(e.target.value)}
                   placeholder="Search filename, title, alt, tag…"
-                  className="w-full pl-9 pr-3 py-2 rounded-lg border border-gray-200 dark:border-white/10 bg-gray-50 dark:bg-zinc-800 text-sm text-gray-900 dark:text-zinc-100 focus:outline-none focus:ring-2 focus:ring-accent/40" />
+                  className="w-full pl-9 pr-3 py-2.5 rounded-lg border border-gray-200 dark:border-white/10 bg-gray-50 dark:bg-zinc-800 text-base sm:text-sm text-gray-900 dark:text-zinc-100 focus:outline-none focus:ring-2 focus:ring-accent/40" />
               </div>
               <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 gap-3">
                 {assets.map(a => (

@@ -1,6 +1,6 @@
 import React from 'react';
 import { NavLink } from 'react-router-dom';
-import { LayoutDashboard, Package, FolderTree, Images, LogOut, ExternalLink } from 'lucide-react';
+import { LayoutDashboard, Package, FolderTree, Images, LogOut, ExternalLink, X } from 'lucide-react';
 import { useAuthStore } from '../../store/useAuthStore';
 
 const NAV_ITEMS = [
@@ -15,11 +15,20 @@ const AdminSidebar = ({ onClose }) => {
 
   return (
     <aside className="flex flex-col h-full bg-white dark:bg-zinc-900 border-r border-gray-200 dark:border-white/5 w-60 shrink-0">
-      <div className="px-5 py-5 border-b border-gray-100 dark:border-white/5">
-        <span className="text-xl font-black tracking-tighter text-gray-900 dark:text-zinc-100">
-          PRONOUN<span className="text-accent">.</span>
-        </span>
-        <p className="text-xs text-accent font-bold uppercase tracking-widest mt-1.5">Admin Panel</p>
+      <div className="flex items-start justify-between px-5 py-5 border-b border-gray-100 dark:border-white/5">
+        <div>
+          <span className="text-xl font-black tracking-tighter text-gray-900 dark:text-zinc-100">
+            PRONOUN<span className="text-accent">.</span>
+          </span>
+          <p className="text-xs text-accent font-bold uppercase tracking-widest mt-1.5">Admin Panel</p>
+        </div>
+        {/* Only rendered in the mobile drawer, which is the only caller passing onClose. */}
+        {onClose && (
+          <button onClick={onClose} aria-label="Close menu"
+            className="lg:hidden p-2 -mr-2 -mt-1 text-gray-400 hover:text-gray-700 dark:hover:text-zinc-200">
+            <X className="w-5 h-5" />
+          </button>
+        )}
       </div>
 
       <div className="px-5 py-4 border-b border-gray-100 dark:border-white/5">

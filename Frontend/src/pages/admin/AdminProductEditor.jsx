@@ -13,7 +13,8 @@ import MediaPicker from '../../components/admin/MediaPicker';
 
 const card    = 'bg-white dark:bg-zinc-900 border border-gray-100 dark:border-white/5 rounded-2xl p-5 sm:p-7';
 const labelCls = 'block text-xs font-bold uppercase tracking-wide text-gray-500 dark:text-zinc-400 mb-1.5';
-const inputCls = 'w-full px-3 py-2.5 rounded-xl border border-gray-200 dark:border-white/10 bg-gray-50 dark:bg-zinc-800 text-sm text-gray-900 dark:text-zinc-100 focus:outline-none focus:ring-2 focus:ring-accent/40';
+// text-base on phones: anything under 16px makes iOS Safari zoom in on focus.
+const inputCls = 'w-full px-3 py-2.5 rounded-xl border border-gray-200 dark:border-white/10 bg-gray-50 dark:bg-zinc-800 text-base sm:text-sm text-gray-900 dark:text-zinc-100 focus:outline-none focus:ring-2 focus:ring-accent/40';
 const btnPrimary   = 'inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-accent text-white text-sm font-bold hover:brightness-110 transition disabled:opacity-50';
 const btnGhost     = 'inline-flex items-center gap-2 px-5 py-2.5 rounded-xl border border-gray-200 dark:border-white/10 text-sm font-bold text-gray-600 dark:text-zinc-300 hover:bg-gray-50 dark:hover:bg-white/5 transition';
 
@@ -143,16 +144,17 @@ export default function AdminProductEditor() {
       <div className="grid lg:grid-cols-[240px_1fr] gap-6">
         {/* ── Left rail: Upload Progress ── */}
         <aside className="lg:sticky lg:top-6 self-start">
-          <div className="bg-white dark:bg-zinc-900 border border-gray-100 dark:border-white/5 rounded-2xl p-4">
-            <p className="text-xs font-black uppercase tracking-widest text-gray-400 dark:text-zinc-500 px-2 mb-3">Upload Progress</p>
-            <nav className="space-y-1">
+          <div className="bg-white dark:bg-zinc-900 border border-gray-100 dark:border-white/5 rounded-2xl p-3 lg:p-4">
+            <p className="hidden lg:block text-xs font-black uppercase tracking-widest text-gray-400 dark:text-zinc-500 px-2 mb-3">Upload Progress</p>
+            {/* A scrollable strip on phones, the usual vertical rail from lg up. */}
+            <nav className="flex lg:block gap-1 lg:space-y-1 overflow-x-auto -mx-1 px-1 lg:mx-0 lg:px-0 lg:overflow-visible">
               {STEPS.map((s, i) => {
                 const locked  = isNew && s.key !== 'base';
                 const current = s.key === step;
                 const done    = !isNew && i < stepIndex;
                 return (
                   <button key={s.key} onClick={() => gotoStep(s.key)} disabled={locked}
-                    className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-semibold transition-colors text-left ${
+                    className={`shrink-0 lg:w-full flex items-center gap-2 lg:gap-3 px-3 py-2.5 rounded-xl text-sm font-semibold transition-colors text-left whitespace-nowrap ${
                       current ? 'bg-accent/10 text-accent'
                       : locked ? 'text-gray-300 dark:text-zinc-600 cursor-not-allowed'
                       : 'text-gray-600 dark:text-zinc-400 hover:bg-gray-50 dark:hover:bg-white/5'}`}>
@@ -161,14 +163,16 @@ export default function AdminProductEditor() {
                       : current ? 'bg-accent text-white' : 'bg-gray-100 dark:bg-white/5'}`}>
                       {locked ? <Lock size={12} /> : done ? <Check size={13} /> : <s.icon size={13} />}
                     </span>
-                    {s.label}
+                    {/* Only the step you are on is labelled on a phone — four
+                        labels side by side would not fit. */}
+                    <span className={current ? '' : 'hidden lg:inline'}>{s.label}</span>
                   </button>
                 );
               })}
             </nav>
 
             {!isNew && (
-              <div className="mt-4 pt-4 border-t border-gray-100 dark:border-white/5 space-y-2">
+              <div className="mt-3 pt-3 lg:mt-4 lg:pt-4 border-t border-gray-100 dark:border-white/5 grid grid-cols-2 lg:grid-cols-1 gap-2">
                 <button onClick={() => publish(false)} disabled={saving} className={`${btnGhost} w-full justify-center`}>
                   Save as Draft
                 </button>
@@ -248,7 +252,7 @@ export default function AdminProductEditor() {
                     categoryId={Number(form.category) || null} />
                 </div>
                 <div>
-                  <label className={labelCls}>Gallery (drag to reorder)</label>
+                  <label className={labelCls}>Gallery (drag, or use the arrows on a phone, to reorder)</label>
                   <MediaPicker type="product" id={Number(id)} role="gallery" folder="products/gallery" label="gallery images"
                     categoryId={Number(form.category) || null} />
                 </div>
@@ -331,20 +335,24 @@ function VariantsEditor({ productId, colors, sizeSets, categoryId, variations, o
         <div className="space-y-2 mb-4">
           {variations.map(v => (
             <div key={v.id} className="border border-gray-100 dark:border-white/5 rounded-xl overflow-hidden">
-              <div className="flex items-center gap-3 p-3">
+              <div className="flex flex-wrap items-center gap-x-3 gap-y-2 p-3">
                 <span className="w-8 h-8 rounded-full border border-gray-200 dark:border-white/10 shrink-0"
                       style={{ background: colors.find(c => c.name === (v.color_name || v.color))?.hex_code || '#e5e7eb' }} />
                 <div className="flex-1 min-w-0">
                   <p className="font-bold text-gray-900 dark:text-zinc-100 truncate">{v.sku}</p>
-                  <p className="text-xs text-gray-500 dark:text-zinc-400">
+                  {/* The meta line wraps on a phone rather than being clipped. */}
+                  <p className="text-xs text-gray-500 dark:text-zinc-400 sm:truncate">
                     {(v.color_name || v.color || 'No colour')} · {v.size_name || 'No size'} · ₹{v.per_piece_price ?? '—'}/pc · set ₹{v.b2b_price ?? '—'} · stock {v.stock_quantity}
                   </p>
                 </div>
-                <button onClick={() => setExpanded(expanded === v.id ? null : v.id)}
-                  className="inline-flex items-center gap-1 text-xs font-semibold text-accent hover:underline">
-                  <ImageIcon size={14} /> Images {expanded === v.id ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
-                </button>
-                <button onClick={() => remove(v.id)} className="p-1.5 text-gray-400 hover:text-red-500"><Trash2 size={15} /></button>
+                <div className="flex items-center gap-1 ml-auto">
+                  <button onClick={() => setExpanded(expanded === v.id ? null : v.id)}
+                    className="inline-flex items-center gap-1 px-2 py-2 text-xs font-semibold text-accent hover:underline">
+                    <ImageIcon size={14} /> Images {expanded === v.id ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+                  </button>
+                  <button onClick={() => remove(v.id)} aria-label="Delete variant"
+                    className="p-2 text-gray-400 hover:text-red-500"><Trash2 size={15} /></button>
+                </div>
               </div>
               {expanded === v.id && (
                 <div className="px-3 pb-3 pt-1 border-t border-gray-100 dark:border-white/5 bg-gray-50/50 dark:bg-white/[0.02]">
@@ -546,8 +554,8 @@ function CreateSizeSetModal({ onClose, onCreated }) {
           <div key={i} className="flex items-center gap-2">
             <input className={inputCls} value={r.size} onChange={e => setRow(i, 'size', e.target.value)} placeholder="Size (e.g. 30 or L)" />
             <span className="text-gray-400">×</span>
-            <input type="number" min="1" className={`${inputCls} w-24`} value={r.qty} onChange={e => setRow(i, 'qty', e.target.value)} />
-            <span className="text-xs text-gray-400 w-8">pcs</span>
+            <input type="number" min="1" className={`${inputCls} w-16 sm:w-24`} value={r.qty} onChange={e => setRow(i, 'qty', e.target.value)} />
+            <span className="text-xs text-gray-400 w-8 shrink-0">pcs</span>
             <button onClick={() => delRow(i)} disabled={rows.length === 1} className="p-1.5 text-gray-400 hover:text-red-500 disabled:opacity-30"><X size={16} /></button>
           </div>
         ))}
@@ -573,7 +581,9 @@ function CreateSizeSetModal({ onClose, onCreated }) {
 function ModalShell({ title, onClose, children }) {
   return (
     <div className="fixed inset-0 z-[70] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm" onClick={onClose}>
-      <div className="bg-white dark:bg-zinc-900 rounded-2xl shadow-2xl w-full max-w-md p-5" onClick={e => e.stopPropagation()}>
+      {/* Capped and scrollable so a phone keyboard can never push the buttons off-screen. */}
+      <div className="bg-white dark:bg-zinc-900 rounded-2xl shadow-2xl w-full max-w-md p-5 max-h-[85vh] overflow-y-auto"
+           onClick={e => e.stopPropagation()}>
         <div className="flex items-center justify-between mb-4">
           <h3 className="text-base font-black text-gray-900 dark:text-zinc-100">{title}</h3>
           <button onClick={onClose} className="p-1.5 text-gray-400 hover:text-gray-700 dark:hover:text-zinc-200"><X size={18} /></button>

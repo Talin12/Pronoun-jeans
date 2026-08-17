@@ -99,16 +99,17 @@ export default function AdminCategoryProducts() {
           </button>
         </div>
       ) : (
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        <div className="grid gap-3 sm:gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          {/* A compact row on phones, a picture-led box from sm up. */}
           {data.results.map(p => (
             <div key={p.id}
-              className="flex flex-col bg-white dark:bg-zinc-900 border border-gray-100 dark:border-white/5 rounded-2xl overflow-hidden hover:shadow-md transition-shadow">
+              className="flex flex-row sm:flex-col bg-white dark:bg-zinc-900 border border-gray-100 dark:border-white/5 rounded-2xl overflow-hidden hover:shadow-md transition-shadow">
               <button onClick={() => navigate(`/admin/products/${p.id}`)}
-                className="aspect-square w-full bg-gray-100 dark:bg-zinc-800 flex items-center justify-center overflow-hidden">
+                className="w-28 shrink-0 sm:w-full sm:aspect-square bg-gray-100 dark:bg-zinc-800 flex items-center justify-center overflow-hidden">
                 {p.thumb ? <img src={p.thumb} alt={p.name} className="w-full h-full object-cover" />
                          : <ImageOff size={24} className="text-gray-300" />}
               </button>
-              <div className="p-3 flex flex-col gap-2 flex-1">
+              <div className="p-3 flex flex-col gap-2 flex-1 min-w-0">
                 <div className="min-w-0">
                   <p className="font-bold text-gray-900 dark:text-zinc-100 truncate">{p.name}</p>
                   <p className="text-xs text-gray-500 dark:text-zinc-400 truncate">
