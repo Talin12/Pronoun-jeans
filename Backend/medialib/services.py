@@ -147,7 +147,10 @@ def ingest_upload(file, *, uploaded_by=None, folder=None, filename=None,
         upload_kwargs['folder'] = folder
     resp = storage.store_image(data, **upload_kwargs)
 
-    storage_key = resp.get('public_id') or file_hash
+    # Store the key WITHOUT the delivery prefix — the Phase 7 bridge writes it
+    # into legacy FileFields, and Django's storage adds the prefix back when it
+    # builds their URLs. See medialib.storage.DELIVERY_PREFIX.
+    storage_key = storage.strip_prefix(resp.get('public_id') or file_hash)
     variants    = storage.build_variants(storage_key, original_width=width)
 
     asset = MediaAsset.objects.create(

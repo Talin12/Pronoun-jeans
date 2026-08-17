@@ -12,12 +12,43 @@ content hash so the stored object is content-addressed (a re-upload of the same
 bytes overwrites the same object instead of creating a Cloudinary duplicate).
 """
 
+import cloudinary.api
 import cloudinary.uploader
 import cloudinary.utils
 import requests
 
 # Cloudinary folder all library assets live under.
 MEDIA_FOLDER = 'media_library'
+
+# Django's storage backend (core.storage.TimeoutMediaCloudinaryStorage, on top of
+# django-cloudinary-storage) puts everything it uploads under `media/` and adds
+# that prefix again when it builds a URL from a FileField name. The Phase 7
+# bridge writes MediaAsset.storage_key straight into those FileFields, and the
+# migration recorded storage_key from FileField names, so ONE convention has to
+# hold across both worlds:
+#
+#     storage_key is the path WITHOUT the prefix (e.g. 'products/<hash>');
+#     the real Cloudinary object is at 'media/products/<hash>'.
+#
+# Upload puts files there, delivery_id() puts the prefix back for URLs, and
+# Django re-adds it by itself for the legacy columns. Getting this wrong is what
+# made library images 404 the moment they were attached to a product.
+DELIVERY_PREFIX = 'media'
+
+
+def delivery_id(storage_key):
+    """The real Cloudinary public_id for a stored key. Idempotent."""
+    if not storage_key:
+        return storage_key
+    if storage_key == DELIVERY_PREFIX or storage_key.startswith(f'{DELIVERY_PREFIX}/'):
+        return storage_key
+    return f'{DELIVERY_PREFIX}/{storage_key}'
+
+
+def strip_prefix(public_id):
+    """Inverse of delivery_id(): a Cloudinary public_id back to a storage_key."""
+    prefix = f'{DELIVERY_PREFIX}/'
+    return public_id[len(prefix):] if public_id.startswith(prefix) else public_id
 
 # Bound each upload the same way core.storage does, so a network blip fails
 # fast instead of hanging a worker.
@@ -48,7 +79,10 @@ def store_image(data, public_id, folder=MEDIA_FOLDER):
     return cloudinary.uploader.upload(
         data,
         public_id=public_id,
-        folder=folder,
+        # Land under the same prefix Django's storage uses, so an asset works
+        # both from the library (delivery_id) and once the Phase 7 bridge has
+        # written its key into a legacy FileField.
+        folder=delivery_id(folder),
         resource_type='image',
         overwrite=False,
         unique_filename=False,
@@ -57,24 +91,41 @@ def store_image(data, public_id, folder=MEDIA_FOLDER):
     )
 
 
+def rename_asset(from_public_id, to_public_id):
+    """Move an existing Cloudinary object. Server-side; no re-upload."""
+    return cloudinary.uploader.rename(
+        from_public_id, to_public_id, timeout=UPLOAD_TIMEOUT_SECONDS,
+    )
+
+
+def asset_exists(public_id):
+    """True when a Cloudinary image object exists at this public_id."""
+    try:
+        cloudinary.api.resource(public_id, resource_type='image')
+        return True
+    except Exception:
+        return False
+
+
 def build_variants(storage_key, original_width=None):
     """
-    Build the transform-URL map for an asset from its Cloudinary public_id.
+    Build the transform-URL map for an asset from its storage_key.
 
     Widths larger than the original are skipped (never upscale). Returns e.g.
     {'200': 'https://…w_200,f_auto,q_auto…', ..., 'original': 'https://…'}.
     """
+    public_id = delivery_id(storage_key)
     variants = {}
     for w in VARIANT_WIDTHS:
         if original_width and w > original_width:
             continue
         url, _ = cloudinary.utils.cloudinary_url(
-            storage_key, width=w, crop='limit',
+            public_id, width=w, crop='limit',
             fetch_format='auto', quality='auto', secure=True,
         )
         variants[str(w)] = url
 
-    original_url, _ = cloudinary.utils.cloudinary_url(storage_key, secure=True)
+    original_url, _ = cloudinary.utils.cloudinary_url(public_id, secure=True)
     variants['original'] = original_url
     return variants
 

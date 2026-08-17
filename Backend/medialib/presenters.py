@@ -9,6 +9,7 @@ build Cloudinary thumbnail URLs and human labels for usage listings.
 import cloudinary.utils
 
 from .models import MediaAttachment
+from .storage import delivery_id
 
 
 def thumb_url(asset, width=200):
@@ -17,7 +18,7 @@ def thumb_url(asset, width=200):
     if asset.variants and key in asset.variants:
         return asset.variants[key]
     url, _ = cloudinary.utils.cloudinary_url(
-        asset.storage_key, width=width, crop='limit',
+        delivery_id(asset.storage_key), width=width, crop='limit',
         fetch_format='auto', quality='auto', secure=True,
     )
     return url
@@ -26,7 +27,7 @@ def thumb_url(asset, width=200):
 def full_url(asset):
     if asset.variants and 'original' in asset.variants:
         return asset.variants['original']
-    url, _ = cloudinary.utils.cloudinary_url(asset.storage_key, secure=True)
+    url, _ = cloudinary.utils.cloudinary_url(delivery_id(asset.storage_key), secure=True)
     return url
 
 
