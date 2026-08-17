@@ -7,7 +7,7 @@ the custom panel behave identically to the Django-admin picker (dedup + the
 Phase 7 legacy-column bridge), and therefore render on the storefront at once.
 """
 
-from django.db.models import Count
+from django.db.models import Count, Q
 from rest_framework import filters, viewsets
 from rest_framework.pagination import PageNumberPagination
 from rest_framework.parsers import FormParser, MultiPartParser
@@ -53,6 +53,21 @@ class ProductViewSet(viewsets.ModelViewSet):
         qs = (Product.objects
               .select_related('category')
               .annotate(variation_count=Count('variations', distinct=True)))
+
+        # ?category=<id> — everything filed under that category. For a main
+        # category that includes products sitting on its sub-categories, since
+        # the panel lists a main and its subs as one tree.
+        category = self.request.query_params.get('category')
+        if category:
+            try:
+                cid = int(category)
+            except (TypeError, ValueError):
+                return qs.none()
+            qs = qs.filter(
+                Q(category_id=cid) | Q(subcategories__id=cid)
+                | Q(category__parent_id=cid) | Q(subcategories__parent_id=cid)
+            ).distinct()
+
         if self.action == 'retrieve':
             qs = qs.prefetch_related(
                 'subcategories',
