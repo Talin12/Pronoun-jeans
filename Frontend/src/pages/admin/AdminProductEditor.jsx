@@ -10,6 +10,7 @@ import {
   createVariation, deleteVariation,
 } from '../../api/adminApi';
 import MediaPicker from '../../components/admin/MediaPicker';
+import SizeRangeBuilder from '../../components/admin/SizeRangeBuilder';
 import BulkVariantBuilder from '../../components/admin/BulkVariantBuilder';
 
 const card    = 'bg-white dark:bg-zinc-900 border border-gray-100 dark:border-white/5 rounded-2xl p-5 sm:p-7';
@@ -558,62 +559,50 @@ function AddColorModal({ onClose, onCreated }) {
 }
 
 // ── Create size set modal (bijnis "Custom Size Set") ─────────────────────────
+//
+// Same builder as the Size Sets page: pick the two ends of the range, tick the
+// sizes, and the breakdown string, article count and name all follow.
 function CreateSizeSetModal({ onClose, onCreated }) {
-  const [name, setName] = useState('');
-  const [rows, setRows] = useState([{ size: '', qty: 1 }]);
+  const [name, setName]     = useState('');
+  const [touched, setTouch] = useState(false);
+  const [built, setBuilt]   = useState({ breakdownString: '', pieces: 0, suggestedName: '' });
   const [saving, setSaving] = useState(false);
-  const [err, setErr] = useState('');
+  const [err, setErr]       = useState('');
 
-  const setRow = (i, k, val) => setRows(rs => rs.map((r, idx) => idx === i ? { ...r, [k]: val } : r));
-  const addRow = () => setRows(rs => [...rs, { size: '', qty: 1 }]);
-  const delRow = (i) => setRows(rs => rs.filter((_, idx) => idx !== i));
-
-  const valid = rows.filter(r => r.size.trim() && Number(r.qty) > 0);
-  const pieces = valid.reduce((s, r) => s + Number(r.qty), 0);
-  const breakdownString = valid.map(r => `${r.qty}x${r.size.trim()}`).join(', ');
+  const effectiveName = touched ? name : built.suggestedName;
+  const canSave       = effectiveName.trim() && built.pieces > 0;
 
   const save = () => {
-    if (!name.trim() || !valid.length) return;
+    if (!canSave) return;
     setSaving(true); setErr('');
     createSizeSet({
-      name: name.trim(),
-      breakdowns: [{ label: breakdownString, breakdown_string: breakdownString, pieces }],
+      name: effectiveName.trim(),
+      breakdowns: [{
+        label: built.breakdownString,
+        breakdown_string: built.breakdownString,
+        pieces: built.pieces,
+      }],
     }).then(onCreated).catch(e => {
       const d = e.response?.data;
-      setErr(d ? JSON.stringify(d) : 'Could not create size set.'); setSaving(false);
+      setErr(d?.name ? `Name: ${[].concat(d.name).join(' ')}`
+             : d ? JSON.stringify(d) : 'Could not create size set.');
+      setSaving(false);
     });
   };
 
   return (
     <ModalShell title="Create custom size set" onClose={onClose}>
       {err && <p className="text-sm text-red-600 dark:text-red-400 mb-3">{err}</p>}
-      <div className="mb-4">
+      <SizeRangeBuilder onChange={setBuilt} />
+      <div className="mt-4">
         <label className={labelCls}>Size set name</label>
-        <input className={inputCls} value={name} onChange={e => setName(e.target.value)} placeholder="e.g. 30 TO 36" />
+        <input className={inputCls} value={effectiveName}
+               onChange={e => { setTouch(true); setName(e.target.value); }}
+               placeholder="Named from the range — edit if you want something else" />
       </div>
-      <label className={labelCls}>Sizes & quantities</label>
-      <div className="space-y-2">
-        {rows.map((r, i) => (
-          <div key={i} className="flex items-center gap-2">
-            <input className={inputCls} value={r.size} onChange={e => setRow(i, 'size', e.target.value)} placeholder="Size (e.g. 30 or L)" />
-            <span className="text-gray-400">×</span>
-            <input type="number" min="1" className={`${inputCls} w-16 sm:w-24`} value={r.qty} onChange={e => setRow(i, 'qty', e.target.value)} />
-            <span className="text-xs text-gray-400 w-8 shrink-0">pcs</span>
-            <button onClick={() => delRow(i)} disabled={rows.length === 1} className="p-1.5 text-gray-400 hover:text-red-500 disabled:opacity-30"><X size={16} /></button>
-          </div>
-        ))}
-      </div>
-      <button onClick={addRow} className="mt-2 inline-flex items-center gap-1.5 text-sm font-semibold text-accent hover:underline">
-        <Plus size={15} /> Add size
-      </button>
-      {valid.length > 0 && (
-        <p className="text-xs text-gray-500 dark:text-zinc-400 mt-3">
-          Breakdown: <span className="font-semibold text-gray-700 dark:text-zinc-200">{breakdownString}</span> · {pieces} pieces/set
-        </p>
-      )}
       <div className="flex justify-end gap-2 mt-5">
         <button onClick={onClose} className={btnGhost}>Cancel</button>
-        <button onClick={save} disabled={saving || !name.trim() || !valid.length} className={btnPrimary}>
+        <button onClick={save} disabled={saving || !canSave} className={btnPrimary}>
           {saving ? <Loader size={15} className="animate-spin" /> : <Check size={15} />} Create size set
         </button>
       </div>

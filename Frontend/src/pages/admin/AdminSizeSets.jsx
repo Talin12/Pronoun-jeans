@@ -5,6 +5,7 @@ import {
 import {
   createSizeSet, deleteSizeSet, listSizeSets, updateSizeSet,
 } from '../../api/adminApi';
+import SizeRangeBuilder from '../../components/admin/SizeRangeBuilder';
 
 // text-base on phones: anything under 16px makes iOS Safari zoom in on focus.
 const inputCls = 'w-full px-3 py-2.5 rounded-xl border border-gray-200 dark:border-white/10 bg-gray-50 dark:bg-zinc-800 text-base sm:text-sm text-gray-900 dark:text-zinc-100 focus:outline-none focus:ring-2 focus:ring-accent/40';
@@ -12,22 +13,14 @@ const labelCls = 'block text-xs font-bold uppercase tracking-wide text-gray-500 
 const btnPrimary = 'inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl bg-accent text-white text-sm font-bold hover:brightness-110 transition disabled:opacity-50';
 const btnGhost = 'inline-flex items-center gap-2 px-4 py-2.5 rounded-xl border border-gray-200 dark:border-white/10 text-sm font-bold text-gray-600 dark:text-zinc-300 hover:bg-gray-50 dark:hover:bg-white/5 transition';
 
-/** "2xL, 1xXL" from [{qty:2,size:'L'},{qty:1,size:'XL'}] — the stored form. */
-const toBreakdownString = (rows) =>
-  rows.filter(r => r.size.trim() && Number(r.qty) > 0)
-      .map(r => `${Number(r.qty)}x${r.size.trim()}`).join(', ');
-
-const countPieces = (rows) =>
-  rows.filter(r => r.size.trim() && Number(r.qty) > 0)
-      .reduce((sum, r) => sum + Number(r.qty), 0);
-
 /**
  * Size sets and their breakdowns.
  *
  * A set ("L TO 3XL") names a range; its breakdowns are the distributions a
- * variation can be sold in ("1xL, 1xXL, 1xXXL, 1x3XL" = 4 pieces). Pieces drive
- * variation pricing, so they are derived from the size/qty rows rather than
- * typed — a breakdown whose pieces disagree with its string would misprice.
+ * variation can be sold in ("1xL, 1xXL, 1xXXL, 1x3XL" = 4 pieces). Both the
+ * string and the article count come from SizeRangeBuilder — you pick the two
+ * ends of the range and tick sizes, never typing either. Pieces drive variation
+ * pricing, so a hand-typed count that disagreed with the string would misprice.
  *
  * Sets in use are deactivated, never deleted: ProductVariation.size_set is
  * SET_NULL, so deleting one would strip the size from live products. The API
@@ -82,21 +75,29 @@ export default function AdminSizeSets() {
 function CreateSizeSetCard({ onCreated, onError }) {
   const [open, setOpen]     = useState(false);
   const [name, setName]     = useState('');
-  const [rows, setRows]     = useState([{ size: '', qty: 1 }]);
+  const [touched, setTouch] = useState(false);   // did the admin type their own name?
+  const [built, setBuilt]   = useState({ breakdownString: '', pieces: 0, suggestedName: '' });
   const [saving, setSaving] = useState(false);
 
-  const breakdownString = toBreakdownString(rows);
-  const pieces          = countPieces(rows);
-  const canSave         = name.trim() && pieces > 0;
+  // The name follows the range ("30 TO 36") until it is edited by hand.
+  const effectiveName = touched ? name : built.suggestedName;
+  const canSave       = effectiveName.trim() && built.pieces > 0;
 
-  const reset = () => { setName(''); setRows([{ size: '', qty: 1 }]); setOpen(false); };
+  const reset = () => {
+    setName(''); setTouch(false); setOpen(false);
+    setBuilt({ breakdownString: '', pieces: 0, suggestedName: '' });
+  };
 
   const save = () => {
     if (!canSave) return;
     setSaving(true); onError('');
     createSizeSet({
-      name: name.trim(),
-      breakdowns: [{ label: breakdownString, breakdown_string: breakdownString, pieces }],
+      name: effectiveName.trim(),
+      breakdowns: [{
+        label: built.breakdownString,
+        breakdown_string: built.breakdownString,
+        pieces: built.pieces,
+      }],
     })
       .then(() => { reset(); onCreated(); })
       .catch(e => onError(readError(e, 'Could not create the size set.')))
@@ -114,14 +115,13 @@ function CreateSizeSetCard({ onCreated, onError }) {
 
   return (
     <div className="bg-white dark:bg-zinc-900 border border-gray-100 dark:border-white/5 rounded-2xl p-5 mb-6">
-      <div className="mb-4">
+      <SizeRangeBuilder onChange={setBuilt} />
+      <div className="mt-4">
         <label className={labelCls}>Size set name</label>
-        <input className={inputCls} value={name} autoFocus
-               onChange={e => setName(e.target.value)} placeholder='e.g. "L TO 3XL" or "30 TO 36"' />
+        <input className={inputCls} value={effectiveName}
+               onChange={e => { setTouch(true); setName(e.target.value); }}
+               placeholder="Named from the range — edit if you want something else" />
       </div>
-      <label className={labelCls}>First breakdown — sizes & quantities per set</label>
-      <SizeQtyRows rows={rows} onChange={setRows} />
-      {pieces > 0 && <BreakdownPreview string={breakdownString} pieces={pieces} />}
       <div className="flex justify-end gap-2 mt-5">
         <button onClick={reset} className={btnGhost}>Cancel</button>
         <button onClick={save} disabled={saving || !canSave} className={btnPrimary}>
@@ -137,7 +137,7 @@ function CreateSizeSetCard({ onCreated, onError }) {
 function SizeSetCard({ sizeSet, onChanged, onError }) {
   const [name, setName]     = useState(sizeSet.name);
   const [adding, setAdding] = useState(false);
-  const [rows, setRows]     = useState([{ size: '', qty: 1 }]);
+  const [built, setBuilt]   = useState({ breakdownString: '', pieces: 0 });
   const [busy, setBusy]     = useState(false);
 
   const inUse      = sizeSet.variation_count > 0;
@@ -154,17 +154,18 @@ function SizeSetCard({ sizeSet, onChanged, onError }) {
   const patch = (body, fallback) => {
     setBusy(true); onError('');
     updateSizeSet(sizeSet.id, body)
-      .then(() => { setAdding(false); setRows([{ size: '', qty: 1 }]); onChanged(); })
+      .then(() => { setAdding(false); setBuilt({ breakdownString: '', pieces: 0 }); onChanged(); })
       .catch(e => onError(readError(e, fallback)))
       .finally(() => setBusy(false));
   };
 
   const addBreakdown = () => {
-    const string = toBreakdownString(rows);
-    const pieces = countPieces(rows);
-    if (!pieces) return;
-    patch({ breakdowns: [...keep(), { label: string, breakdown_string: string, pieces }] },
-          'Could not add the breakdown.');
+    if (!built.pieces) return;
+    patch({ breakdowns: [...keep(), {
+      label: built.breakdownString,
+      breakdown_string: built.breakdownString,
+      pieces: built.pieces,
+    }] }, 'Could not add the breakdown.');
   };
 
   const removeBreakdown = (id) =>
@@ -238,15 +239,13 @@ function SizeSetCard({ sizeSet, onChanged, onError }) {
 
         {adding ? (
           <div className="pt-2">
-            <SizeQtyRows rows={rows} onChange={setRows} />
-            {countPieces(rows) > 0 && (
-              <BreakdownPreview string={toBreakdownString(rows)} pieces={countPieces(rows)} />
-            )}
+            <SizeRangeBuilder onChange={setBuilt} />
             <div className="flex justify-end gap-2 mt-3">
-              <button onClick={() => { setAdding(false); setRows([{ size: '', qty: 1 }]); }} className={btnGhost}>
+              <button onClick={() => { setAdding(false); setBuilt({ breakdownString: '', pieces: 0 }); }}
+                      className={btnGhost}>
                 Cancel
               </button>
-              <button onClick={addBreakdown} disabled={busy || !countPieces(rows)} className={btnPrimary}>
+              <button onClick={addBreakdown} disabled={busy || !built.pieces} className={btnPrimary}>
                 {busy ? <Loader size={15} className="animate-spin" /> : <Check size={15} />} Add breakdown
               </button>
             </div>
@@ -263,46 +262,6 @@ function SizeSetCard({ sizeSet, onChanged, onError }) {
 }
 
 // ── Shared bits ───────────────────────────────────────────────────────────────
-
-function SizeQtyRows({ rows, onChange }) {
-  const setRow = (i, k, val) => onChange(rows.map((r, idx) => idx === i ? { ...r, [k]: val } : r));
-  const addRow = () => onChange([...rows, { size: '', qty: 1 }]);
-  const delRow = (i) => onChange(rows.filter((_, idx) => idx !== i));
-
-  return (
-    <>
-      <div className="space-y-2">
-        {rows.map((r, i) => (
-          <div key={i} className="flex items-center gap-2">
-            <input className={inputCls} value={r.size} placeholder="Size (e.g. 30 or L)"
-                   onChange={e => setRow(i, 'size', e.target.value)} />
-            <span className="text-gray-400">×</span>
-            <input type="number" min="1" className={`${inputCls} w-16 sm:w-24`} value={r.qty}
-                   onChange={e => setRow(i, 'qty', e.target.value)} />
-            <span className="text-xs text-gray-400 w-8 shrink-0">pcs</span>
-            <button onClick={() => delRow(i)} disabled={rows.length === 1}
-                    aria-label="Remove size"
-                    className="p-1.5 text-gray-400 hover:text-red-500 disabled:opacity-30">
-              <X size={16} />
-            </button>
-          </div>
-        ))}
-      </div>
-      <button onClick={addRow}
-              className="mt-2 inline-flex items-center gap-1.5 text-sm font-semibold text-accent hover:underline">
-        <Plus size={15} /> Add size
-      </button>
-    </>
-  );
-}
-
-function BreakdownPreview({ string, pieces }) {
-  return (
-    <p className="text-xs text-gray-500 dark:text-zinc-400 mt-3">
-      Breakdown: <span className="font-semibold text-gray-700 dark:text-zinc-200">{string}</span> · {pieces} pieces/set
-    </p>
-  );
-}
 
 /** Pull the server's message out — the API explains *why* a delete was refused. */
 function readError(e, fallback) {
