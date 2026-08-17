@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import {
   ArrowLeft, ArrowRight, Loader, Save, Trash2, Plus, Check, Lock,
   Image as ImageIcon, Layers, FileText, ClipboardCheck, AlertCircle, X, ChevronDown, ChevronUp,
@@ -28,6 +28,9 @@ export default function AdminProductEditor() {
   const { id } = useParams();
   const isNew  = !id || id === 'new';
   const navigate = useNavigate();
+  // ?category=<id> — set when "Add product" is used from a category page.
+  const [params] = useSearchParams();
+  const preset = params.get('category');
 
   const [step, setStep]      = useState('base');
   const [loading, setLoad]   = useState(!isNew);
@@ -67,6 +70,20 @@ export default function AdminProductEditor() {
   }, [id, isNew]);
 
   useEffect(() => { loadRefs(); loadProduct(); }, [loadRefs, loadProduct]);
+
+  // Prefill the category when the editor was opened from a category page. A
+  // sub-category selects its parent too, since the FK holds the main category.
+  useEffect(() => {
+    if (!isNew || !preset || !categories.length) return;
+    const cat = categories.find(c => c.id === Number(preset));
+    if (!cat) return;
+    setForm(f => {
+      if (f.category) return f;               // never clobber a choice already made
+      return cat.parent
+        ? { ...f, category: cat.parent, subcategories: [cat.id] }
+        : { ...f, category: cat.id };
+    });
+  }, [isNew, preset, categories]);
 
   const mainCategories = categories.filter(c => !c.parent);
   const subCategories  = categories.filter(c => c.parent === Number(form.category));

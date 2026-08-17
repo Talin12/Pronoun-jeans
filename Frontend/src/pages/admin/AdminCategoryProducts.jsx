@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import {
-  ArrowLeft, Loader, Package, ImageOff, Pencil, ChevronLeft, ChevronRight,
+  ArrowLeft, Loader, Package, ImageOff, Pencil, Plus, ChevronLeft, ChevronRight,
 } from 'lucide-react';
 import { listProducts, updateProduct, getCategory } from '../../api/adminApi';
 import StatusToggle from '../../components/admin/StatusToggle';
@@ -64,14 +64,21 @@ export default function AdminCategoryProducts() {
         <ArrowLeft size={16} /> All categories
       </button>
 
-      <div className="mb-6">
-        <p className="text-accent text-xs font-black uppercase tracking-widest mb-1">Category</p>
-        <h1 className="text-2xl font-black text-gray-900 dark:text-zinc-100">
-          {cat ? (cat.parent_name ? `${cat.parent_name} → ${cat.name}` : cat.name) : '…'}
-        </h1>
-        <p className="text-gray-500 dark:text-zinc-400 text-sm mt-1">
-          {loading ? '—' : `${data.count} product${data.count !== 1 ? 's' : ''} in this category`}
-        </p>
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
+        <div>
+          <p className="text-accent text-xs font-black uppercase tracking-widest mb-1">Category</p>
+          <h1 className="text-2xl font-black text-gray-900 dark:text-zinc-100">
+            {cat ? (cat.parent_name ? `${cat.parent_name} → ${cat.name}` : cat.name) : '…'}
+          </h1>
+          <p className="text-gray-500 dark:text-zinc-400 text-sm mt-1">
+            {loading ? '—' : `${data.count} product${data.count !== 1 ? 's' : ''} in this category`}
+          </p>
+        </div>
+        {/* Starts the upload wizard with this category already selected. */}
+        <button onClick={() => navigate(`/admin/products/new?category=${id}`)}
+          className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-accent text-white text-sm font-bold hover:brightness-110 transition shadow-sm shrink-0">
+          <Plus size={18} /> Add Product to {cat?.name || 'this category'}
+        </button>
       </div>
 
       {error && (
@@ -86,6 +93,10 @@ export default function AdminCategoryProducts() {
         <div className="text-center py-20 text-gray-400">
           <Package size={40} className="mx-auto mb-3 opacity-40" />
           <p className="font-semibold">No products in this category yet</p>
+          <button onClick={() => navigate(`/admin/products/new?category=${id}`)}
+            className="inline-flex items-center gap-2 mt-4 px-5 py-2.5 rounded-xl bg-accent text-white text-sm font-bold hover:brightness-110 transition">
+            <Plus size={18} /> Add the first one
+          </button>
         </div>
       ) : (
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
