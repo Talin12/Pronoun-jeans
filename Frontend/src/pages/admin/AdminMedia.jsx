@@ -3,7 +3,7 @@ import {
   Images, Loader, Search, UploadCloud, FolderTree, X, Check, FolderInput,
 } from 'lucide-react';
 import {
-  listAssets, listMediaSections, uploadAssets, categorizeAssets,
+  listAssets, listMediaSections, uploadAssetsInBatches, categorizeAssets,
 } from '../../api/adminApi';
 
 const PAGE_TITLE = 'Media Library';
@@ -29,6 +29,7 @@ export default function AdminMedia() {
   const [selected, setSel]      = useState(new Set());
   const [busy, setBusy]         = useState(false);
   const [error, setError]       = useState('');
+  const [progress, setProgress] = useState('');
   const fileRef = useRef(null);
 
   const loadSections = useCallback(() => {
@@ -58,27 +59,29 @@ export default function AdminMedia() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [search, active]);
 
-  const doUpload = (files) => {
+  const doUpload = async (files) => {
     if (!files || !files.length) return;
     setError('');
-    const queued = Array.from(files).map(f => ({ name: f.name, status: 'uploading…' }));
+    const queued = Array.from(files).map(f => ({ name: f.name, status: 'waiting…' }));
     setUploads(prev => [...queued, ...prev]);
-    uploadAssets(files, undefined, active)
-      .then(d => {
-        const results = d.results || [];
-        setUploads(prev => prev.map(u => {
-          const match = results.find(r => r.asset.original_filename === u.name);
-          if (!match) return u;
-          return { ...u, status: match.deduplicated ? 'already in library — filed here too' : 'uploaded' };
-        }));
-        (d.errors || []).forEach(e => setError(`${e.filename}: ${e.error}`));
-        fetchAssets(true);
-        loadSections();
-      })
-      .catch(() => {
-        setUploads(prev => prev.map(u => ({ ...u, status: 'failed' })));
-        setError('Upload failed. Please try again.');
-      });
+
+    // Small batches: one slow or rejected file no longer costs the whole set.
+    const { results, errors } = await uploadAssetsInBatches(files, undefined, active, {
+      onProgress: ({ done, total }) => setProgress(done < total ? `${done} of ${total} uploaded…` : ''),
+    });
+
+    setUploads(prev => prev.map(u => {
+      const ok  = results.find(r => r.asset.original_filename === u.name);
+      if (ok) return { ...u, status: ok.deduplicated ? 'already in library — filed here too' : 'uploaded' };
+      const bad = errors.find(e => e.filename === u.name);
+      if (bad) return { ...u, status: bad.error };
+      return u;
+    }));
+
+    if (errors.length) {
+      setError(`${errors.length} of ${queued.length} failed — ${errors[0].error}`);
+    }
+    if (results.length) { fetchAssets(true); loadSections(); }
   };
 
   const toggleSel = (id) => setSel(prev => {
@@ -183,8 +186,13 @@ export default function AdminMedia() {
               Drag images here, or click to browse — uploads go to <span className="text-accent">{activeName}</span>
             </p>
             <p className="text-xs text-gray-400 mt-1">
-              JPG, PNG, WebP, AVIF · up to 15 MB each · many at once · uploaded once, reused anywhere
+              JPG, PNG, WebP, AVIF · up to 15 MB each · many at once, sent a few at a time
             </p>
+            {progress && (
+              <p className="text-xs font-semibold text-accent mt-2 flex items-center justify-center gap-1.5">
+                <Loader size={12} className="animate-spin" /> {progress}
+              </p>
+            )}
             <input ref={fileRef} type="file" multiple accept="image/*" className="hidden"
               onChange={e => { doUpload(e.target.files); e.target.value = ''; }} />
           </div>
@@ -200,10 +208,11 @@ export default function AdminMedia() {
               {uploads.slice(0, 8).map((u, i) => (
                 <li key={i} className="flex items-center justify-between text-sm px-3 py-2 rounded-lg bg-gray-50 dark:bg-zinc-800">
                   <span className="truncate text-gray-700 dark:text-zinc-300">{u.name}</span>
-                  <span className={`text-xs font-semibold ml-3 shrink-0 ${
-                    u.status === 'failed' ? 'text-red-500'
+                  <span className={`text-xs font-semibold ml-3 shrink-0 text-right ${
+                    u.status === 'uploaded' ? 'text-green-600 dark:text-green-400'
                     : u.status.includes('already') ? 'text-amber-600 dark:text-amber-400'
-                    : u.status === 'uploaded' ? 'text-green-600 dark:text-green-400' : 'text-gray-400'}`}>{u.status}</span>
+                    : u.status === 'waiting…' ? 'text-gray-400'
+                    : 'text-red-500'}`}>{u.status}</span>
                 </li>
               ))}
               {uploads.length > 8 && <li className="text-xs text-gray-400 px-3">+{uploads.length - 8} more</li>}

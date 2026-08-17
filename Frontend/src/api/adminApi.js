@@ -98,6 +98,46 @@ export const uploadAssets = (files, folder, categoryId) => {
   }).then(r => r.data);
 };
 
+/**
+ * Upload many files as several small requests instead of one large one.
+ *
+ * Ten 5 MB phone photos in a single POST is ~50 MB that has to arrive, decode
+ * and reach Cloudinary inside one request — slow phone upstream alone can pass
+ * gunicorn's timeout, and then the whole batch is lost. In batches, a failure
+ * costs you that batch and names the files, and the rest still land.
+ *
+ * Always resolves: per-file problems come back in `errors`, never as a throw.
+ */
+export const uploadAssetsInBatches = async (
+  files, folder, categoryId, { batchSize = 3, onProgress } = {},
+) => {
+  const all = Array.from(files);
+  const results = [];
+  const errors  = [];
+
+  for (let i = 0; i < all.length; i += batchSize) {
+    const batch = all.slice(i, i + batchSize);
+    try {
+      const d = await uploadAssets(batch, folder, categoryId);
+      results.push(...(d.results || []));
+      errors.push(...(d.errors || []));
+    } catch (err) {
+      const status = err.response?.status;
+      const body   = err.response?.data;
+      const detail = body?.error || body?.detail
+        || (typeof body === 'string' && body.slice(0, 120));
+      const message = detail
+        || (status === 413 ? 'Files too large for one request'
+          : status === 502 || status === 504 ? 'The server timed out processing these'
+          : status ? `Server error ${status}`
+          : 'Network dropped or the request timed out');
+      batch.forEach(f => errors.push({ filename: f.name, error: message }));
+    }
+    onProgress?.({ done: Math.min(i + batchSize, all.length), total: all.length });
+  }
+  return { results, errors };
+};
+
 /** File images already in the library into (or out of) a section. */
 export const categorizeAssets = (mediaIds, { add = [], remove = [] } = {}) =>
   api.post('admin/media/assets/categorize/', { media_ids: mediaIds, add, remove })

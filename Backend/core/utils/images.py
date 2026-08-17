@@ -95,19 +95,29 @@ def compress_image(file, name):
     """
     try:
         file.seek(0)
+        # Image.open() only reads the header, so mode and size are known before
+        # anything is decoded.
         img = Image.open(file)
+
+        has_alpha = (
+            img.mode in ('RGBA', 'LA')
+            or (img.mode == 'P' and 'transparency' in img.info)
+        )
+
+        size = getattr(file, 'size', None) or 0
+        if size <= PASSTHROUGH_BYTES and max(img.size) <= MAX_DIMENSION:
+            file.seek(0)
+            return None
+
+        # Decode straight to roughly the size we want. For JPEG, libjpeg can
+        # scale by 1/2, 1/4 or 1/8 during decode, so a 48 MP photo costs ~36 MB
+        # of RAM instead of ~144 MB. It only kicks in past 2x the target — a
+        # 12 MP photo still decodes in full — but the biggest camera uploads are
+        # exactly the ones that threaten a 512 MB worker. No-op for other
+        # formats, and it never decodes below the requested size.
+        img.draft('RGB', (MAX_DIMENSION, MAX_DIMENSION))
         img.load()
     except Exception:
-        return None
-
-    has_alpha = (
-        img.mode in ('RGBA', 'LA')
-        or (img.mode == 'P' and 'transparency' in img.info)
-    )
-
-    size = getattr(file, 'size', None) or 0
-    if size <= PASSTHROUGH_BYTES and max(img.size) <= MAX_DIMENSION:
-        file.seek(0)
         return None
 
     # Respect EXIF orientation before stripping metadata on re-encode.
