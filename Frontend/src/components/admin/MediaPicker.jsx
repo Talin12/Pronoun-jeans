@@ -213,12 +213,22 @@ export function LibraryModal({ folder, single, categoryId, onClose, onConfirm })
     const names = Array.from(files).map(f => ({ name: f.name, status: 'waiting…' }));
     setUploads(prev => [...names, ...prev]);
 
-    // Batched, so a slow phone connection or one rejected file cannot take the
-    // whole selection down. Per-file reasons are shown against each row.
-    const { results, errors } = await uploadAssetsInBatches(files, folder, section || undefined);
+    // Compressed in the browser and batched by size, so a slow phone connection
+    // or one rejected file cannot take the whole selection down. Per-file
+    // reasons are shown against each row.
+    const { results, errors } = await uploadAssetsInBatches(files, folder, section || undefined, {
+      // Rows are prepended, so index i is file i of this selection.
+      onProgress: ({ phase, done }) => setUploads(prev => prev.map((u, i) => {
+        if (phase === 'compressing') {
+          return i === done && u.status === 'waiting…' ? { ...u, status: 'preparing…' } : u;
+        }
+        return u.status === 'preparing…' || u.status === 'waiting…'
+          ? { ...u, status: 'uploading…' } : u;
+      })),
+    });
 
     setUploads(prev => prev.map(u => {
-      const ok = results.find(r => r.asset.original_filename === u.name);
+      const ok = results.find(r => r.sourceFilename === u.name);
       if (ok) return { ...u, status: ok.deduplicated ? 'already in library — reused' : 'uploaded' };
       const bad = errors.find(e => e.filename === u.name);
       return bad ? { ...u, status: bad.error } : u;

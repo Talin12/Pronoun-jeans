@@ -65,13 +65,20 @@ export default function AdminMedia() {
     const queued = Array.from(files).map(f => ({ name: f.name, status: 'waiting…' }));
     setUploads(prev => [...queued, ...prev]);
 
-    // Small batches: one slow or rejected file no longer costs the whole set.
+    // Shrunk in the browser, then packed into requests by size: one slow or
+    // rejected file no longer costs the whole set, and a batch of big photos
+    // no longer arrives as tens of megabytes.
     const { results, errors } = await uploadAssetsInBatches(files, undefined, active, {
-      onProgress: ({ done, total }) => setProgress(done < total ? `${done} of ${total} uploaded…` : ''),
+      onProgress: ({ phase, done, total }) => setProgress(
+        phase === 'compressing' ? `preparing ${done + 1} of ${total}…`
+          : done < total ? `${done} of ${total} uploaded…`
+          : '',
+      ),
     });
+    setProgress('');
 
     setUploads(prev => prev.map(u => {
-      const ok  = results.find(r => r.asset.original_filename === u.name);
+      const ok  = results.find(r => r.sourceFilename === u.name);
       if (ok) return { ...u, status: ok.deduplicated ? 'already in library — filed here too' : 'uploaded' };
       const bad = errors.find(e => e.filename === u.name);
       if (bad) return { ...u, status: bad.error };
