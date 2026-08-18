@@ -95,7 +95,7 @@ const OnboardBuyerModal = ({ onClose, onSuccess }) => {
               </div>
 
               <ModalInput icon={Building} label="Company Name *"    placeholder="Kumar Textiles Pvt. Ltd."             value={form.company_name} onChange={set('company_name')} required />
-              <ModalInput icon={Phone}    label="Phone Number *"    placeholder="+91 93750 43100"                      value={form.phone_number} onChange={set('phone_number')} required />
+              <ModalInput icon={Phone}    label="Phone Number *"    placeholder="+91 98765 43210"                      value={form.phone_number} onChange={set('phone_number')} required />
               <ModalInput icon={FileText} label="GST Number"        placeholder="22AAAAA0000A1Z5 (optional)"           value={form.gst_number}   onChange={set('gst_number')} />
 
               <div className="flex items-center gap-3 pt-1">

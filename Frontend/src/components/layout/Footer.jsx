@@ -60,6 +60,10 @@ const Footer = () => (
         <div className="space-y-4">
           <h4 className="text-gray-900 dark:text-zinc-100 text-xs font-black uppercase tracking-widest">Contact</h4>
           <ul className="space-y-3">
+            {/* TODO(NAP): needs the full street address — building, street and
+                area — to match the Google Business Profile exactly. Google
+                cross-checks name/address/phone across the web for local
+                ranking, and a city-and-PIN-only address cannot be matched. */}
             <li className="flex items-start gap-2.5 text-sm text-gray-500 dark:text-zinc-400">
               <MapPin className="w-4 h-4 text-accent mt-0.5 shrink-0" />
               <a href="https://maps.app.goo.gl/s9NX16aYkiNnHcfr6" target="_blank" rel="noopener noreferrer" className="hover:text-accent transition-colors">
@@ -67,9 +71,9 @@ const Footer = () => (
               </a>
             </li>
             <li>
-              <a href="tel:+919375043100" className="flex items-center gap-2.5 text-sm text-gray-500 dark:text-zinc-400 hover:text-accent transition-colors">
+              <a href="tel:+919375143100" className="flex items-center gap-2.5 text-sm text-gray-500 dark:text-zinc-400 hover:text-accent transition-colors">
                 <Phone className="w-4 h-4 text-accent shrink-0" />
-                +91 93750 43100
+                +91 93751 43100
               </a>
             </li>
             <li>

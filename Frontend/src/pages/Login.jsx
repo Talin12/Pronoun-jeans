@@ -205,7 +205,7 @@ const RequestAccessModal = ({ onClose }) => {
             />
             <ModalInput
               icon={Phone} label="Phone Number *"
-              placeholder="+91 93750 43100"
+              placeholder="+91 98765 43210"
               value={form.phone_number} onChange={set('phone_number')}
               error={errors.phone_number}
             />
