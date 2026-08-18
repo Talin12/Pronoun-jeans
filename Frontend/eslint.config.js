@@ -10,7 +10,10 @@ export default defineConfig([
     files: ['**/*.{js,jsx}'],
     extends: [
       js.configs.recommended,
-      reactHooks.configs.flat.recommended,
+      // v5 of the plugin exposes its flat config as 'recommended-latest';
+      // `configs.flat` only exists in v6, and `configs.recommended` here is the
+      // legacy eslintrc shape, which a flat config cannot extend.
+      reactHooks.configs['recommended-latest'],
       reactRefresh.configs.vite,
     ],
     languageOptions: {
@@ -23,7 +26,13 @@ export default defineConfig([
       },
     },
     rules: {
-      'no-unused-vars': ['error', { varsIgnorePattern: '^[A-Z_]' }],
+      // Capitalised names are components. `varsIgnorePattern` only covers
+      // variables, but these arrive as destructured props — ({ icon: Icon }) —
+      // which ESLint counts as arguments, so the same intent is needed here.
+      'no-unused-vars': ['error', {
+        varsIgnorePattern: '^[A-Z_]',
+        argsIgnorePattern: '^[A-Z_]',
+      }],
     },
   },
 ])

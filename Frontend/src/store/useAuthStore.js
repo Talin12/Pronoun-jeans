@@ -21,7 +21,7 @@ const getInitialAuthState = () => {
   return { user: decoded, isAuthenticated: true, isAgent: decoded.is_agent ?? false, isSuperuser: decoded.is_superuser ?? false, impersonatedBuyer: null };
 };
 
-export const useAuthStore = create((set, get) => ({
+export const useAuthStore = create((set, _get) => ({
   ...getInitialAuthState(),
 
   initAuth: () => {

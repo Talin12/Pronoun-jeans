@@ -452,7 +452,8 @@ const AvailableOffers = ({ coupons, subtotal, appliedCoupon, onApply, onRemove }
   const handleApplyCode = async (code) => {
     setLoading(code);
     try { const res = await api.post('orders/cart/apply-coupon/', { coupon_code: code }); onApply(res.data); }
-    catch { } finally { setLoading(null); }
+    catch { /* the coupon simply did not apply; the row resets below */ }
+    finally { setLoading(null); }
   };
 
   const handleManualApply = async () => {
