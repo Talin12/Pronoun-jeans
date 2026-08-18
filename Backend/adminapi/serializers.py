@@ -152,10 +152,12 @@ class CategorySerializer(serializers.ModelSerializer):
 
     class Meta:
         model  = Category
-        fields = ['id', 'name', 'slug', 'parent', 'parent_name', 'image', 'image_url']
+        fields = ['id', 'name', 'slug', 'parent', 'parent_name', 'image', 'image_url',
+                  'description']
         extra_kwargs = {
-            'image': {'write_only': True, 'required': False},
-            'slug':  {'required': False},
+            'image':       {'write_only': True, 'required': False},
+            'slug':        {'required': False},
+            'description': {'required': False},
         }
 
     def get_image_url(self, obj):
@@ -270,22 +272,31 @@ class ProductDetailSerializer(serializers.ModelSerializer):
     category_name = serializers.CharField(source='category.name', read_only=True)
     variations    = ProductVariationSerializer(many=True, read_only=True)
     image_url     = serializers.SerializerMethodField()
+    og_image_url  = serializers.SerializerMethodField()
 
     class Meta:
         model  = Product
         fields = [
             'id', 'name', 'code', 'slug', 'category', 'category_name', 'subcategories',
             'description', 'fabric_details', 'is_active', 'moq',
-            'image', 'image_url', 'variations', 'created_at',
+            'image', 'image_url', 'variations', 'created_at', 'updated_at',
+            'meta_title', 'meta_description', 'og_image', 'og_image_url',
         ]
         extra_kwargs = {
-            'slug':  {'required': False},
-            'code':  {'required': False},
-            'image': {'write_only': True, 'required': False},
+            'slug':     {'required': False},
+            'code':     {'required': False},
+            'image':    {'write_only': True, 'required': False},
+            # Same shape as `image`: uploaded write-only, read back as a URL.
+            'og_image': {'write_only': True, 'required': False, 'allow_null': True},
+            'meta_title':       {'required': False, 'allow_blank': True},
+            'meta_description': {'required': False, 'allow_blank': True},
         }
 
     def get_image_url(self, obj):
         return _image_url(obj.image)
+
+    def get_og_image_url(self, obj):
+        return _image_url(obj.og_image)
 
     def validate_code(self, value):
         """

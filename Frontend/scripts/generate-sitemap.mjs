@@ -6,9 +6,10 @@
 //
 //     VITE_API_URL=https://…/api/ node scripts/generate-sitemap.mjs
 //
-// No <lastmod>. The API does not expose an updated_at on products yet, and a
-// fabricated date — today's, or the build's — teaches Google that the
-// timestamp means nothing, which is worse than not having one.
+// <lastmod> comes from Product.updated_at and Category.updated_at, and is
+// emitted only where a real timestamp exists. Static pages have none — their
+// copy lives in the repo, not the database — and a fabricated date, today's or
+// the build's, would teach Google that the field means nothing.
 
 import { writeFile } from 'node:fs/promises';
 import { join, resolve, dirname } from 'node:path';
@@ -46,7 +47,11 @@ async function main() {
   });
 
   const body = included
-    .map((route) => `  <url>\n    <loc>${escapeXml(`${SITE_URL}${route.path === '/' ? '/' : route.path}`)}</loc>\n  </url>`)
+    .map((route) => {
+      const loc = escapeXml(`${SITE_URL}${route.path === '/' ? '/' : route.path}`);
+      const lastmod = route.lastmod ? `\n    <lastmod>${route.lastmod}</lastmod>` : '';
+      return `  <url>\n    <loc>${loc}</loc>${lastmod}\n  </url>`;
+    })
     .join('\n');
 
   await writeFile(
@@ -55,7 +60,11 @@ async function main() {
     'utf8',
   );
 
-  console.log(`✓ sitemap.xml — ${included.length} URLs (${excluded.length} excluded)`);
+  const dated = included.filter((route) => route.lastmod).length;
+  console.log(
+    `✓ sitemap.xml — ${included.length} URLs, ${dated} with lastmod `
+    + `(${excluded.length} excluded)`,
+  );
   for (const entry of excluded) console.log(`    - ${entry}`);
 }
 

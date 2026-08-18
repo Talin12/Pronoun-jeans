@@ -31,6 +31,23 @@ export const createProduct = (data) =>
 export const updateProduct = (id, data) =>
   api.patch(`admin/products/${id}/`, data).then(r => r.data);
 
+/**
+ * The share image is a file, so it cannot ride in the JSON Base Details
+ * payload. Kept as its own call for that reason — and so that touching it can
+ * never disturb the publish flow, which sends every base field at once.
+ */
+export const setProductOgImage = (id, file) => {
+  const fd = new FormData();
+  fd.append('og_image', file);
+  return api.patch(`admin/products/${id}/`, fd, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+  }).then(r => r.data);
+};
+
+/** Clearing needs JSON: multipart has no way to say null. */
+export const clearProductOgImage = (id) =>
+  api.patch(`admin/products/${id}/`, { og_image: null }).then(r => r.data);
+
 export const deleteProduct = (id) =>
   api.delete(`admin/products/${id}/`).then(r => r.data);
 

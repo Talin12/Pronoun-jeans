@@ -1,5 +1,10 @@
 import { cldUrl, cldSrcSet, isCloudinaryUrl, SRCSET_WIDTHS } from '../../utils/cloudinary';
 
+// One warning per image, not one per render — a carousel would otherwise bury
+// the console. Dev only: import.meta.env.DEV is folded away at build time, so
+// neither the check nor the Set survives into production.
+const warnedFor = new Set();
+
 /**
  * Drop-in <img> replacement that emits a responsive, modern-format image from a
  * Cloudinary URL (srcset + sizes + f_auto/q_auto), so mobile downloads a 400px
@@ -22,6 +27,17 @@ export default function ResponsiveImage({
   ...rest
 }) {
   if (!src) return null;
+
+  // Every image this component renders is content — a garment, a category, a
+  // hero — so an empty alt is a bug, not a decorative-image declaration. The
+  // asset carries alt_text; the caller has to pass it down.
+  if (import.meta.env.DEV && !alt && !warnedFor.has(src)) {
+    warnedFor.add(src);
+    console.warn(
+      `[a11y/seo] <ResponsiveImage> rendered with no alt text: ${src}`,
+      '\nPass alt from the asset (alt_text), or a description of the garment.',
+    );
+  }
 
   const common = {
     alt,

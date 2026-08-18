@@ -1,9 +1,12 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
-  Plus, Loader, Trash2, FolderTree, AlertCircle, ChevronRight,
+  Plus, Loader, Trash2, FolderTree, AlertCircle, ChevronRight, Check,
 } from 'lucide-react';
-import { listCategories, createCategory, deleteCategory } from '../../api/adminApi';
+import { listCategories, createCategory, deleteCategory, updateCategory } from '../../api/adminApi';
+import { SeoSection, FieldHeader, GooglePreview } from '../../components/admin/SeoFields';
+import { effectiveCategorySeo, META_DESCRIPTION_MAX } from '../../config/seoCopy';
+import { SITE_URL } from '../../config/site';
 
 // text-base on phones: anything under 16px makes iOS Safari zoom in on focus.
 const inputCls = 'w-full px-3 py-2.5 rounded-xl border border-gray-200 dark:border-white/10 bg-gray-50 dark:bg-zinc-800 text-base sm:text-sm text-gray-900 dark:text-zinc-100 focus:outline-none focus:ring-2 focus:ring-accent/40';
@@ -92,6 +95,8 @@ export default function AdminCategories() {
                     className="p-2.5 -mr-1 text-gray-400 hover:text-red-500 shrink-0"><Trash2 size={15} /></button>
                 </div>
 
+                <CategorySeoPanel category={main} />
+
                 {subs.length > 0 && (
                   <div className="flex flex-wrap gap-2 mt-3 pl-6">
                     {subs.map(s => (
@@ -114,5 +119,88 @@ export default function AdminCategories() {
         </div>
       )}
     </div>
+  );
+}
+
+/**
+ * Per-category SEO, folded away until asked for.
+ *
+ * Only main categories get one: /catalog/:slug resolves top-level categories
+ * only (CategoryViewSet filters parent__isnull=True), so a sub-category has no
+ * page of its own to describe.
+ *
+ * Saves on its own button rather than with the add form above it — this is
+ * editing an existing row, and nothing else on this page does that.
+ */
+function CategorySeoPanel({ category }) {
+  const [open, setOpen]         = useState(false);
+  const [value, setValue]       = useState(category.description || '');
+  const [saved, setSaved]       = useState(category.description || '');
+  const [saving, setSaving]     = useState(false);
+  const [error, setError]       = useState('');
+  const [justSaved, setJustSaved] = useState(false);
+
+  const dirty = value !== saved;
+  const preview = effectiveCategorySeo({ name: category.name, description: value });
+
+  const save = () => {
+    setSaving(true); setError(''); setJustSaved(false);
+    updateCategory(category.id, { description: value })
+      .then(c => {
+        setSaved(c.description || '');
+        setJustSaved(true);
+        setTimeout(() => setJustSaved(false), 2500);
+      })
+      .catch(e => setError(e.response?.data ? JSON.stringify(e.response.data) : 'Could not save.'))
+      .finally(() => setSaving(false));
+  };
+
+  return (
+    <SeoSection
+      open={open}
+      onToggle={() => setOpen(o => !o)}
+      overridden={saved.trim() ? 1 : 0}
+      subtitle={`How /catalog/${category.slug} appears in Google. Optional — blank is written for you.`}
+    >
+      <div>
+        <FieldHeader label="Meta description" value={value} max={META_DESCRIPTION_MAX} soft={140} />
+        <textarea
+          rows={3}
+          maxLength={META_DESCRIPTION_MAX}
+          className={inputCls}
+          value={value}
+          onChange={e => setValue(e.target.value)}
+          placeholder={preview.generatedDescription ? 'Generated — type here to override' : ''}
+        />
+      </div>
+
+      <GooglePreview
+        url={`${SITE_URL.replace(/^https?:\/\//, '')}/catalog/${category.slug}`}
+        title={preview.title}
+        description={preview.description}
+        generatedDescription={preview.generatedDescription}
+      />
+
+      {error && (
+        <div className="flex items-start gap-2 text-red-600 dark:text-red-400 text-sm">
+          <AlertCircle size={15} className="mt-0.5" /> <span>{error}</span>
+        </div>
+      )}
+
+      <div className="flex items-center justify-end gap-3">
+        {justSaved && (
+          <span className="inline-flex items-center gap-1.5 text-xs font-bold text-green-600 dark:text-green-400">
+            <Check size={14} /> Saved
+          </span>
+        )}
+        <button
+          onClick={save}
+          disabled={saving || !dirty}
+          className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-accent text-white text-sm font-bold hover:brightness-110 transition disabled:opacity-50"
+        >
+          {saving ? <Loader size={15} className="animate-spin" /> : <Check size={15} />} Save description
+        </button>
+      </div>
+    </SeoSection>
   );
 }

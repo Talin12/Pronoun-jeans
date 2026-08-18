@@ -6,6 +6,10 @@ import { readFile } from 'node:fs/promises';
 /**
  * Static routes that are prerendered.
  *
+ * None of these carry a lastmod: their copy lives in the repo, not the
+ * database, so there is no timestamp to read and an invented one would be
+ * worse than none.
+ *
  * Missing on purpose: /login, /cart, /history, /dashboard, /reset-password/*
  * and both portals. They are noindex, they are behind auth, or both — there is
  * no crawler to serve and no first-paint worth the build time. They keep
@@ -52,11 +56,47 @@ export function isDisallowed(path, rules) {
   });
 }
 
+/**
+ * Normalise an API timestamp to a sitemap <lastmod>.
+ *
+ * Second precision, UTC. DRF hands back microseconds, which are valid W3C
+ * datetime but noise here. Anything unparseable returns null so the caller
+ * omits the element rather than emitting a broken date.
+ */
+export function toLastmod(value) {
+  if (!value) return null;
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return null;
+  return date.toISOString().replace(/\.\d+Z$/, 'Z');
+}
+
+/**
+ * The freshest thing on a category page.
+ *
+ * A category page is mostly its products, so a product edited today makes the
+ * category page stale even though the Category row was untouched. Taking the
+ * later of the two keeps <lastmod> honest — the whole point of the element.
+ */
+function categoryLastmod(category, products) {
+  const candidates = [category.updated_at, ...products.map((p) => p.updated_at)]
+    .map(toLastmod)
+    .filter(Boolean);
+  return candidates.length ? candidates.sort().at(-1) : null;
+}
+
 /** Every route this build should produce HTML for, in a stable order. */
 export function buildRouteList({ categories, products }) {
   return [
     ...STATIC_ROUTES,
-    ...categories.map((c) => ({ path: `/catalog/${c.slug}`, indexable: true })),
-    ...products.map((p) => ({ path: `/product/${p.slug}`, indexable: true })),
+    ...categories.map((c) => ({
+      path: `/catalog/${c.slug}`,
+      indexable: true,
+      lastmod: categoryLastmod(c, products.filter((p) => p.category === c.id)),
+    })),
+    ...products.map((p) => ({
+      path: `/product/${p.slug}`,
+      indexable: true,
+      lastmod: toLastmod(p.updated_at),
+    })),
   ];
 }

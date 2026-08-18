@@ -665,3 +665,103 @@ class ProductBaseUpdateTests(TestCase):
         self.client.patch(self.url, {'moq': 1, 'is_active': True}, format='json')
         r = self.client.get(self.url)
         self.assertEqual(r.json()['moq'], 1)
+
+
+class ProductSeoFieldTests(TestCase):
+    """
+    The SEO fields ride along in the same Base Details payload as everything
+    else, so the failure mode 41824f9 fixed — publishing dropping edits made on
+    that step — must not come back through a new field.
+    """
+
+    def setUp(self):
+        self.client, self.user = _superuser_client()
+        self.product = Product.objects.create(name='Test SEO', slug='test-seo', moq=10)
+        self.url = f'/api/admin/products/{self.product.id}/'
+
+    def test_seo_fields_round_trip(self):
+        r = self.client.patch(self.url, {
+            'meta_title': 'Wholesale Cargo Pants in Bulk',
+            'meta_description': 'Bulk cargo pants in ready size sets from Ahmedabad.',
+        }, format='json')
+        self.assertEqual(r.status_code, 200, r.content)
+
+        self.product.refresh_from_db()
+        self.assertEqual(self.product.meta_title, 'Wholesale Cargo Pants in Bulk')
+        self.assertEqual(self.product.meta_description,
+                         'Bulk cargo pants in ready size sets from Ahmedabad.')
+        self.assertEqual(self.client.get(self.url).json()['meta_title'],
+                         'Wholesale Cargo Pants in Bulk')
+
+    def test_publishing_carries_the_seo_fields(self):
+        """The full payload the panel sends when Publish is pressed."""
+        r = self.client.patch(self.url, {
+            'name': 'Test SEO', 'code': 'PJ2001', 'moq': 4,
+            'description': 'desc', 'fabric_details': 'cotton',
+            'category': None, 'subcategories': [], 'is_active': True,
+            'meta_title': 'Hand-written title',
+            'meta_description': 'Hand-written description.',
+        }, format='json')
+        self.assertEqual(r.status_code, 200, r.content)
+
+        self.product.refresh_from_db()
+        self.assertEqual(self.product.meta_title, 'Hand-written title')
+        self.assertEqual(self.product.meta_description, 'Hand-written description.')
+        self.assertEqual(self.product.moq, 4)
+        self.assertTrue(self.product.is_active)
+
+    def test_they_can_be_cleared_back_to_blank(self):
+        """Blank is meaningful — it hands the page back to generated metadata."""
+        self.product.meta_title = 'Something'
+        self.product.meta_description = 'Something else'
+        self.product.save()
+
+        r = self.client.patch(self.url, {'meta_title': '', 'meta_description': ''}, format='json')
+        self.assertEqual(r.status_code, 200, r.content)
+
+        self.product.refresh_from_db()
+        self.assertEqual(self.product.meta_title, '')
+        self.assertEqual(self.product.meta_description, '')
+
+    def test_meta_title_is_length_limited(self):
+        r = self.client.patch(self.url, {'meta_title': 'x' * 71}, format='json')
+        self.assertEqual(r.status_code, 400, r.content)
+
+    def test_meta_description_is_length_limited(self):
+        r = self.client.patch(self.url, {'meta_description': 'x' * 161}, format='json')
+        self.assertEqual(r.status_code, 400, r.content)
+
+    def test_toggling_active_alone_leaves_seo_alone(self):
+        """The product-list Active switch still sends only is_active."""
+        self.client.patch(self.url, {'meta_title': 'Keep me'}, format='json')
+        r = self.client.patch(self.url, {'is_active': False}, format='json')
+        self.assertEqual(r.status_code, 200, r.content)
+
+        self.product.refresh_from_db()
+        self.assertEqual(self.product.meta_title, 'Keep me')
+        self.assertFalse(self.product.is_active)
+
+    def test_updated_at_is_exposed_for_the_sitemap(self):
+        self.assertIn('updated_at', self.client.get(self.url).json())
+
+
+class CategoryDescriptionTests(TestCase):
+    def setUp(self):
+        self.client, self.user = _superuser_client()
+
+    def test_description_round_trips(self):
+        created = self.client.post('/api/admin/categories/', {
+            'name': 'Cargo Pant',
+            'description': 'Bulk cargo pants in ready size sets.',
+        }, format='json')
+        self.assertEqual(created.status_code, 201, created.content)
+
+        url = f"/api/admin/categories/{created.json()['id']}/"
+        r = self.client.patch(url, {'description': 'Updated copy.'}, format='json')
+        self.assertEqual(r.status_code, 200, r.content)
+        self.assertEqual(self.client.get(url).json()['description'], 'Updated copy.')
+
+    def test_description_is_optional(self):
+        r = self.client.post('/api/admin/categories/', {'name': 'Shorts'}, format='json')
+        self.assertEqual(r.status_code, 201, r.content)
+        self.assertEqual(r.json()['description'], '')

@@ -7,6 +7,7 @@ import ResponsiveImage from '../components/shared/ResponsiveImage';
 import Seo from '../components/seo/Seo';
 import JsonLd from '../components/seo/JsonLd';
 import { categoryItemListSchema, breadcrumbSchema } from '../config/schema';
+import { categorySeoTitle, categorySeoDescription } from '../config/seoCopy';
 import { usePrerenderReady } from '../hooks/usePrerenderReady';
 
 const CategoryProducts = () => {
@@ -18,6 +19,7 @@ const CategoryProducts = () => {
   const [products, setProducts]           = useState([]);
   const [loading, setLoading]             = useState(true);
   const [categoryName, setCategoryName]   = useState('');
+  const [categoryDesc, setCategoryDesc]   = useState('');
   const [subcategories, setSubcategories] = useState([]);
   const [activeSubcategory, setActiveSubcategory] = useState(searchParams.get('subcategory') || '');
   const [searchQuery, setSearchQuery]     = useState('');
@@ -28,6 +30,7 @@ const CategoryProducts = () => {
     api.get(`products/categories/${category_slug}/`)
       .then(res => {
         setCategoryName(res.data.name);
+        setCategoryDesc(res.data.description || '');
         setSubcategories(res.data.subcategories || []);
       })
       .catch(() => {});
@@ -81,8 +84,8 @@ const CategoryProducts = () => {
           ?subcategory= filter is the same set of products, not a new page. */}
       {categoryName ? (
         <Seo
-          title={`${categoryName} — Wholesale ${categoryName} Manufacturer`}
-          description={`Wholesale ${categoryName.toLowerCase()} from Pronoun Jeans, a B2B denim manufacturer in Ahmedabad. Bulk size sets, MOQ pricing and pan-India dispatch for retailers.`}
+          title={categorySeoTitle({ name: categoryName })}
+          description={categoryDesc || categorySeoDescription({ name: categoryName })}
           canonical={`/catalog/${category_slug}`}
         >
           <JsonLd data={categoryItemListSchema({ name: categoryName, slug: category_slug, products })} />

@@ -8,7 +8,11 @@ import {
   createProduct, getProduct, updateProduct,
   listCategories, listColors, createColor, listSizeSets, createSizeSet,
   createVariation, deleteVariation,
+  setProductOgImage, clearProductOgImage,
 } from '../../api/adminApi';
+import { SeoSection, FieldHeader, GooglePreview } from '../../components/admin/SeoFields';
+import { effectiveProductSeo, META_TITLE_MAX, META_DESCRIPTION_MAX } from '../../config/seoCopy';
+import { SITE_URL } from '../../config/site';
 import MediaPicker from '../../components/admin/MediaPicker';
 import SizeRangeBuilder from '../../components/admin/SizeRangeBuilder';
 import BulkVariantBuilder from '../../components/admin/BulkVariantBuilder';
@@ -105,7 +109,16 @@ export default function AdminProductEditor() {
   const [form, setForm] = useState({
     name: '', code: '', category: '', subcategories: [], description: '',
     fabric_details: '', moq: 10, is_active: false,
+    // Part of the base payload on purpose: every save path sends the whole
+    // form, so these persist through Save & Next, Save as Draft and Publish
+    // alike, and the "Unsaved changes" marker covers them for free.
+    meta_title: '', meta_description: '',
   });
+  const [seoOpen, setSeoOpen] = useState(false);
+  const [slug, setSlug]       = useState('');
+  // The share image is a file, saved on its own the moment it is chosen.
+  const [ogImageUrl, setOgImageUrl] = useState('');
+  const [ogBusy, setOgBusy]         = useState(false);
   // What the server last confirmed. Base edits only persist through "Save &
   // Next", Save as Draft or Publish, so an unsaved change needs to be visible
   // rather than quietly dropped when the step changes.
@@ -140,9 +153,12 @@ export default function AdminProductEditor() {
           name: p.name || '', code: p.code || '', category: p.category || '',
           subcategories: p.subcategories || [], description: p.description || '',
           fabric_details: p.fabric_details || '', moq: p.moq ?? 10, is_active: p.is_active,
+          meta_title: p.meta_title || '', meta_description: p.meta_description || '',
         };
         setForm(loaded);
         setSavedForm(normalizeBase(loaded));
+        setSlug(p.slug || '');
+        setOgImageUrl(p.og_image_url || '');
         setVariations(p.variations || []);
       })
       .catch(() => setError('Failed to load product.'))
@@ -194,6 +210,38 @@ export default function AdminProductEditor() {
       .catch(err => setError(errMsg(err, 'Failed to update.')))
       .finally(() => setSaving(false));
   };
+
+  // Saved on its own rather than through basePayload(): a file cannot go in the
+  // JSON body, and routing it through the base save would mean the publish
+  // path had two shapes again — the exact thing 41824f9 fixed.
+  const pickOgImage = (file) => {
+    if (!file || isNew) return;
+    setOgBusy(true); setError('');
+    setProductOgImage(id, file)
+      .then(p => setOgImageUrl(p.og_image_url || ''))
+      .catch(err => setError(errMsg(err, 'Could not upload the share image.')))
+      .finally(() => setOgBusy(false));
+  };
+
+  const removeOgImage = () => {
+    setOgBusy(true); setError('');
+    clearProductOgImage(id)
+      .then(() => setOgImageUrl(''))
+      .catch(err => setError(errMsg(err, 'Could not remove the share image.')))
+      .finally(() => setOgBusy(false));
+  };
+
+  // What the storefront would actually render for this product right now,
+  // built by the same functions the page uses.
+  const seoPreview = effectiveProductSeo({
+    name: form.name,
+    category_name: mainCategories.find(c => c.id === Number(form.category))?.name || '',
+    fabric_details: form.fabric_details,
+    moq: form.moq,
+    meta_title: form.meta_title,
+    meta_description: form.meta_description,
+  });
+  const seoOverrides = [form.meta_title, form.meta_description].filter(v => v.trim()).length;
 
   const stepIndex = STEPS.findIndex(s => s.key === step);
   const gotoStep  = (key) => { if (!isNew || key === 'base') setStep(key); };
@@ -323,6 +371,73 @@ export default function AdminProductEditor() {
                   <textarea rows={2} className={inputCls} value={form.fabric_details} onChange={e => set('fabric_details', e.target.value)} />
                 </div>
               </div>
+
+              <SeoSection
+                open={seoOpen}
+                onToggle={() => setSeoOpen(o => !o)}
+                overridden={seoOverrides}
+                subtitle="How this product appears in Google and when shared. Optional — leave blank and it is written for you."
+              >
+                <div>
+                  <FieldHeader label="Meta title" value={form.meta_title} max={META_TITLE_MAX} soft={55} />
+                  <input className={inputCls} value={form.meta_title} maxLength={META_TITLE_MAX}
+                         onChange={e => set('meta_title', e.target.value)}
+                         placeholder={seoPreview.generatedTitle ? 'Generated — type here to override' : ''} />
+                </div>
+
+                <div>
+                  <FieldHeader label="Meta description" value={form.meta_description} max={META_DESCRIPTION_MAX} soft={140} />
+                  <textarea rows={3} className={inputCls} value={form.meta_description} maxLength={META_DESCRIPTION_MAX}
+                            onChange={e => set('meta_description', e.target.value)}
+                            placeholder={seoPreview.generatedDescription ? 'Generated — type here to override' : ''} />
+                  <p className="text-xs text-gray-400 dark:text-zinc-500 mt-1.5">
+                    Aim for 140–160 characters. Shorter gets padded by Google, longer gets cut.
+                  </p>
+                </div>
+
+                <div>
+                  <label className={labelCls}>Share image</label>
+                  {isNew ? (
+                    <p className="text-xs text-gray-400 dark:text-zinc-500">
+                      Save the product first, then a share image can be uploaded.
+                    </p>
+                  ) : (
+                    <div className="flex items-start gap-3 flex-wrap">
+                      {ogImageUrl && (
+                        <img src={ogImageUrl} alt="Share image preview"
+                             className="w-40 h-[84px] object-cover rounded-xl border border-gray-200 dark:border-white/10" />
+                      )}
+                      <div className="flex items-center gap-2">
+                        <label className={`${btnGhost} cursor-pointer`}>
+                          {ogBusy ? <Loader size={16} className="animate-spin" /> : <ImageIcon size={16} />}
+                          {ogImageUrl ? 'Replace' : 'Upload'}
+                          <input type="file" accept="image/*" className="hidden" disabled={ogBusy}
+                                 onChange={e => { pickOgImage(e.target.files?.[0]); e.target.value = ''; }} />
+                        </label>
+                        {ogImageUrl && (
+                          <button type="button" onClick={removeOgImage} disabled={ogBusy}
+                                  className="p-2.5 text-gray-400 hover:text-red-500 disabled:opacity-50">
+                            <Trash2 size={15} />
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  )}
+                  <p className="text-xs text-gray-400 dark:text-zinc-500 mt-1.5">
+                    Shown when the product link is sent on WhatsApp. 1200×630 works best.
+                    Blank falls back to the cover image.
+                  </p>
+                </div>
+
+                <GooglePreview
+                  url={`${SITE_URL.replace(/^https?:\/\//, '')}/product/${slug || 'product-name'}`}
+                  title={seoPreview.title}
+                  description={seoPreview.description}
+                  generatedTitle={seoPreview.generatedTitle}
+                  generatedDescription={seoPreview.generatedDescription}
+                />
+              </SeoSection>
+
               <div className="mt-6 flex items-center justify-between gap-3">
                 <button onClick={() => navigate('/admin/products')} className={btnGhost}>Cancel</button>
                 <div className="flex items-center gap-3">

@@ -11,6 +11,7 @@ import ResponsiveImage from '../components/shared/ResponsiveImage';
 import Seo from '../components/seo/Seo';
 import JsonLd from '../components/seo/JsonLd';
 import { productSchema } from '../config/schema';
+import { productSeoTitle, productSeoDescription } from '../config/seoCopy';
 import { usePrerenderReady } from '../hooks/usePrerenderReady';
 
 const decodeHtml = (text) => {
@@ -19,18 +20,11 @@ const decodeHtml = (text) => {
   return (doc.body.textContent ?? '').replace(/\\n/g, '\n');
 };
 
-// Assembled from whatever the product actually carries. fabric_details is free
-// text typed into the admin panel and is blank on plenty of SKUs, so it is cut
-// to its first sentence and dropped entirely when missing rather than leaving a
-// dangling clause in the search snippet.
-const productDescription = (p) => {
-  const fabric = decodeHtml(p.fabric_details || '').split(/[.\n]/)[0].trim();
-  return [
-    `${p.name} — wholesale ${(p.category_name || 'denim').toLowerCase()} from Pronoun Jeans, Ahmedabad.`,
-    fabric && `${fabric}.`,
-    `Sold in size sets, MOQ ${p.moq} unit${p.moq === 1 ? '' : 's'}, with pan-India dispatch for retailers.`,
-  ].filter(Boolean).join(' ');
-};
+// Alt text for images whose own alt_text is blank. Rows saved before the
+// server started defaulting alt_text still have '', and "Main" describes
+// nothing to a screen reader or to Google Images.
+const imageAlt = (p, extra) =>
+  [p.name, p.category_name, extra].filter(Boolean).join(' — ');
 
 const Toast = ({ onDone }) => {
   useEffect(() => { const t = setTimeout(onDone, 3000); return () => clearTimeout(t); }, [onDone]);
@@ -302,11 +296,13 @@ const ProductDetail = () => {
 
   return (
     <div className="bg-gray-50 dark:bg-zinc-950 min-h-screen">
+      {/* Hand-written overrides win; blank falls back to the generated copy,
+          which is why the admin panel stores '' rather than pre-filling. */}
       <Seo
-        title={`${product.name} — Wholesale ${product.category_name || 'Denim'}`}
-        description={productDescription(product)}
+        title={product.meta_title || productSeoTitle(product)}
+        description={product.meta_description || productSeoDescription(product)}
         canonical={`/product/${product.slug}`}
-        image={product.image}
+        image={product.og_image || product.image}
         type="product"
       >
         <JsonLd data={productSchema(product)} />
@@ -321,7 +317,7 @@ const ProductDetail = () => {
         <div className="flex flex-col lg:flex-row gap-8 items-start">
 
           <div className="w-full lg:w-96 xl:w-[420px] shrink-0">
-            <ZoomableImage src={mainImage} alt={product.name} />
+            <ZoomableImage src={mainImage} alt={imageAlt(product)} />
 
             {(() => {
               // When a color is active, collect all images for that color's variations
@@ -331,16 +327,16 @@ const ProductDetail = () => {
                   .filter(v => (v.color_name || v.color) === activeColor)
                   .forEach(v => {
                     if (v.gallery_images?.length) {
-                      v.gallery_images.forEach(gi => thumbs.push({ key: `gi-${gi.id}`, src: gi.image, alt: gi.alt_text || v.color_name || '' }));
+                      v.gallery_images.forEach(gi => thumbs.push({ key: `gi-${gi.id}`, src: gi.image, alt: gi.alt_text || imageAlt(product, v.color_name) }));
                     } else if (v.image) {
-                      thumbs.push({ key: `v-${v.id}`, src: v.image, alt: v.color_name || '' });
+                      thumbs.push({ key: `v-${v.id}`, src: v.image, alt: imageAlt(product, v.color_name) });
                     }
                   });
               } else {
                 // Default: show product main image + product gallery images
-                if (product.image) thumbs.push({ key: 'main', src: product.image, alt: 'Main' });
+                if (product.image) thumbs.push({ key: 'main', src: product.image, alt: imageAlt(product) });
                 (product.gallery_images || []).forEach(img =>
-                  thumbs.push({ key: `pg-${img.id}`, src: img.image, alt: img.alt_text || '' })
+                  thumbs.push({ key: `pg-${img.id}`, src: img.image, alt: img.alt_text || imageAlt(product) })
                 );
               }
 

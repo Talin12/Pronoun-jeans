@@ -13,7 +13,10 @@ class CategorySerializer(serializers.ModelSerializer):
 
     class Meta:
         model  = Category
-        fields = ['id', 'name', 'slug', 'image', 'parent', 'subcategories']
+        fields = ['id', 'name', 'slug', 'image', 'parent', 'subcategories',
+                  # description feeds the category page's meta description;
+                  # updated_at feeds <lastmod> in the build-time sitemap.
+                  'description', 'updated_at']
 
 
 class ProductImageSerializer(serializers.ModelSerializer):
@@ -144,6 +147,9 @@ class ProductSerializer(serializers.ModelSerializer):
             'id', 'name', 'slug', 'description', 'fabric_details',
             'category', 'category_name', 'subcategories', 'is_active', 'moq',
             'image', 'created_at', 'variations', 'gallery_images', 'library_media',
+            # SEO overrides — blank means the storefront generates its own.
+            # updated_at feeds <lastmod> in the build-time sitemap.
+            'updated_at', 'meta_title', 'meta_description', 'og_image',
         ]
 
     def get_library_media(self, obj):

@@ -154,11 +154,13 @@ export function productSchema(product) {
     variations.map((v) => v.image),
   );
 
-  const description = [product.description, product.fabric_details]
+  // The real copy describes the garment; meta_description is written for a
+  // search snippet. Prefer the former, and fall back rather than emit nothing.
+  const description = ([product.description, product.fabric_details]
     .filter(Boolean)
     .join(' ')
     .replace(/\s+/g, ' ')
-    .trim();
+    .trim()) || (product.meta_description ?? '').trim();
 
   const schema = {
     '@context': 'https://schema.org',
