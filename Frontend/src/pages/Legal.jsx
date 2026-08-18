@@ -1,5 +1,6 @@
 import React from 'react';
 import Seo from '../components/seo/Seo';
+import { usePrerenderReady } from '../hooks/usePrerenderReady';
 
 // ── Pre-built policy pages ────────────────────────────────────────────────────
 
@@ -86,6 +87,7 @@ const PAGES = {
 const Legal = ({ page = 'terms' }) => {
   const key = PAGES[page] ? page : 'terms';
   const { title, updated, sections, description } = PAGES[key];
+  usePrerenderReady();
 
   return (
     <div className="bg-gray-50 dark:bg-zinc-950 min-h-screen">

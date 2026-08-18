@@ -4,6 +4,9 @@ import { Package, Truck, ShieldCheck, ArrowRight, Tag, ChevronLeft, ChevronRight
 import api from '../api/axios';
 import ResponsiveImage from '../components/shared/ResponsiveImage';
 import Seo from '../components/seo/Seo';
+import JsonLd from '../components/seo/JsonLd';
+import { websiteSchema } from '../config/schema';
+import { usePrerenderReady } from '../hooks/usePrerenderReady';
 
 const TRUST_BADGES = [
   { icon: Package,     title: 'Bulk Pricing',        desc: 'Exclusive B2B rates on every SKU with tiered MOQ discounts.'   },
@@ -111,6 +114,7 @@ const Home = () => {
   const [categories, setCategories]     = useState([]);
   const [slides, setSlides]             = useState([]);
   const [slidesLoaded, setSlidesLoaded] = useState(false);
+  const [catsLoaded, setCatsLoaded]     = useState(false);
 
   useEffect(() => {
     api.get('products/hero-slides/')
@@ -122,8 +126,12 @@ const Home = () => {
   useEffect(() => {
     api.get('products/categories/')
       .then(res => setCategories((res.data.results || res.data || []).slice(0, 6)))
-      .catch(() => {});
+      .catch(() => {})
+      .finally(() => setCatsLoaded(true));
   }, []);
+
+  // Both fetches feed visible markup, so the snapshot has to wait for both.
+  usePrerenderReady(slidesLoaded && catsLoaded);
 
   return (
     <div className="bg-white dark:bg-zinc-950 min-h-screen">
@@ -132,7 +140,9 @@ const Home = () => {
         title="Wholesale Jeans Manufacturer in Ahmedabad"
         description="Pronoun Jeans manufactures wholesale men's jeans, cargo pants and joggers in Ahmedabad. Bulk size sets, MOQ pricing and pan-India dispatch for retailers."
         canonical="/"
-      />
+      >
+        <JsonLd data={websiteSchema()} />
+      </Seo>
 
       {/* ── Hero ── */}
       <section className="relative h-[92vh] min-h-[560px] max-h-[860px] overflow-hidden">

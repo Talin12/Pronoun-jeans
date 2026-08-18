@@ -9,6 +9,9 @@ import { useAuthStore } from '../store/useAuthStore';
 import { useCartStore } from '../store/useCartStore';
 import ResponsiveImage from '../components/shared/ResponsiveImage';
 import Seo from '../components/seo/Seo';
+import JsonLd from '../components/seo/JsonLd';
+import { productSchema } from '../config/schema';
+import { usePrerenderReady } from '../hooks/usePrerenderReady';
 
 const decodeHtml = (text) => {
   if (!text) return '';
@@ -218,6 +221,8 @@ const ProductDetail = () => {
       .finally(() => setLoading(false));
   }, [slug]);
 
+  usePrerenderReady(!loading);
+
   const uniqueColors = useMemo(() => {
     if (!product) return [];
     const seen = new Map();
@@ -303,7 +308,9 @@ const ProductDetail = () => {
         canonical={`/product/${product.slug}`}
         image={product.image}
         type="product"
-      />
+      >
+        <JsonLd data={productSchema(product)} />
+      </Seo>
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
 
         <button onClick={() => navigate(-1)} className="flex items-center gap-2 text-accent hover:text-red-700 transition-colors mb-6 text-sm font-semibold">

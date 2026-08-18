@@ -26,4 +26,6 @@ dist-ssr
 # Frontend/.gitignore
 .env
 .env.*
+# …but the template is documentation, and the build now needs VITE_API_URL.
+!.env.example
 .DS_Store

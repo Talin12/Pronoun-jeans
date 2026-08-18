@@ -5,6 +5,9 @@ import api from '../api/axios';
 import { useAuthStore } from '../store/useAuthStore';
 import ResponsiveImage from '../components/shared/ResponsiveImage';
 import Seo from '../components/seo/Seo';
+import JsonLd from '../components/seo/JsonLd';
+import { categoryItemListSchema, breadcrumbSchema } from '../config/schema';
+import { usePrerenderReady } from '../hooks/usePrerenderReady';
 
 const CategoryProducts = () => {
   const { category_slug } = useParams();
@@ -65,6 +68,10 @@ const CategoryProducts = () => {
 
   const clearSearch = () => { setSearchInput(''); setSearchQuery(''); fetchProducts('', activeSubcategory); };
 
+  // Both the category name and its products are on screen, and both arrive
+  // from separate requests, so neither alone is enough to snapshot on.
+  usePrerenderReady(Boolean(categoryName) && !loading);
+
   return (
     <div className="p-10 bg-gray-50 dark:bg-zinc-950 min-h-screen">
       {/* The title depends on a name that arrives over the network, so this URL
@@ -77,7 +84,14 @@ const CategoryProducts = () => {
           title={`${categoryName} — Wholesale ${categoryName} Manufacturer`}
           description={`Wholesale ${categoryName.toLowerCase()} from Pronoun Jeans, a B2B denim manufacturer in Ahmedabad. Bulk size sets, MOQ pricing and pan-India dispatch for retailers.`}
           canonical={`/catalog/${category_slug}`}
-        />
+        >
+          <JsonLd data={categoryItemListSchema({ name: categoryName, slug: category_slug, products })} />
+          <JsonLd data={breadcrumbSchema([
+            { name: 'Home', path: '/' },
+            { name: 'Catalogue', path: '/catalog' },
+            { name: categoryName, path: `/catalog/${category_slug}` },
+          ])} />
+        </Seo>
       ) : (
         <Seo
           title="Wholesale Denim Catalogue — Bulk Jeans & Bottomwear"

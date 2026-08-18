@@ -2,9 +2,11 @@ import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ArrowRight } from 'lucide-react';
 import Seo from '../components/seo/Seo';
+import { usePrerenderReady } from '../hooks/usePrerenderReady';
 
 const AboutUs = () => {
   const navigate = useNavigate();
+  usePrerenderReady();
 
   return (
     <div className="bg-gray-50 dark:bg-zinc-950 min-h-screen">

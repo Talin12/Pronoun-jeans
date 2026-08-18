@@ -53,6 +53,14 @@ MIDDLEWARE = [
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
 ]
 
+# ── Deploy hook ───────────────────────────────────────────────────────────────
+# The storefront is prerendered, so a catalogue change needs a rebuild to
+# become real HTML. products/signals.py POSTs here when a Product or Category
+# is saved or deleted. Unset means the hooks no-op — local dev and CI never
+# call out.
+VERCEL_DEPLOY_HOOK = env('VERCEL_DEPLOY_HOOK', default=None)
+
+
 # ── CORS ──────────────────────────────────────────────────────────────────────
 CORS_ALLOWED_ORIGINS = env.list(
     'CORS_ALLOWED_ORIGINS',

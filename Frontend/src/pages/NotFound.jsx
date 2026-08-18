@@ -1,10 +1,12 @@
 import { useNavigate, useLocation } from 'react-router-dom';
 import { ArrowLeft, Search } from 'lucide-react';
 import Seo from '../components/seo/Seo';
+import { usePrerenderReady } from '../hooks/usePrerenderReady';
 
 const NotFound = () => {
   const navigate = useNavigate();
   const { pathname } = useLocation();
+  usePrerenderReady();
 
   return (
     <div className="min-h-[80vh] bg-gray-50 dark:bg-zinc-950 flex items-center justify-center px-4">

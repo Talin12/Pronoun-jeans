@@ -4,6 +4,9 @@ import { Tag, ArrowRight, Loader } from 'lucide-react';
 import api from '../api/axios';
 import ResponsiveImage from '../components/shared/ResponsiveImage';
 import Seo from '../components/seo/Seo';
+import JsonLd from '../components/seo/JsonLd';
+import { catalogPageSchema, breadcrumbSchema } from '../config/schema';
+import { usePrerenderReady } from '../hooks/usePrerenderReady';
 
 const Catalog = () => {
   const [categories, setCategories] = useState([]);
@@ -16,6 +19,8 @@ const Catalog = () => {
       .finally(() => setLoading(false));
   }, []);
 
+  usePrerenderReady(!loading);
+
   // Held in a variable rather than written twice: the categories are fetched
   // client-side, so the spinner below is a real, crawlable state of this URL
   // and it must not be a page without a title.
@@ -24,7 +29,13 @@ const Catalog = () => {
       title="Wholesale Denim Catalogue — Bulk Jeans & Bottomwear"
       description="Browse the Pronoun Jeans wholesale catalogue: men's jeans, cargos and joggers by category, sold in ready size sets with MOQ pricing for retailers."
       canonical="/catalog"
-    />
+    >
+      <JsonLd data={catalogPageSchema(categories)} />
+      <JsonLd data={breadcrumbSchema([
+        { name: 'Home', path: '/' },
+        { name: 'Catalogue', path: '/catalog' },
+      ])} />
+    </Seo>
   );
 
   if (loading) return (
