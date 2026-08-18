@@ -7,10 +7,16 @@ import Seo from '../components/seo/Seo';
 import JsonLd from '../components/seo/JsonLd';
 import { catalogPageSchema, breadcrumbSchema } from '../config/schema';
 import { usePrerenderReady } from '../hooks/usePrerenderReady';
+import BootstrapData from '../lib/BootstrapData';
+import { readBootstrap } from '../lib/bootstrap';
+
+const BOOTSTRAP = readBootstrap('catalog');
 
 const Catalog = () => {
-  const [categories, setCategories] = useState([]);
-  const [loading, setLoading]       = useState(true);
+  // Same reason as the category page: without this the whole grid is replaced
+  // by a full-screen spinner on boot while it re-fetches what was already there.
+  const [categories, setCategories] = useState(BOOTSTRAP?.categories ?? []);
+  const [loading, setLoading]       = useState(!BOOTSTRAP);
 
   useEffect(() => {
     api.get('products/categories/')
@@ -30,6 +36,7 @@ const Catalog = () => {
       description="Browse the Pronoun Jeans wholesale catalogue: men's jeans, cargos and joggers by category, sold in ready size sets with MOQ pricing for retailers."
       canonical="/catalog"
     >
+      <BootstrapData id="catalog" data={{ categories }} />
       <JsonLd data={catalogPageSchema(categories)} />
       <JsonLd data={breadcrumbSchema([
         { name: 'Home', path: '/' },

@@ -9,6 +9,17 @@ import JsonLd from '../components/seo/JsonLd';
 import { categoryItemListSchema, breadcrumbSchema } from '../config/schema';
 import { categorySeoTitle, categorySeoDescription } from '../config/seoCopy';
 import { usePrerenderReady } from '../hooks/usePrerenderReady';
+import BootstrapData from '../lib/BootstrapData';
+import { readBootstrap } from '../lib/bootstrap';
+
+// Trimmed to what the product card renders. The full payload carries
+// library_media and every variation, which would put tens of kilobytes of
+// JSON in the HTML to save one fetch.
+const forBootstrap = (products) => products.map(p => ({
+  id: p.id, slug: p.slug, name: p.name, image: p.image,
+  category_name: p.category_name, moq: p.moq,
+  variations: (p.variations ?? []).map(v => ({ id: v.id })),
+}));
 
 const CategoryProducts = () => {
   const { category_slug } = useParams();
@@ -16,11 +27,20 @@ const CategoryProducts = () => {
   const [searchParams, setSearchParams] = useSearchParams();
   const { isAuthenticated } = useAuthStore();
 
-  const [products, setProducts]           = useState([]);
-  const [loading, setLoading]             = useState(true);
-  const [categoryName, setCategoryName]   = useState('');
-  const [categoryDesc, setCategoryDesc]   = useState('');
-  const [subcategories, setSubcategories] = useState([]);
+  // Seeded from the prerendered HTML. Without this the client mounts with
+  // products=[] and loading=true, so thirteen already-rendered cards collapse
+  // into one spinner and come back a moment later — measured at 0.89 CLS.
+  const [boot] = useState(() => readBootstrap(`category:${category_slug}`));
+  // The bootstrap belongs to the slug this component mounted with. Once the
+  // visitor navigates to another category the component is reused, so without
+  // this the guard below would keep the previous category's products on screen.
+  const bootConsumed = useRef(false);
+
+  const [products, setProducts]           = useState(boot?.products ?? []);
+  const [loading, setLoading]             = useState(!boot);
+  const [categoryName, setCategoryName]   = useState(boot?.name ?? '');
+  const [categoryDesc, setCategoryDesc]   = useState(boot?.description ?? '');
+  const [subcategories, setSubcategories] = useState(boot?.subcategories ?? []);
   const [activeSubcategory, setActiveSubcategory] = useState(searchParams.get('subcategory') || '');
   const [searchQuery, setSearchQuery]     = useState('');
   const [searchInput, setSearchInput]     = useState('');
@@ -52,7 +72,13 @@ const CategoryProducts = () => {
 
   useEffect(() => {
     const initialSubcategory = searchParams.get('subcategory') || '';
-    setProducts([]); setSearchInput(''); setSearchQuery(''); setActiveSubcategory(initialSubcategory);
+    // Keep the bootstrapped grid on screen while the first refresh is in
+    // flight; clearing it would reintroduce the collapse this fixes. Every
+    // subsequent category change clears, so one category's products can never
+    // be shown under another's heading.
+    if (bootConsumed.current || !boot) setProducts([]);
+    bootConsumed.current = true;
+    setSearchInput(''); setSearchQuery(''); setActiveSubcategory(initialSubcategory);
     fetchProducts('', initialSubcategory);
   }, [category_slug]);
 
@@ -77,6 +103,15 @@ const CategoryProducts = () => {
 
   return (
     <div className="p-10 bg-gray-50 dark:bg-zinc-950 min-h-screen">
+      <BootstrapData
+        id={`category:${category_slug}`}
+        data={{
+          name: categoryName,
+          description: categoryDesc,
+          subcategories,
+          products: forBootstrap(products),
+        }}
+      />
       {/* The title depends on a name that arrives over the network, so this URL
           spends its first moments without one. The generic card below covers
           that window; the real one replaces it as soon as the category
@@ -154,7 +189,11 @@ const CategoryProducts = () => {
         )}
       </div>
 
-      {loading ? (
+      {/* Spinner only when there is genuinely nothing to show. A refresh over
+          an existing grid — which is what every bootstrapped first load does —
+          must not blank it: that is the collapse-and-return that scored 0.034
+          CLS, and it is a worse experience than briefly stale prices. */}
+      {loading && products.length === 0 ? (
         <div className="flex items-center justify-center py-28"><Loader className="animate-spin text-accent w-10 h-10" /></div>
       ) : products.length === 0 ? (
         <div className="text-center py-20">

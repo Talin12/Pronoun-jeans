@@ -242,8 +242,9 @@ export default function BulkVariantBuilder({
                       style={{ background: colors.find(c => c.id === cid)?.hex_code || '#e5e7eb' }} />
                     <span className="font-semibold text-sm text-gray-900 dark:text-zinc-100 w-24 truncate">{colorName(cid)}</span>
                     <div className="flex-1 flex flex-wrap gap-1.5">
-                      {(imgs[cid] || []).map(a => (
-                        <img key={a.id} src={a.thumb_url} alt=""
+                      {(imgs[cid] || []).map((a, i) => (
+                        <img key={a.id} src={a.thumb_url}
+                          alt={`${colorName(cid)} — image ${i + 1}`}
                           className="w-10 h-10 rounded-lg object-cover border border-gray-200 dark:border-white/10" />
                       ))}
                     </div>
