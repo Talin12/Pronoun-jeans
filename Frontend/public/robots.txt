@@ -1,0 +1,15 @@
+User-agent: *
+Allow: /
+
+Disallow: /admin
+Disallow: /admin/
+Disallow: /agent
+Disallow: /agent/
+Disallow: /cart
+Disallow: /history
+Disallow: /dashboard
+Disallow: /login
+Disallow: /reset-password/
+Disallow: /*?subcategory=
+
+Sitemap: https://www.pronounjeans.com/sitemap.xml

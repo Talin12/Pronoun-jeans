@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { Link } from 'react-router-dom';
 import { Tag, ArrowRight, Loader } from 'lucide-react';
 import api from '../api/axios';
 import ResponsiveImage from '../components/shared/ResponsiveImage';
@@ -7,7 +7,6 @@ import ResponsiveImage from '../components/shared/ResponsiveImage';
 const Catalog = () => {
   const [categories, setCategories] = useState([]);
   const [loading, setLoading]       = useState(true);
-  const navigate = useNavigate();
 
   useEffect(() => {
     api.get('products/categories/')
@@ -36,9 +35,15 @@ const Catalog = () => {
         {categories.map((category) => (
           <div
             key={category.id}
-            onClick={() => navigate(`/catalog/${category.slug}`)}
             className="group relative bg-white dark:bg-zinc-900 rounded-2xl overflow-hidden border border-gray-200 dark:border-white/5 cursor-pointer hover:border-gray-300 dark:hover:border-accent/40 hover:shadow-lg transition-all duration-300 hover:-translate-y-1"
           >
+            {/* Covers the card so the whole tile stays clickable, while keeping
+                the subcategory links out of this anchor's subtree — an <a>
+                inside an <a> is invalid. The label is the crawlable anchor
+                text; the visible heading below is the same words. */}
+            <Link to={`/catalog/${category.slug}`} className="absolute inset-0 z-10">
+              <span className="sr-only">{category.name}</span>
+            </Link>
             <div className="h-72 overflow-hidden bg-gray-100 dark:bg-zinc-900">
               {category.image ? (
                 <ResponsiveImage src={category.image} alt={category.name}
@@ -57,18 +62,18 @@ const Catalog = () => {
                 <p className="text-white/70 text-xs font-bold uppercase tracking-widest mb-1">Collection</p>
                 <h2 className="text-white text-2xl font-bold">{category.name}</h2>
                 {category.subcategories?.length > 0 && (
-                  <div className="flex flex-wrap gap-1.5 mt-2">
+                  // z-20 lifts these above the card-wide link so they stay
+                  // clickable in their own right; they are siblings of it, not
+                  // descendants.
+                  <div className="relative z-20 flex flex-wrap gap-1.5 mt-2">
                     {category.subcategories.map((sub) => (
-                      <span
+                      <Link
                         key={sub.id}
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          navigate(`/catalog/${category.slug}?subcategory=${sub.slug}`);
-                        }}
+                        to={`/catalog/${category.slug}?subcategory=${sub.slug}`}
                         className="text-white/80 text-xs font-medium bg-white/10 hover:bg-white/20 rounded-full px-2.5 py-1 transition-colors"
                       >
                         {sub.name}
-                      </span>
+                      </Link>
                     ))}
                   </div>
                 )}

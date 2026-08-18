@@ -1,43 +1,56 @@
 import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
-import { useEffect } from 'react';
+import { lazy, Suspense, useEffect } from 'react';
+import { Loader } from 'lucide-react';
 import { useAuthStore } from './store/useAuthStore';
 import Navbar from './components/layout/Navbar';
 import Footer from './components/layout/Footer';
 import WhatsAppCTA from './components/ui/WhatsAppCTA';
 import AgentRoute from './components/auth/AgentRoute';
-import AgentLayout from './components/agent/AgentLayout';
 import AdminRoute from './components/auth/AdminRoute';
-import AdminLayout from './components/admin/AdminLayout';
 
+// Eager: everything an anonymous visitor can land on. These are the pages
+// Google crawls and buyers see first, so they stay in the entry chunk.
 import Home from './pages/Home';
 import Login from './pages/Login';
 import AboutUs from './pages/AboutUs';
 import Contact from './pages/Contact';
-import Legal from './pages/Legal';
 import Catalog from './pages/Catalog';
 import CategoryProducts from './pages/CategoryProducts';
 import ProductDetail from './pages/ProductDetail';
-import Cart from './pages/Cart';
-import OrderHistory from './pages/OrderHistory';
-import Dashboard from './pages/Dashboard';
 import NotFound from './pages/NotFound';
-import ResetPassword from './pages/ResetPassword';
 
-import AgentDashboard    from './pages/agent/AgentDashboard';
-import AgentBuyers       from './pages/agent/AgentBuyers';
-import AgentOrders       from './pages/agent/AgentOrders';
-import AgentCommissions  from './pages/agent/AgentCommissions';
-import AgentSampleOrders from './pages/agent/AgentSampleOrders';
+// Lazy: signed-in and staff-only surfaces. The admin and agent portals alone
+// were most of the bundle, and every anonymous visitor was downloading them.
+const Legal         = lazy(() => import('./pages/Legal'));
+const Cart          = lazy(() => import('./pages/Cart'));
+const OrderHistory  = lazy(() => import('./pages/OrderHistory'));
+const Dashboard     = lazy(() => import('./pages/Dashboard'));
+const ResetPassword = lazy(() => import('./pages/ResetPassword'));
 
-import AdminDashboard     from './pages/admin/AdminDashboard';
-import AdminProducts      from './pages/admin/AdminProducts';
-import AdminProductEditor from './pages/admin/AdminProductEditor';
-import AdminCategories    from './pages/admin/AdminCategories';
-import AdminCategoryProducts from './pages/admin/AdminCategoryProducts';
-import AdminSizeSets       from './pages/admin/AdminSizeSets';
-import AdminMedia          from './pages/admin/AdminMedia';
-import AdminUsers          from './pages/admin/AdminUsers';
-import AdminUserProfile    from './pages/admin/AdminUserProfile';
+const AgentLayout        = lazy(() => import('./components/agent/AgentLayout'));
+const AgentDashboard     = lazy(() => import('./pages/agent/AgentDashboard'));
+const AgentBuyers        = lazy(() => import('./pages/agent/AgentBuyers'));
+const AgentOrders        = lazy(() => import('./pages/agent/AgentOrders'));
+const AgentCommissions   = lazy(() => import('./pages/agent/AgentCommissions'));
+const AgentSampleOrders  = lazy(() => import('./pages/agent/AgentSampleOrders'));
+
+const AdminLayout          = lazy(() => import('./components/admin/AdminLayout'));
+const AdminDashboard       = lazy(() => import('./pages/admin/AdminDashboard'));
+const AdminProducts        = lazy(() => import('./pages/admin/AdminProducts'));
+const AdminProductEditor   = lazy(() => import('./pages/admin/AdminProductEditor'));
+const AdminCategories      = lazy(() => import('./pages/admin/AdminCategories'));
+const AdminCategoryProducts = lazy(() => import('./pages/admin/AdminCategoryProducts'));
+const AdminSizeSets        = lazy(() => import('./pages/admin/AdminSizeSets'));
+const AdminMedia           = lazy(() => import('./pages/admin/AdminMedia'));
+const AdminUsers           = lazy(() => import('./pages/admin/AdminUsers'));
+const AdminUserProfile     = lazy(() => import('./pages/admin/AdminUserProfile'));
+
+// Same spinner the catalogue uses while its own data loads.
+const RouteFallback = () => (
+  <div className="flex items-center justify-center min-h-screen bg-gray-50 dark:bg-zinc-950">
+    <Loader className="animate-spin text-accent w-10 h-10" />
+  </div>
+);
 
 const ProtectedRoute = ({ children }) => {
   const { isAuthenticated } = useAuthStore();
@@ -51,6 +64,9 @@ function App() {
 
   return (
     <BrowserRouter>
+      {/* One boundary around every route: the lazy chunks below are the only
+          things that suspend, and they each fill the viewport while loading. */}
+      <Suspense fallback={<RouteFallback />}>
       <Routes>
 
         {/* ── Agent portal — full-screen layout, no Navbar/Footer ── */}
@@ -121,6 +137,7 @@ function App() {
         } />
 
       </Routes>
+      </Suspense>
     </BrowserRouter>
   );
 }

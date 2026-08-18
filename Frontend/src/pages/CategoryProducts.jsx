@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useCallback, useRef } from 'react';
-import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
+import { Link, useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { ArrowLeft, Package, Loader, BadgeCheck, Search, X, Lock } from 'lucide-react';
 import api from '../api/axios';
 import { useAuthStore } from '../store/useAuthStore';
@@ -135,8 +135,10 @@ const CategoryProducts = () => {
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
           {products.map((product) => (
-            <div key={product.id} onClick={() => navigate(`/product/${product.slug}`)}
-              className="group bg-white dark:bg-zinc-900 rounded-2xl overflow-hidden border border-gray-200 dark:border-white/5 hover:border-gray-300 dark:hover:border-white/20 hover:shadow-md transition-all duration-300 hover:-translate-y-1 cursor-pointer">
+            // `block` keeps the anchor laid out exactly as the div was; the
+            // card holds nothing else interactive, so it can be one link.
+            <Link key={product.id} to={`/product/${product.slug}`}
+              className="group block bg-white dark:bg-zinc-900 rounded-2xl overflow-hidden border border-gray-200 dark:border-white/5 hover:border-gray-300 dark:hover:border-white/20 hover:shadow-md transition-all duration-300 hover:-translate-y-1 cursor-pointer">
               <div className="h-64 overflow-hidden relative bg-gray-100 dark:bg-zinc-900">
                 {product.image ? (
                   <ResponsiveImage src={product.image} alt={product.name}
@@ -166,7 +168,7 @@ const CategoryProducts = () => {
                   {isAuthenticated ? 'View Variations' : 'View Product'}
                 </div>
               </div>
-            </div>
+            </Link>
           ))}
         </div>
       )}
