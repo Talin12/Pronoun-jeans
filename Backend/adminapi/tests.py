@@ -408,7 +408,7 @@ class ProductCodeTests(TestCase):
 
         skus = list(ProductVariation.objects.filter(product_id=pid).values_list('sku', flat=True))
         self.assertTrue(skus)
-        self.assertTrue(all(s.startswith('PJ100-') for s in skus), skus)
+        self.assertTrue(all(s.startswith('PJ100_') for s in skus), skus)
 
     def test_slug_is_still_the_fallback_without_a_code(self):
         pid = self._create(code='').json()['id']
@@ -420,4 +420,97 @@ class ProductCodeTests(TestCase):
         self.assertEqual(r.status_code, 201, r.content)
 
         sku = ProductVariation.objects.filter(product_id=pid).values_list('sku', flat=True)[0]
-        self.assertTrue(sku.startswith('URBANRISETRA-'), sku)   # from the slug, as before
+        self.assertTrue(sku.startswith('URBANRISETRACK'), sku)   # from the slug, as before
+
+
+class SkuFormatTests(TestCase):
+    """
+    Variant SKUs read CODE_COLOUR_SIZESET_<n>PCS, e.g. 574_BLACK_30TO36_4PCS.
+
+    Built automatically for every variant, from the same helper whether the
+    variant came from the bulk builder or was added one at a time.
+    """
+
+    def setUp(self):
+        self.client, self.user = _superuser_client()
+        self.product = Product.objects.create(name='Denim Pant', slug='denim-pant', code='574')
+        self.black   = Color.objects.create(name='Black', hex_code='#000000')
+        self.size    = SizeSet.objects.create(name='30 TO 36')
+        self.brk     = SizeSetBreakdown.objects.create(
+            size_set=self.size, label='1x30, 1x32, 1x34, 1x36',
+            breakdown_string='1x30, 1x32, 1x34, 1x36', pieces=4,
+        )
+
+    def test_the_documented_example(self):
+        from adminapi.skus import build_sku
+        self.assertEqual(
+            build_sku(self.product, self.black, self.size, self.brk),
+            '574_BLACK_30TO36_4PCS',
+        )
+
+    def test_bulk_builder_uses_the_format(self):
+        r = self.client.post('/api/admin/variations/bulk/', {
+            'product': self.product.id, 'colors': [self.black.id],
+            'size_sets': [{'size_set': self.size.id, 'size_breakdown': self.brk.id}],
+            'per_piece_price': '100.00', 'stock_quantity': 5,
+        }, format='json')
+        self.assertEqual(r.status_code, 201, r.content)
+        self.assertEqual(ProductVariation.objects.get().sku, '574_BLACK_30TO36_4PCS')
+
+    def test_single_variant_gets_the_same_sku(self):
+        """A variant added one at a time must match the bulk builder."""
+        r = self.client.post('/api/admin/variations/', {
+            'product': self.product.id, 'color_palette': self.black.id,
+            'size_set': self.size.id, 'size_breakdown': self.brk.id,
+            'per_piece_price': '100.00', 'stock_quantity': 5,
+        }, format='json')
+        self.assertEqual(r.status_code, 201, r.content)
+        self.assertEqual(r.json()['sku'], '574_BLACK_30TO36_4PCS')
+
+    def test_an_explicit_sku_is_kept(self):
+        r = self.client.post('/api/admin/variations/', {
+            'product': self.product.id, 'color_palette': self.black.id,
+            'size_set': self.size.id, 'size_breakdown': self.brk.id,
+            'sku': 'HAND-PICKED-1', 'per_piece_price': '100.00',
+        }, format='json')
+        self.assertEqual(r.status_code, 201, r.content)
+        self.assertEqual(r.json()['sku'], 'HAND-PICKED-1')
+
+    def test_spaces_are_stripped_from_every_part(self):
+        from adminapi.skus import build_sku
+        navy = Color.objects.create(name='Midnight Blue', hex_code='#001')
+        self.assertEqual(
+            build_sku(self.product, navy, self.size, self.brk),
+            '574_MIDNIGHTBLUE_30TO36_4PCS',
+        )
+
+    def test_missing_parts_are_omitted_not_padded(self):
+        from adminapi.skus import build_sku
+        self.assertEqual(build_sku(self.product, None, self.size, self.brk),
+                         '574_30TO36_4PCS')
+        self.assertEqual(build_sku(self.product, self.black, None, None),
+                         '574_BLACK')
+        self.assertEqual(build_sku(self.product), '574')
+
+    def test_slug_is_the_fallback_without_a_code(self):
+        from adminapi.skus import build_sku
+        coded = Product.objects.create(name='No Code', slug='no-code')
+        self.assertEqual(build_sku(coded, self.black), 'NOCODE_BLACK')
+
+    def test_a_clash_gets_a_numeric_suffix(self):
+        from adminapi.skus import build_sku
+        taken = {'574_BLACK_30TO36_4PCS'}
+        self.assertEqual(build_sku(self.product, self.black, self.size, self.brk, taken=taken),
+                         '574_BLACK_30TO36_4PCS_2')
+
+    def test_two_breakdowns_of_one_set_both_get_a_sku(self):
+        """Same set, different piece counts — the count keeps them apart."""
+        eight = SizeSetBreakdown.objects.create(
+            size_set=self.size, label='2x30, 2x32, 2x34, 2x36',
+            breakdown_string='2x30, 2x32, 2x34, 2x36', pieces=8,
+        )
+        from adminapi.skus import build_sku
+        self.assertEqual(build_sku(self.product, self.black, self.size, self.brk),
+                         '574_BLACK_30TO36_4PCS')
+        self.assertEqual(build_sku(self.product, self.black, self.size, eight),
+                         '574_BLACK_30TO36_8PCS')

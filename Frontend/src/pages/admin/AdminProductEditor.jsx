@@ -20,10 +20,20 @@ const inputCls = 'w-full px-3 py-2.5 rounded-xl border border-gray-200 dark:bord
 const btnPrimary   = 'inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-accent text-white text-sm font-bold hover:brightness-110 transition disabled:opacity-50';
 const btnGhost     = 'inline-flex items-center gap-2 px-5 py-2.5 rounded-xl border border-gray-200 dark:border-white/10 text-sm font-bold text-gray-600 dark:text-zinc-300 hover:bg-gray-50 dark:hover:bg-white/5 transition';
 
-// Mirrors _sku_token / _unique_sku on the server, so the preview shown next to
-// the product code is the shape the generated SKUs actually take.
-const skuToken   = (v, len = 6) => String(v || '').toUpperCase().replace(/[^A-Z0-9]+/g, '').slice(0, len);
-const skuPreview = (code) => `${skuToken(code, 12) || 'SKU'}-COLOUR-SIZE`;
+// Mirrors adminapi/skus.py, so what the panel previews is what the server
+// stores: CODE_COLOUR_SIZESET_<n>PCS, e.g. 574_BLACK_30TO36_4PCS.
+const skuToken = (v, len = 16) => String(v || '').toUpperCase().replace(/[^A-Z0-9]+/g, '').slice(0, len);
+
+const buildSku = (code, colour, sizeSet, pieces) => {
+  const parts = [skuToken(code) || 'SKU'];
+  if (colour)  parts.push(skuToken(colour));
+  if (sizeSet) parts.push(skuToken(sizeSet));
+  if (pieces)  parts.push(`${pieces}PCS`);
+  return parts.filter(Boolean).join('_');
+};
+
+// Shown beside the product code — placeholders, since no variant exists yet.
+const skuPreview = (code) => `${skuToken(code) || 'SKU'}_COLOUR_SIZESET_nPCS`;
 
 const STEPS = [
   { key: 'base',     label: 'Base Details',       icon: FileText },
@@ -289,7 +299,7 @@ export default function AdminProductEditor() {
               <h2 className="text-lg font-black text-gray-900 dark:text-zinc-100 mb-1">Variants & Pricing</h2>
               <p className="text-sm text-gray-400 dark:text-zinc-500 mb-5">Add each size-set / colour combination with its price, stock and images.</p>
               <VariantsEditor
-                productId={Number(id)} productName={form.name}
+                productId={Number(id)} productName={form.name} productCode={form.code}
                 colors={colors} sizeSets={sizeSets}
                 categoryId={Number(form.category) || null}
                 variations={variations} onChange={setVariations}
@@ -341,7 +351,7 @@ const Row = ({ label, value }) => (
 );
 
 // ── Variants editor ──────────────────────────────────────────────────────────
-function VariantsEditor({ productId, productName, colors, sizeSets, categoryId, variations, onChange, onColorsChange, onSizeSetsChange }) {
+function VariantsEditor({ productId, productName, productCode, colors, sizeSets, categoryId, variations, onChange, onColorsChange, onSizeSetsChange }) {
   const [adding, setAdding]   = useState(false);
   const [bulk, setBulk]       = useState(false);
   const [expanded, setExpanded] = useState(null);
@@ -413,7 +423,7 @@ function VariantsEditor({ productId, productName, colors, sizeSets, categoryId, 
           }} />
       ) : adding ? (
         <VariantForm
-          productId={productId} colors={colors} sizeSets={sizeSets}
+          productId={productId} productCode={productCode} colors={colors} sizeSets={sizeSets}
           onColorsChange={onColorsChange} onSizeSetsChange={onSizeSetsChange}
           onCancel={() => setAdding(false)}
           onSaved={(v) => { onChange([...variations, v]); setAdding(false); }} />
@@ -443,7 +453,7 @@ function VariantsEditor({ productId, productName, colors, sizeSets, categoryId, 
   );
 }
 
-function VariantForm({ productId, colors, sizeSets, onColorsChange, onSizeSetsChange, onCancel, onSaved }) {
+function VariantForm({ productId, productCode, colors, sizeSets, onColorsChange, onSizeSetsChange, onCancel, onSaved }) {
   const [v, setV] = useState({
     size_set: '', size_breakdown: '', color_palette: '', sku: '',
     per_piece_price: '', mrp_per_piece: '', stock_quantity: 0,
@@ -455,6 +465,18 @@ function VariantForm({ productId, colors, sizeSets, onColorsChange, onSizeSetsCh
   const set = (k, val) => setV(s => ({ ...s, [k]: val }));
 
   const breakdowns = sizeSets.find(s => s.id === Number(v.size_set))?.breakdowns || [];
+
+  // What the server will generate if the SKU is left blank. Only shown once a
+  // code exists — without one the server falls back to the slug, which the
+  // panel does not hold, and a wrong preview is worse than none.
+  const autoSku = productCode
+    ? buildSku(
+        productCode,
+        colors.find(c => c.id === Number(v.color_palette))?.name,
+        sizeSets.find(s => s.id === Number(v.size_set))?.name,
+        breakdowns.find(b => b.id === Number(v.size_breakdown))?.pieces,
+      )
+    : '';
 
   const save = () => {
     setSaving(true); setErr('');
@@ -478,8 +500,11 @@ function VariantForm({ productId, colors, sizeSets, onColorsChange, onSizeSetsCh
       {err && <p className="text-sm text-red-600 dark:text-red-400 mb-3">{err}</p>}
       <div className="grid sm:grid-cols-3 gap-3">
         <div>
-          <label className={labelCls}>SKU *</label>
-          <input className={inputCls} value={v.sku} onChange={e => set('sku', e.target.value)} placeholder="Unique code" />
+          <label className={labelCls}>SKU</label>
+          {/* Generated by the server from code, colour, size set and pieces.
+              Typing here overrides it for this one variant. */}
+          <input className={inputCls} value={v.sku} onChange={e => set('sku', e.target.value.toUpperCase())}
+                 placeholder={autoSku || 'Generated automatically'} />
         </div>
         <div>
           <div className="flex items-center justify-between">

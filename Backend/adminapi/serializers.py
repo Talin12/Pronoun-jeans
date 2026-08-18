@@ -21,6 +21,8 @@ from products.models import (
     Category, Color, Product, ProductVariation, SizeSet, SizeSetBreakdown,
 )
 
+from .skus import build_sku
+
 User = get_user_model()
 
 
@@ -191,13 +193,45 @@ class ProductVariationSerializer(serializers.ModelSerializer):
         extra_kwargs = {
             'b2b_price': {'required': False},
             'mrp':       {'required': False},
+            'sku':       {'required': False, 'allow_blank': True},
             'image':     {'write_only': True, 'required': False},
         }
 
     def get_image_url(self, obj):
         return _image_url(obj.image)
 
+    def _auto_sku(self, attrs):
+        """
+        CODE_COLOUR_SIZESET_<n>PCS, the same format the bulk builder produces.
+
+        Generated whenever the SKU is left blank, so a variant added one at a
+        time is named identically to one built in bulk.
+        """
+        product = attrs.get('product') or getattr(self.instance, 'product', None)
+        if product is None:
+            return None
+        return build_sku(
+            product,
+            attrs.get('color_palette')  or getattr(self.instance, 'color_palette', None),
+            attrs.get('size_set')       or getattr(self.instance, 'size_set', None),
+            attrs.get('size_breakdown') or getattr(self.instance, 'size_breakdown', None),
+            taken=set(ProductVariation.objects
+                      .exclude(pk=getattr(self.instance, 'pk', None))
+                      .values_list('sku', flat=True)),
+        )
+
     def validate(self, attrs):
+        # SKUs are generated, not typed — the panel sends a blank one and gets
+        # the standard format back.
+        if not (attrs.get('sku') or '').strip():
+            generated = self._auto_sku(attrs)
+            if generated:
+                attrs['sku'] = generated
+            elif self.instance is None:
+                raise serializers.ValidationError({
+                    'sku': 'Could not build a SKU — pick a product first.',
+                })
+
         # b2b_price auto-fills from per_piece_price × pieces in the model, but one
         # of the two must exist because b2b_price is required at the DB level.
         per_piece = attrs.get('per_piece_price',

@@ -7,7 +7,6 @@ the custom panel behave identically to the Django-admin picker (dedup + the
 Phase 7 legacy-column bridge), and therefore render on the storefront at once.
 """
 
-import re
 from decimal import Decimal, InvalidOperation
 
 from django.contrib.auth import get_user_model
@@ -28,6 +27,7 @@ from products.models import (
 )
 
 from .permissions import IsSuperUser
+from .skus import build_sku
 from .serializers import (
     CategorySerializer, ColorSerializer, ProductDetailSerializer,
     ProductListSerializer, ProductVariationSerializer, SizeSetSerializer,
@@ -36,26 +36,6 @@ from .serializers import (
 
 _VALID_TYPES = {t for t, _ in ATTACHABLE_TYPES}
 _VALID_ROLES = {r for r, _ in ROLE_CHOICES}
-
-
-def _sku_token(value, length=6):
-    """Uppercase alphanumeric slice of a name, for building readable SKUs."""
-    return re.sub(r'[^A-Z0-9]+', '', (value or '').upper())[:length]
-
-
-def _unique_sku(prefix, color, size_set, taken):
-    """PREFIX-COLOUR-SIZE, with a numeric suffix if that is already in use."""
-    parts = [prefix]
-    if color is not None:
-        parts.append(_sku_token(color.name) or 'C')
-    if size_set is not None:
-        parts.append(_sku_token(size_set.name) or 'S')
-    base = '-'.join(p for p in parts if p)
-    sku, n = base, 2
-    while sku in taken:
-        sku = f'{base}-{n}'
-        n += 1
-    return sku
 
 
 class AdminPagination(PageNumberPagination):
@@ -265,11 +245,7 @@ class ProductVariationViewSet(viewsets.ModelViewSet):
         if len(colors) * len(pairs) == 0:
             return Response({'error': 'Nothing to create.'}, status=400)
 
-        # The product code is what the admin assigned for exactly this purpose,
-        # so it wins over the slug — which is derived from the full name and
-        # produces long, unreadable SKUs.
-        prefix = (data.get('sku_prefix') or product.code or product.slug or 'SKU')
-        prefix = _sku_token(prefix, 12) or 'SKU'
+        prefix = data.get('sku_prefix') or None
 
         taken = set(ProductVariation.objects.values_list('sku', flat=True))
         existing = set(
@@ -290,7 +266,8 @@ class ProductVariationViewSet(viewsets.ModelViewSet):
                         })
                         continue
 
-                    sku = _unique_sku(prefix, color, size_set, taken)
+                    sku = build_sku(product, color, size_set, breakdown,
+                                    prefix=prefix, taken=taken)
                     variation = ProductVariation(
                         product=product, size_set=size_set, size_breakdown=breakdown,
                         color_palette=color, sku=sku,
