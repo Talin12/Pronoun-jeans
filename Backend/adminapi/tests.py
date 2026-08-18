@@ -614,3 +614,54 @@ class SetPricingTests(TestCase):
         }, format='json')
         self.assertEqual(r.status_code, 201, r.content)
         self.assertEqual(ProductVariation.objects.get().b2b_price, Decimal('2000.00'))
+
+
+class ProductBaseUpdateTests(TestCase):
+    """
+    Publishing must carry the Base Details with it.
+
+    The panel used to send is_active on its own when publishing, so a MOQ typed
+    and then published never reached the database and the storefront kept
+    showing the old value. These pin the API contract the panel relies on.
+    """
+
+    def setUp(self):
+        self.client, self.user = _superuser_client()
+        self.product = Product.objects.create(name='Test 6', slug='test-6', moq=10)
+        self.url = f'/api/admin/products/{self.product.id}/'
+
+    def test_moq_can_be_lowered(self):
+        r = self.client.patch(self.url, {'moq': 1}, format='json')
+        self.assertEqual(r.status_code, 200, r.content)
+        self.product.refresh_from_db()
+        self.assertEqual(self.product.moq, 1)
+
+    def test_publishing_carries_the_base_fields(self):
+        """The payload the panel now sends when publishing."""
+        r = self.client.patch(self.url, {
+            'name': 'Test 6', 'code': 'PJ1001', 'moq': 1,
+            'description': 'desc', 'fabric_details': 'cotton',
+            'category': None, 'subcategories': [], 'is_active': True,
+        }, format='json')
+        self.assertEqual(r.status_code, 200, r.content)
+
+        self.product.refresh_from_db()
+        self.assertEqual(self.product.moq, 1)
+        self.assertTrue(self.product.is_active)
+        self.assertEqual(self.product.code, 'PJ1001')
+
+    def test_toggling_active_alone_leaves_moq_alone(self):
+        """The product-list Active switch sends only is_active."""
+        self.client.patch(self.url, {'moq': 3}, format='json')
+        r = self.client.patch(self.url, {'is_active': False}, format='json')
+        self.assertEqual(r.status_code, 200, r.content)
+
+        self.product.refresh_from_db()
+        self.assertEqual(self.product.moq, 3)
+        self.assertFalse(self.product.is_active)
+
+    def test_moq_is_returned_by_the_api(self):
+        """The buyer page reads MOQ straight off the product payload."""
+        self.client.patch(self.url, {'moq': 1, 'is_active': True}, format='json')
+        r = self.client.get(self.url)
+        self.assertEqual(r.json()['moq'], 1)

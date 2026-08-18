@@ -106,7 +106,24 @@ export default function AdminProductEditor() {
     name: '', code: '', category: '', subcategories: [], description: '',
     fabric_details: '', moq: 10, is_active: false,
   });
+  // What the server last confirmed. Base edits only persist through "Save &
+  // Next", Save as Draft or Publish, so an unsaved change needs to be visible
+  // rather than quietly dropped when the step changes.
+  const [savedForm, setSavedForm] = useState(null);
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
+
+  // One shape for the Base Details payload, so every save path writes the same
+  // fields and the dirty check compares like with like — a raw form against a
+  // normalised snapshot would read as dirty the instant it was saved.
+  const normalizeBase = (f) => ({
+    ...f,
+    category: f.category || null,
+    moq: Number(f.moq) || 0,
+  });
+  const basePayload = () => normalizeBase(form);
+
+  const baseDirty = savedForm !== null
+    && JSON.stringify(normalizeBase(form)) !== JSON.stringify(savedForm);
 
   const loadRefs = useCallback(() => {
     listCategories().then(setCategories);
@@ -119,11 +136,13 @@ export default function AdminProductEditor() {
     setLoad(true);
     getProduct(id)
       .then(p => {
-        setForm({
+        const loaded = {
           name: p.name || '', code: p.code || '', category: p.category || '',
           subcategories: p.subcategories || [], description: p.description || '',
           fabric_details: p.fabric_details || '', moq: p.moq ?? 10, is_active: p.is_active,
-        });
+        };
+        setForm(loaded);
+        setSavedForm(normalizeBase(loaded));
         setVariations(p.variations || []);
       })
       .catch(() => setError('Failed to load product.'))
@@ -158,9 +177,9 @@ export default function AdminProductEditor() {
 
   const saveBase = (goNext = true) => {
     setSaving(true); setError('');
-    const payload = { ...form, category: form.category || null, moq: Number(form.moq) || 0 };
-    const req = isNew ? createProduct(payload) : updateProduct(id, payload);
+    const req = isNew ? createProduct(basePayload()) : updateProduct(id, basePayload());
     return req.then(p => {
+      setSavedForm(basePayload());
       if (isNew) { navigate(`/admin/products/${p.id}`, { replace: true }); }
       else if (goNext) setStep('images');
       return p;
@@ -170,7 +189,7 @@ export default function AdminProductEditor() {
 
   const publish = (active) => {
     setSaving(true); setError('');
-    updateProduct(id, { is_active: active })
+    updateProduct(id, { ...basePayload(), is_active: active })
       .then(() => navigate('/admin/products'))
       .catch(err => setError(errMsg(err, 'Failed to update.')))
       .finally(() => setSaving(false));
@@ -304,12 +323,19 @@ export default function AdminProductEditor() {
                   <textarea rows={2} className={inputCls} value={form.fabric_details} onChange={e => set('fabric_details', e.target.value)} />
                 </div>
               </div>
-              <div className="mt-6 flex justify-between">
+              <div className="mt-6 flex items-center justify-between gap-3">
                 <button onClick={() => navigate('/admin/products')} className={btnGhost}>Cancel</button>
-                <button onClick={() => saveBase(true)} disabled={saving || !form.name} className={btnPrimary}>
-                  {saving ? <Loader size={16} className="animate-spin" /> : <Save size={16} />}
-                  {isNew ? 'Save & Continue' : 'Save & Next'} <ArrowRight size={16} />
-                </button>
+                <div className="flex items-center gap-3">
+                  {baseDirty && (
+                    <span className="inline-flex items-center gap-1.5 text-xs font-bold text-amber-600 dark:text-amber-400">
+                      <AlertCircle size={14} /> Unsaved changes
+                    </span>
+                  )}
+                  <button onClick={() => saveBase(true)} disabled={saving || !form.name} className={btnPrimary}>
+                    {saving ? <Loader size={16} className="animate-spin" /> : <Save size={16} />}
+                    {isNew ? 'Save & Continue' : 'Save & Next'} <ArrowRight size={16} />
+                  </button>
+                </div>
               </div>
             </div>
           )}
