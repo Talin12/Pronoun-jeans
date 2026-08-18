@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Lock, Eye, EyeOff, Loader2, CheckCircle2, AlertCircle } from 'lucide-react';
 import api from '../api/axios';
+import Seo from '../components/seo/Seo';
 
 const ResetPassword = () => {
   const { uid, token }                  = useParams();
@@ -34,6 +35,14 @@ const ResetPassword = () => {
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-zinc-950 flex items-center justify-center px-4">
+      {/* Canonical deliberately drops the uid/token segments — a one-time reset
+          credential has no business in a tag meant to be published. */}
+      <Seo
+        title="Reset Password"
+        description="Set a new password for your Pronoun Jeans wholesale partner account."
+        canonical="/reset-password"
+        noindex
+      />
       <div className="w-full max-w-md">
 
         <div className="text-center mb-10">

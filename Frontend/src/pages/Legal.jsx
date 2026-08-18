@@ -1,4 +1,5 @@
 import React from 'react';
+import Seo from '../components/seo/Seo';
 
 // ── Pre-built policy pages ────────────────────────────────────────────────────
 
@@ -72,18 +73,23 @@ const REFUND_SECTIONS = [
 ];
 
 const PAGES = {
-  terms:   { title: 'Terms & Conditions',  updated: 'April 2026', sections: TERMS_SECTIONS },
-  privacy: { title: 'Privacy Policy',       updated: 'April 2026', sections: PRIVACY_SECTIONS },
-  refund:  { title: 'Refund Policy',        updated: 'April 2026', sections: REFUND_SECTIONS },
+  terms:   { title: 'Terms & Conditions',  updated: 'April 2026', sections: TERMS_SECTIONS,
+             description: 'Terms and conditions governing wholesale orders, MOQ, pricing and dispatch for verified B2B partners of Pronoun Jeans.' },
+  privacy: { title: 'Privacy Policy',       updated: 'April 2026', sections: PRIVACY_SECTIONS,
+             description: 'How Pronoun Jeans collects, uses and protects the account and order information of its wholesale partners.' },
+  refund:  { title: 'Refund Policy',        updated: 'April 2026', sections: REFUND_SECTIONS,
+             description: 'Return eligibility, the return process and refund timelines for bulk wholesale orders placed with Pronoun Jeans.' },
 };
 
 // ── Reusable Legal Layout ─────────────────────────────────────────────────────
 
 const Legal = ({ page = 'terms' }) => {
-  const { title, updated, sections } = PAGES[page] || PAGES.terms;
+  const key = PAGES[page] ? page : 'terms';
+  const { title, updated, sections, description } = PAGES[key];
 
   return (
     <div className="bg-gray-50 dark:bg-zinc-950 min-h-screen">
+      <Seo title={title} description={description} canonical={`/${key}`} noindex />
       {/* Header */}
       <div className="border-b border-gray-200 dark:border-white/5 bg-white dark:bg-zinc-900">
         <div className="max-w-5xl mx-auto px-6 py-10">

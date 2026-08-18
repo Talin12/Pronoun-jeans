@@ -4,6 +4,7 @@ import {
   Plus, Trash2, CheckCircle2, AlertCircle, Pencil, X, FileText, Truck, CreditCard
 } from 'lucide-react';
 import api from '../api/axios';
+import Seo from '../components/seo/Seo';
 
 const TAB_ORDERS  = 'orders';
 const TAB_ADDRESS = 'addresses';
@@ -35,6 +36,12 @@ const Dashboard = () => {
 
   return (
     <div className="bg-gray-50 dark:bg-zinc-950 min-h-screen p-6 lg:p-12">
+      <Seo
+        title="My Dashboard"
+        description="Manage your Pronoun Jeans wholesale account: past orders, delivery addresses and account details."
+        canonical="/dashboard"
+        noindex
+      />
       <div className="max-w-6xl mx-auto">
         <h1 className="text-gray-900 dark:text-zinc-100 text-3xl font-bold mb-8">My Dashboard</h1>
         <div className="flex flex-col lg:flex-row gap-8">

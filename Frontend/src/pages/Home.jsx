@@ -3,6 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { Package, Truck, ShieldCheck, ArrowRight, Tag, ChevronLeft, ChevronRight } from 'lucide-react';
 import api from '../api/axios';
 import ResponsiveImage from '../components/shared/ResponsiveImage';
+import Seo from '../components/seo/Seo';
 
 const TRUST_BADGES = [
   { icon: Package,     title: 'Bulk Pricing',        desc: 'Exclusive B2B rates on every SKU with tiered MOQ discounts.'   },
@@ -127,6 +128,12 @@ const Home = () => {
   return (
     <div className="bg-white dark:bg-zinc-950 min-h-screen">
 
+      <Seo
+        title="Wholesale Jeans Manufacturer in Ahmedabad"
+        description="Pronoun Jeans manufactures wholesale men's jeans, cargo pants and joggers in Ahmedabad. Bulk size sets, MOQ pricing and pan-India dispatch for retailers."
+        canonical="/"
+      />
+
       {/* ── Hero ── */}
       <section className="relative h-[92vh] min-h-[560px] max-h-[860px] overflow-hidden">
 
@@ -145,12 +152,12 @@ const Home = () => {
                 Wholesale Partner Portal
               </span>
               <h1 className="text-5xl sm:text-6xl lg:text-7xl font-black text-white leading-[1.05] tracking-tight mb-6">
-                Discover the<br />
-                <span className="text-accent">Pronoun</span><br />
-                Collection.
+                Wholesale Jeans<br />
+                <span className="text-accent">Manufacturer</span><br />
+                in Ahmedabad.
               </h1>
               <p className="text-lg text-white/75 max-w-md mb-10 leading-relaxed">
-                Premium wholesale clothing. Designed for modern retail. Built for serious buyers.
+                Men's denim, cargo pants and joggers in bulk size sets. Built for retailers and distributors across India.
               </p>
               <div className="flex items-center gap-4 flex-wrap">
                 <button onClick={() => navigate('/catalog')}

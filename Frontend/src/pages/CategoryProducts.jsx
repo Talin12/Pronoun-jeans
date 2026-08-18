@@ -4,6 +4,7 @@ import { ArrowLeft, Package, Loader, BadgeCheck, Search, X, Lock } from 'lucide-
 import api from '../api/axios';
 import { useAuthStore } from '../store/useAuthStore';
 import ResponsiveImage from '../components/shared/ResponsiveImage';
+import Seo from '../components/seo/Seo';
 
 const CategoryProducts = () => {
   const { category_slug } = useParams();
@@ -66,6 +67,24 @@ const CategoryProducts = () => {
 
   return (
     <div className="p-10 bg-gray-50 dark:bg-zinc-950 min-h-screen">
+      {/* The title depends on a name that arrives over the network, so this URL
+          spends its first moments without one. The generic card below covers
+          that window; the real one replaces it as soon as the category
+          resolves. Both canonicalise to the bare category path — the
+          ?subcategory= filter is the same set of products, not a new page. */}
+      {categoryName ? (
+        <Seo
+          title={`${categoryName} — Wholesale ${categoryName} Manufacturer`}
+          description={`Wholesale ${categoryName.toLowerCase()} from Pronoun Jeans, a B2B denim manufacturer in Ahmedabad. Bulk size sets, MOQ pricing and pan-India dispatch for retailers.`}
+          canonical={`/catalog/${category_slug}`}
+        />
+      ) : (
+        <Seo
+          title="Wholesale Denim Catalogue — Bulk Jeans & Bottomwear"
+          description="Browse wholesale men's jeans, cargos and joggers from Pronoun Jeans, Ahmedabad. Bulk orders in ready size sets, with MOQ pricing for verified B2B buyers."
+          canonical={`/catalog/${category_slug}`}
+        />
+      )}
       <div className="mb-10">
         <button onClick={() => navigate('/catalog')}
           className="flex items-center gap-2 text-gray-500 dark:text-zinc-400 hover:text-gray-900 dark:hover:text-white transition-colors mb-6 text-sm font-semibold">

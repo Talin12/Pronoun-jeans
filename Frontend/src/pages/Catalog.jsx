@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { Tag, ArrowRight, Loader } from 'lucide-react';
 import api from '../api/axios';
 import ResponsiveImage from '../components/shared/ResponsiveImage';
+import Seo from '../components/seo/Seo';
 
 const Catalog = () => {
   const [categories, setCategories] = useState([]);
@@ -15,20 +16,44 @@ const Catalog = () => {
       .finally(() => setLoading(false));
   }, []);
 
+  // Held in a variable rather than written twice: the categories are fetched
+  // client-side, so the spinner below is a real, crawlable state of this URL
+  // and it must not be a page without a title.
+  const seo = (
+    <Seo
+      title="Wholesale Denim Catalogue — Bulk Jeans & Bottomwear"
+      description="Browse the Pronoun Jeans wholesale catalogue: men's jeans, cargos and joggers by category, sold in ready size sets with MOQ pricing for retailers."
+      canonical="/catalog"
+    />
+  );
+
   if (loading) return (
     <div className="flex items-center justify-center min-h-screen bg-gray-50 dark:bg-zinc-950">
+      {seo}
       <Loader className="animate-spin text-accent w-10 h-10" />
     </div>
   );
 
   return (
     <div className="p-10 bg-gray-50 dark:bg-zinc-950 min-h-screen">
+      {seo}
       <div className="mb-10">
         <div className="flex items-center gap-2 mb-2">
           <Tag className="text-accent w-5 h-5" />
           <span className="text-accent text-xs font-bold uppercase tracking-widest">Shop by Category</span>
         </div>
         <h1 className="text-gray-900 dark:text-zinc-100 text-4xl font-bold">Our Collections</h1>
+        <p className="text-gray-500 dark:text-zinc-400 text-sm leading-relaxed mt-4 max-w-3xl">
+          Pronoun Jeans is a B2B denim manufacturer based in Ahmedabad, Gujarat, supplying men's jeans,
+          cargo pants, joggers and casual bottomwear to retailers, distributors and multi-brand outlets
+          across India. Every collection below is produced in-house and sold wholesale only — in ready
+          size sets rather than single pieces, with a minimum order quantity on each style. Browse by
+          category to see the fits, washes and fabrics currently in production; each product page lists
+          its size breakdown, available colours and MOQ. Wholesale rates are reserved for verified B2B
+          partners, so prices appear once your account is approved and you sign in. New buyer? Send us
+          your requirement — categories, quantities and delivery city — on WhatsApp or through the
+          contact form, and our team will share current rates, fabric details and lead times for bulk orders.
+        </p>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">

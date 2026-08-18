@@ -2,6 +2,7 @@ import React, { useEffect, useState, useMemo } from 'react';
 import { Loader, PackageSearch, MapPin, ExternalLink, CheckCircle2, Filter } from 'lucide-react';
 import api from '../api/axios';
 import TrackingTimelineModal from '../components/shared/TrackingTimelineModal';
+import Seo from '../components/seo/Seo';
 
 const SELLER_GSTIN = '24AEXPJ4984P1ZD';
 const SELLER_NAME  = 'M. SANKLECHA CREATION';
@@ -181,6 +182,12 @@ const OrderHistory = () => {
 
   return (
     <div className="bg-gray-50 dark:bg-zinc-950 min-h-screen px-4 py-10">
+      <Seo
+        title="Order History"
+        description="Track and review the bulk orders you have placed with Pronoun Jeans."
+        canonical="/history"
+        noindex
+      />
       <div className="max-w-5xl mx-auto">
         <div className="mb-6">
           <h1 className="text-gray-900 dark:text-zinc-100 text-3xl font-black">Order History</h1>

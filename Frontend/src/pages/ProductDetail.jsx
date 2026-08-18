@@ -8,11 +8,25 @@ import api from '../api/axios';
 import { useAuthStore } from '../store/useAuthStore';
 import { useCartStore } from '../store/useCartStore';
 import ResponsiveImage from '../components/shared/ResponsiveImage';
+import Seo from '../components/seo/Seo';
 
 const decodeHtml = (text) => {
   if (!text) return '';
   const doc = new DOMParser().parseFromString(text, 'text/html');
   return (doc.body.textContent ?? '').replace(/\\n/g, '\n');
+};
+
+// Assembled from whatever the product actually carries. fabric_details is free
+// text typed into the admin panel and is blank on plenty of SKUs, so it is cut
+// to its first sentence and dropped entirely when missing rather than leaving a
+// dangling clause in the search snippet.
+const productDescription = (p) => {
+  const fabric = decodeHtml(p.fabric_details || '').split(/[.\n]/)[0].trim();
+  return [
+    `${p.name} — wholesale ${(p.category_name || 'denim').toLowerCase()} from Pronoun Jeans, Ahmedabad.`,
+    fabric && `${fabric}.`,
+    `Sold in size sets, MOQ ${p.moq} unit${p.moq === 1 ? '' : 's'}, with pan-India dispatch for retailers.`,
+  ].filter(Boolean).join(' ');
 };
 
 const Toast = ({ onDone }) => {
@@ -254,13 +268,27 @@ const ProductDetail = () => {
     } finally { setSubmitting(false); }
   };
 
+  // Both states below are real, crawlable states of this URL, so neither may be
+  // a page without a title. The miss is a soft 404 — noindex keeps a dead slug
+  // from being indexed as a thin product page.
   if (loading) return (
     <div className="flex items-center justify-center min-h-screen bg-gray-50 dark:bg-zinc-950">
+      <Seo
+        title="Wholesale Jeans & Denim — Bulk Size Sets"
+        description="Wholesale men's jeans, cargos and joggers from Pronoun Jeans, a B2B denim manufacturer in Ahmedabad. Bulk size sets, MOQ pricing, pan-India dispatch."
+        canonical={`/product/${slug}`}
+      />
       <Loader className="animate-spin text-accent w-10 h-10" />
     </div>
   );
   if (!product) return (
     <div className="flex items-center justify-center min-h-screen bg-gray-50 dark:bg-zinc-950">
+      <Seo
+        title="Product Not Found"
+        description="This product is no longer listed. Browse the Pronoun Jeans wholesale catalogue for current men's jeans, cargo pants and joggers available in bulk."
+        canonical={`/product/${slug}`}
+        noindex
+      />
       <p className="text-gray-500 dark:text-zinc-400">Product not found.</p>
     </div>
   );
@@ -269,6 +297,13 @@ const ProductDetail = () => {
 
   return (
     <div className="bg-gray-50 dark:bg-zinc-950 min-h-screen">
+      <Seo
+        title={`${product.name} — Wholesale ${product.category_name || 'Denim'}`}
+        description={productDescription(product)}
+        canonical={`/product/${product.slug}`}
+        image={product.image}
+        type="product"
+      />
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
 
         <button onClick={() => navigate(-1)} className="flex items-center gap-2 text-accent hover:text-red-700 transition-colors mb-6 text-sm font-semibold">

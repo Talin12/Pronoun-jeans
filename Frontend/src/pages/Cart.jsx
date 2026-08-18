@@ -12,6 +12,7 @@ import api from '../api/axios';
 import ResponsiveImage from '../components/shared/ResponsiveImage';
 import { useCartStore } from '../store/useCartStore';
 import { useAuthStore } from '../store/useAuthStore';
+import Seo from '../components/seo/Seo';
 
 const UPI_ID        = 'pronoun@kotak';
 const BUSINESS_NAME = 'Pronoun Jeans';
@@ -914,6 +915,12 @@ const Cart = () => {
 
   return (
     <div className="bg-gray-50 dark:bg-zinc-950 min-h-screen p-6 lg:p-12">
+      <Seo
+        title="Your Cart"
+        description="Review the size sets in your Pronoun Jeans wholesale cart and complete your bulk order."
+        canonical="/cart"
+        noindex
+      />
       <div className="max-w-7xl mx-auto">
         <div className="flex items-center gap-3 mb-8">
           <ShoppingCart className="w-7 h-7 text-accent" />

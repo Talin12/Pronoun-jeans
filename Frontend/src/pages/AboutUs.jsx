@@ -1,12 +1,19 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ArrowRight } from 'lucide-react';
+import Seo from '../components/seo/Seo';
 
 const AboutUs = () => {
   const navigate = useNavigate();
 
   return (
     <div className="bg-gray-50 dark:bg-zinc-950 min-h-screen">
+
+      <Seo
+        title="About Pronoun Jeans — Denim Manufacturer, Ahmedabad"
+        description="Pronoun Jeans manufactures men's denim and casual bottomwear in Ahmedabad, working with long-standing mills and tailors to supply retailers across India."
+        canonical="/about"
+      />
 
       {/* Hero */}
       <div className="max-w-4xl mx-auto px-6 py-24 text-center">

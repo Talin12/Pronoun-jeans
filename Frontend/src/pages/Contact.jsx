@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { MapPin, Phone, Mail, Send, Loader2 } from 'lucide-react';
+import Seo from '../components/seo/Seo';
 
 const Contact = () => {
   const [form, setForm]       = useState({ name: '', email: '', company: '', message: '' });
@@ -12,6 +13,11 @@ const Contact = () => {
 
   return (
     <div className="bg-gray-50 dark:bg-zinc-950 min-h-screen">
+      <Seo
+        title="Contact — Wholesale Enquiries & Bulk Orders"
+        description="Contact Pronoun Jeans, Ahmedabad, for wholesale enquiries and bulk orders. Call +91 93751 43100, message us on WhatsApp, or send your MOQ requirement."
+        canonical="/contact"
+      />
       <div className="max-w-5xl mx-auto px-6 py-20">
 
         <div className="mb-12 text-center">
