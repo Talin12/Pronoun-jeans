@@ -6,6 +6,7 @@ different URL surfaces with different auth — a fix verified only against
 /admin/medialib/api/* says nothing about what the React panel actually calls.
 """
 
+from decimal import Decimal
 from unittest import mock
 
 from django.contrib.auth import get_user_model
@@ -514,3 +515,102 @@ class SkuFormatTests(TestCase):
                          '574_BLACK_30TO36_4PCS')
         self.assertEqual(build_sku(self.product, self.black, self.size, eight),
                          '574_BLACK_30TO36_8PCS')
+
+
+class SetPricingTests(TestCase):
+    """
+    Per-piece price is the only price entered; the set total is derived.
+
+    b2b_price = per_piece_price × pieces in the breakdown, computed in
+    ProductVariation.save() and read-only over the API so the two cannot
+    disagree.
+    """
+
+    def setUp(self):
+        self.client, self.user = _superuser_client()
+        self.product = Product.objects.create(name='Denim Pant', slug='denim-pant', code='574')
+        self.black   = Color.objects.create(name='Black', hex_code='#000000')
+        self.size    = SizeSet.objects.create(name='30 TO 36')
+        self.four    = SizeSetBreakdown.objects.create(
+            size_set=self.size, label='1x30, 1x32, 1x34, 1x36',
+            breakdown_string='1x30, 1x32, 1x34, 1x36', pieces=4)
+
+    def _create(self, **extra):
+        payload = {
+            'product': self.product.id, 'color_palette': self.black.id,
+            'size_set': self.size.id, 'size_breakdown': self.four.id,
+            'per_piece_price': '250.00', 'stock_quantity': 5,
+        }
+        payload.update(extra)
+        return self.client.post('/api/admin/variations/', payload, format='json')
+
+    def test_set_price_is_per_piece_times_pieces(self):
+        r = self._create()
+        self.assertEqual(r.status_code, 201, r.content)
+        self.assertEqual(r.json()['b2b_price'], '1000.00')      # 250 × 4
+
+    def test_set_mrp_is_derived_too(self):
+        r = self._create(mrp_per_piece='400.00')
+        self.assertEqual(r.status_code, 201, r.content)
+        self.assertEqual(r.json()['mrp'], '1600.00')            # 400 × 4
+
+    def test_a_posted_set_price_is_ignored(self):
+        """b2b_price is read-only — the calculation always wins."""
+        r = self._create(b2b_price='1.00')
+        self.assertEqual(r.status_code, 201, r.content)
+        self.assertEqual(r.json()['b2b_price'], '1000.00')
+
+    def test_per_piece_price_is_required_on_create(self):
+        r = self._create(per_piece_price='')
+        self.assertEqual(r.status_code, 400)
+        self.assertIn('per_piece_price', r.json())
+
+    def test_no_breakdown_counts_as_one_piece(self):
+        r = self._create(size_breakdown=None)
+        self.assertEqual(r.status_code, 201, r.content)
+        self.assertEqual(r.json()['b2b_price'], '250.00')
+
+    def test_changing_the_breakdown_reprices_the_set(self):
+        eight = SizeSetBreakdown.objects.create(
+            size_set=self.size, label='2x30, 2x32, 2x34, 2x36',
+            breakdown_string='2x30, 2x32, 2x34, 2x36', pieces=8)
+        vid = self._create().json()['id']
+
+        r = self.client.patch(f'/api/admin/variations/{vid}/',
+                              {'size_breakdown': eight.id}, format='json')
+        self.assertEqual(r.status_code, 200, r.content)
+        self.assertEqual(r.json()['b2b_price'], '2000.00')      # 250 × 8
+
+    def test_changing_the_per_piece_price_reprices_the_set(self):
+        vid = self._create().json()['id']
+        r = self.client.patch(f'/api/admin/variations/{vid}/',
+                              {'per_piece_price': '300.00'}, format='json')
+        self.assertEqual(r.status_code, 200, r.content)
+        self.assertEqual(r.json()['b2b_price'], '1200.00')      # 300 × 4
+
+    def test_editing_stock_alone_leaves_the_price_alone(self):
+        vid = self._create().json()['id']
+        r = self.client.patch(f'/api/admin/variations/{vid}/',
+                              {'stock_quantity': 99}, format='json')
+        self.assertEqual(r.status_code, 200, r.content)
+        self.assertEqual(r.json()['b2b_price'], '1000.00')
+
+    def test_a_legacy_variant_without_a_per_piece_price_stays_editable(self):
+        """Rows predating this rule must not demand a repricing to edit stock."""
+        legacy = ProductVariation.objects.create(
+            product=self.product, size_set=self.size, sku='LEGACY-1', b2b_price='900.00')
+        r = self.client.patch(f'/api/admin/variations/{legacy.id}/',
+                              {'stock_quantity': 7}, format='json')
+        self.assertEqual(r.status_code, 200, r.content)
+
+    def test_bulk_builder_prices_each_variant_from_its_own_breakdown(self):
+        eight = SizeSetBreakdown.objects.create(
+            size_set=self.size, label='2x30, 2x32, 2x34, 2x36',
+            breakdown_string='2x30, 2x32, 2x34, 2x36', pieces=8)
+        r = self.client.post('/api/admin/variations/bulk/', {
+            'product': self.product.id, 'colors': [self.black.id],
+            'size_sets': [{'size_set': self.size.id, 'size_breakdown': eight.id}],
+            'per_piece_price': '250.00', 'stock_quantity': 5,
+        }, format='json')
+        self.assertEqual(r.status_code, 201, r.content)
+        self.assertEqual(ProductVariation.objects.get().b2b_price, Decimal('2000.00'))

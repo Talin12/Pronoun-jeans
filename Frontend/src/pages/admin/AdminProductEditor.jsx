@@ -35,6 +35,49 @@ const buildSku = (code, colour, sizeSet, pieces) => {
 // Shown beside the product code — placeholders, since no variant exists yet.
 const skuPreview = (code) => `${skuToken(code) || 'SKU'}_COLOUR_SIZESET_nPCS`;
 
+const money = (n) => `₹${Number(n).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+
+/**
+ * The set total, worked out the way ProductVariation.save() does it:
+ * per-piece price × pieces in the chosen breakdown.
+ *
+ * Read-only — the set price is never typed. Shown so the multiplication is
+ * visible before saving rather than a promise in help text.
+ */
+function SetPriceSummary({ perPiece, mrpPerPiece, pieces }) {
+  const n     = Number(pieces) || 1;
+  const price = Number(perPiece);
+  const mrp   = Number(mrpPerPiece);
+
+  if (!price && !mrp) {
+    return (
+      <p className="text-xs text-gray-400 dark:text-zinc-500 mt-2">
+        Set price is calculated automatically — per-piece price × pieces in the breakdown.
+      </p>
+    );
+  }
+  return (
+    <div className="mt-3 rounded-xl bg-gray-50 dark:bg-zinc-800 px-3 py-2.5 text-sm">
+      {price > 0 && (
+        <p className="text-gray-700 dark:text-zinc-300">
+          Set price <span className="font-bold text-accent">{money(price * n)}</span>
+          <span className="text-xs text-gray-400 dark:text-zinc-500"> — {money(price)} × {n} pc{n === 1 ? '' : 's'}</span>
+        </p>
+      )}
+      {mrp > 0 && (
+        <p className="text-gray-500 dark:text-zinc-400 text-xs mt-0.5">
+          Set MRP <span className="font-semibold">{money(mrp * n)}</span> — {money(mrp)} × {n} pc{n === 1 ? '' : 's'}
+        </p>
+      )}
+      {!pieces && (
+        <p className="text-xs text-amber-600 dark:text-amber-400 mt-1">
+          No breakdown chosen — counted as 1 piece.
+        </p>
+      )}
+    </div>
+  );
+}
+
 const STEPS = [
   { key: 'base',     label: 'Base Details',       icon: FileText },
   { key: 'images',   label: 'Images',             icon: ImageIcon },
@@ -546,10 +589,11 @@ function VariantForm({ productId, productCode, colors, sizeSets, onColorsChange,
           <input type="number" min="0" className={inputCls} value={v.stock_quantity} onChange={e => set('stock_quantity', e.target.value)} />
         </div>
       </div>
-      <p className="text-xs text-gray-400 dark:text-zinc-500 mt-2">Set total price = per-piece × pieces in the breakdown (calculated automatically).</p>
+      <SetPriceSummary perPiece={v.per_piece_price} mrpPerPiece={v.mrp_per_piece}
+                       pieces={breakdowns.find(b => b.id === Number(v.size_breakdown))?.pieces} />
       <div className="flex justify-end gap-2 mt-4">
         <button onClick={onCancel} className={btnGhost}>Cancel</button>
-        <button onClick={save} disabled={saving || !v.sku} className={btnPrimary}>
+        <button onClick={save} disabled={saving || !v.per_piece_price} className={btnPrimary}>
           {saving ? <Loader size={15} className="animate-spin" /> : <Check size={15} />} Save variant
         </button>
       </div>

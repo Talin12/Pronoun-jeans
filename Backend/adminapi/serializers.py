@@ -191,8 +191,11 @@ class ProductVariationSerializer(serializers.ModelSerializer):
             'stock_quantity', 'image', 'image_url',
         ]
         extra_kwargs = {
-            'b2b_price': {'required': False},
-            'mrp':       {'required': False},
+            # Set totals are derived — per-piece price × pieces in the breakdown,
+            # computed in ProductVariation.save(). Read-only so there is exactly
+            # one way to price a variant and the two can never disagree.
+            'b2b_price': {'read_only': True},
+            'mrp':       {'read_only': True},
             'sku':       {'required': False, 'allow_blank': True},
             'image':     {'write_only': True, 'required': False},
         }
@@ -232,16 +235,17 @@ class ProductVariationSerializer(serializers.ModelSerializer):
                     'sku': 'Could not build a SKU — pick a product first.',
                 })
 
-        # b2b_price auto-fills from per_piece_price × pieces in the model, but one
-        # of the two must exist because b2b_price is required at the DB level.
+        # The set total is computed from the per-piece price, so that price is
+        # the one required input. Variants predating this rule may carry a
+        # b2b_price with no per-piece figure — those stay editable (a stock
+        # edit must not demand a repricing), but a new one has to have it.
         per_piece = attrs.get('per_piece_price',
                               getattr(self.instance, 'per_piece_price', None))
-        b2b       = attrs.get('b2b_price',
-                              getattr(self.instance, 'b2b_price', None))
-        if per_piece in (None, '') and b2b in (None, ''):
+        existing_total = getattr(self.instance, 'b2b_price', None)
+        if per_piece in (None, '') and existing_total in (None, ''):
             raise serializers.ValidationError({
-                'per_piece_price': 'Enter a per-piece price (the total is calculated '
-                                   'automatically) or fill in the total price directly.'
+                'per_piece_price': 'Enter a per-piece price — the set total is '
+                                   'calculated from it.',
             })
         return attrs
 

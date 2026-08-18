@@ -9,6 +9,8 @@ import { LibraryModal } from './MediaPicker';
 const labelCls = 'block text-xs font-bold uppercase tracking-wide text-gray-500 dark:text-zinc-400 mb-1.5';
 // text-base on phones: anything under 16px makes iOS Safari zoom in on focus.
 const inputCls = 'w-full px-3 py-2.5 rounded-xl border border-gray-200 dark:border-white/10 bg-gray-50 dark:bg-zinc-800 text-base sm:text-sm text-gray-900 dark:text-zinc-100 focus:outline-none focus:ring-2 focus:ring-accent/40';
+
+const money = (n) => `₹${Number(n).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 const btnPrimary = 'inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-accent text-white text-sm font-bold hover:brightness-110 transition disabled:opacity-50';
 const btnGhost   = 'inline-flex items-center gap-2 px-5 py-2.5 rounded-xl border border-gray-200 dark:border-white/10 text-sm font-bold text-gray-600 dark:text-zinc-300 hover:bg-gray-50 dark:hover:bg-white/5 transition';
 
@@ -64,6 +66,20 @@ export default function BulkVariantBuilder({
 
   const colorName = (id) => colors.find(c => c.id === id)?.name || '—';
   const sizeName  = (id) => sizeSets.find(s => s.id === id)?.name || '—';
+
+  // Pieces for a chosen breakdown — 1 when the set has none, matching
+  // ProductVariation.pieces on the server.
+  const piecesFor = (size) => {
+    if (!size) return 1;
+    const set = sizeSets.find(s => s.id === size.size_set);
+    return set?.breakdowns?.find(b => b.id === Number(size.size_breakdown))?.pieces || 1;
+  };
+
+  // The set total for one row: per-piece price × that row's pieces.
+  const rowSetPrice = (combo) => {
+    const per = Number(price.per_piece_price);
+    return per > 0 ? per * piecesFor(combo.size) : null;
+  };
 
   const stepIndex = STEPS.findIndex(s => s.key === step);
   const canNext =
@@ -281,11 +297,16 @@ export default function BulkVariantBuilder({
                       {c.color !== null ? colorName(c.color) : 'No colour'}
                       {c.size ? ` · ${sizeName(c.size.size_set)}` : ''}
                     </span>
-                    {(imgs[c.color] || []).length > 0 && (
-                      <span className="ml-auto text-xs text-gray-400 shrink-0">
-                        {imgs[c.color].length} image{imgs[c.color].length !== 1 ? 's' : ''}
-                      </span>
-                    )}
+                    <span className="ml-auto flex items-center gap-2 shrink-0">
+                      {(imgs[c.color] || []).length > 0 && (
+                        <span className="text-xs text-gray-400">
+                          {imgs[c.color].length} image{imgs[c.color].length !== 1 ? 's' : ''}
+                        </span>
+                      )}
+                      {rowSetPrice(c) !== null && (
+                        <span className="text-xs font-bold text-accent">{money(rowSetPrice(c))}</span>
+                      )}
+                    </span>
                   </li>
                 ))}
               </ul>
