@@ -19,16 +19,24 @@ from django.template.defaultfilters import filesizeformat
 from PIL import Image, ImageOps
 
 # Reject anything above this outright — even compression shouldn't have to
-# chew through a file this big.
-MAX_UPLOAD_BYTES = 25 * 1024 * 1024
+# chew through a file this big. Set well above real camera output (48 MP RAW-to-
+# JPEG exports land ~20–40 MB) so those uploads reach the compressor instead of
+# being bounced before it can shrink them under Cloudinary's 10 MB limit.
+MAX_UPLOAD_BYTES = 50 * 1024 * 1024
 
-# Long-edge cap and re-encode quality for stored images.
-MAX_DIMENSION = 2500
-JPEG_QUALITY = 85
-WEBP_QUALITY = 90
+# Long-edge cap and re-encode quality for stored images. 3840 px (4K) is far
+# larger than any storefront display size, and q90 is the visually-lossless
+# threshold — together they keep a re-encoded 40 MB photo comfortably under
+# Cloudinary's 10 MB cap while staying indistinguishable from the original.
+MAX_DIMENSION = 3840
+JPEG_QUALITY = 90
+WEBP_QUALITY = 92
 
-# Files already below this size AND within MAX_DIMENSION are stored as-is.
-PASSTHROUGH_BYTES = int(2.5 * 1024 * 1024)
+# Files already below this size AND within MAX_DIMENSION are stored BYTE-FOR-BYTE
+# unchanged (zero re-encode, zero quality loss). Held just under Cloudinary's
+# 10 MB free-tier limit so the only images we ever recompress are the ones that
+# genuinely can't fit otherwise.
+PASSTHROUGH_BYTES = 9 * 1024 * 1024
 
 
 def validate_image_upload(file):

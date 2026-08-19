@@ -29,7 +29,7 @@ from django.apps import apps
 from django.db.models import Q
 from PIL import Image
 
-from core.utils.images import compress_image
+from core.utils.images import MAX_UPLOAD_BYTES, compress_image
 from . import storage
 from .models import MediaAsset, MediaAttachment
 
@@ -44,7 +44,9 @@ _FORMAT_TO_MIME = {
     'AVIF': 'image/avif',
 }
 
-MAX_UPLOAD_BYTES = 15 * 1024 * 1024  # 15 MB
+# Single source of truth: the same outright-reject ceiling CompressedImageField
+# enforces. The compressor (shared with that field) then shrinks anything under
+# this to fit Cloudinary, so the two paths never disagree on what's accepted.
 
 
 class MediaValidationError(Exception):
