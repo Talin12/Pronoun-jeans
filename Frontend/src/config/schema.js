@@ -198,7 +198,43 @@ export function productSchema(product) {
   const sku = variations.find((v) => v.sku)?.sku;
   if (sku) schema.sku = sku;
 
+  const videos = productVideoSchema(product);
+  if (videos.length) schema.video = videos;
+
   return schema;
+}
+
+/**
+ * VideoObject entries for a product's gallery videos.
+ *
+ * Google indexes these separately from the product itself — a garment clip can
+ * surface in video search and carry a thumbnail into the product result, which
+ * a photo gallery alone cannot earn. Every required property has to be real:
+ * `name`, `description`, `thumbnailUrl` and `uploadDate` are all mandatory, so
+ * a video missing any of them is dropped rather than published half-formed.
+ */
+function productVideoSchema(product) {
+  return (product.library_media ?? [])
+    .filter((att) => att.media?.media_type === 'video')
+    .map((att) => att.media)
+    .filter((media) => media.poster_url && media.created_at)
+    .map((media) => {
+      const name = media.title || media.alt_text
+        || `${product.name} — product video`;
+      const video = {
+        '@type': 'VideoObject',
+        name,
+        description: media.alt_text || name,
+        thumbnailUrl: media.poster_url,
+        uploadDate: media.created_at,
+        contentUrl: media.url,
+      };
+      // ISO 8601 duration. Only emitted when we actually know the length —
+      // Cloudinary reports it on upload, but assets ingested another way may
+      // not have it, and a wrong duration is worse than an absent one.
+      if (media.duration) video.duration = `PT${Math.round(media.duration)}S`;
+      return video;
+    });
 }
 
 /** /contact — the same LocalBusiness entity as index.html, enriched with geo. */

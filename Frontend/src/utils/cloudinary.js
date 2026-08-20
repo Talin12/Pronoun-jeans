@@ -39,3 +39,18 @@ export function cldOgUrl(url) {
   if (!isCloudinaryUrl(url)) return null;
   return url.replace('/upload/', '/upload/f_jpg,q_auto,w_1200,h_630,c_fill,g_auto/');
 }
+
+// ── Video ────────────────────────────────────────────────────────────────────
+
+/**
+ * mm:ss for a duration in seconds — the label on a gallery video thumbnail.
+ *
+ * Blank rather than "0:00" when the length is unknown: a video whose duration
+ * the API did not report should show no badge at all, not a badge claiming it
+ * is empty.
+ */
+export function formatDuration(seconds) {
+  if (seconds == null || Number.isNaN(seconds)) return '';
+  const total = Math.round(seconds);
+  return `${Math.floor(total / 60)}:${String(total % 60).padStart(2, '0')}`;
+}

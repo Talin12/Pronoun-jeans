@@ -16,6 +16,13 @@ Flow:
   5. On a miss, upload to storage under a content-addressed key and insert
      the MediaAsset row.
 
+Video takes the same path with steps 1 and 2 swapped for their video
+equivalents: the container is sniffed from the file's own bytes, and nothing is
+re-encoded on the way in — Cloudinary transcodes on delivery, so the bytes we
+hash are the bytes the admin picked. Everything after that (dedup, attachment,
+ordering, the legacy bridge) is deliberately type-agnostic, which is what lets a
+product gallery be one ordered list of mixed media.
+
 Variant generation is NOT a background job: Cloudinary produces derivatives
 on-the-fly from URL transforms, so step 5 just records the transform recipes
 (instant) and the admin upload response stays fast.
@@ -46,6 +53,20 @@ _FORMAT_TO_MIME = {
 
 MAX_UPLOAD_BYTES = 15 * 1024 * 1024  # 15 MB
 
+# Video containers we accept, keyed by the signature we detect rather than by
+# the client-supplied extension. MOV is included because that is what an iPhone
+# hands over, and Cloudinary transcodes it to something the web can play.
+_VIDEO_MIME = {
+    'mp4':  'video/mp4',
+    'webm': 'video/webm',
+    'mov':  'video/quicktime',
+}
+
+# Video is not re-encoded on ingest, so this is a cap on what actually travels
+# over the wire, not on what we store. Sized to Cloudinary's free-tier per-file
+# video limit.
+MAX_VIDEO_UPLOAD_BYTES = 100 * 1024 * 1024  # 100 MB
+
 
 class MediaValidationError(Exception):
     """Raised for a rejected upload; the API layer maps this to HTTP 400."""
@@ -54,6 +75,57 @@ class MediaValidationError(Exception):
 def compute_hash(data):
     """SHA-256 hex digest of the given bytes — the dedup key."""
     return hashlib.sha256(data).hexdigest()
+
+
+def hash_file(file, chunk_size=1024 * 1024):
+    """
+    The same digest as compute_hash(), read a chunk at a time.
+
+    Used for video, where the file can be 100 MB: hashing it as one bytes object
+    would hold the whole upload in a worker that has 512 MB total. Leaves the
+    file rewound for whoever reads it next.
+    """
+    digest = hashlib.sha256()
+    file.seek(0)
+    for chunk in iter(lambda: file.read(chunk_size), b''):
+        digest.update(chunk)
+    file.seek(0)
+    return digest.hexdigest()
+
+
+def sniff_video_container(head):
+    """
+    Identify a video container from its first bytes, or None if it is not one.
+
+    Signature-based rather than extension-based for the same reason the image
+    path decodes rather than trusting Content-Type: the filename and the
+    browser-supplied MIME are both attacker- (and Finder-) controlled, and an
+    upload routed down the wrong branch fails much later and much less clearly.
+    """
+    if head[:4] == b'\x1aE\xdf\xa3':
+        # EBML — Matroska/WebM. Cloudinary transcodes either.
+        return 'webm'
+    if head[4:8] == b'ftyp':
+        # ISO base media: MP4 and QuickTime share a header and differ by brand.
+        return 'mov' if head[8:12] == b'qt  ' else 'mp4'
+    return None
+
+
+def _read_head(file, size=16):
+    file.seek(0)
+    head = file.read(size)
+    file.seek(0)
+    return head
+
+
+def _validate_video(file):
+    """Size cap for a video upload. The container was already sniffed."""
+    size = getattr(file, 'size', None)
+    if size is not None and size > MAX_VIDEO_UPLOAD_BYTES:
+        raise MediaValidationError(
+            f'Video is too large ({size} bytes). '
+            f'Maximum is {MAX_VIDEO_UPLOAD_BYTES} bytes.'
+        )
 
 
 def _validate(file):
@@ -69,7 +141,13 @@ def _validate(file):
         probe = Image.open(file)
         probe.verify()          # verifies signature; invalidates `probe`
     except Exception:
-        raise MediaValidationError('File is not a valid image.')
+        # We get here only after sniff_video_container() said "not a video", so
+        # an unplayable container (AVI, MKV-in-name-only, a .mov that is really
+        # something else) lands here and the message has to cover both kinds.
+        raise MediaValidationError(
+            'File is not a supported image or video. '
+            'Images: JPEG, PNG, WebP, AVIF. Videos: MP4, WebM, MOV.'
+        )
 
     file.seek(0)
     fmt = (Image.open(file).format or '').upper()
@@ -103,12 +181,94 @@ def _final_bytes(file, filename, source_format):
     return raw, filename
 
 
+def _existing_asset(file_hash, categories):
+    """
+    The already-stored asset for this content, or None.
+
+    Shared by both ingest paths: dedup is on the bytes, so it neither knows nor
+    cares whether they are a photo or a clip.
+    """
+    existing = MediaAsset.objects.filter(file_hash=file_hash).first()
+    if existing is None:
+        return None
+    if existing.deleted_at is not None:
+        # Someone re-uploaded a previously soft-deleted file — revive it rather
+        # than creating a hash-colliding row (the unique constraint would reject
+        # that anyway).
+        existing.deleted_at = None
+        existing.save(update_fields=['deleted_at', 'updated_at'])
+    if categories:
+        existing.categories.add(*categories)
+    return existing
+
+
+def _ingest_video(file, container, *, uploaded_by, folder, filename,
+                  title, alt_text, categories):
+    """
+    Ingest one uploaded video. Same contract as ingest_upload().
+
+    Nothing is re-encoded here. Cloudinary produces the playable renditions from
+    URL transforms at delivery time exactly as it does for image derivatives, so
+    an ingest that transcoded would spend a request's worth of CPU producing a
+    file nobody ever fetches.
+
+    Dimensions and duration come from the upload response rather than from
+    probing the file, which keeps ffmpeg off the server's dependency list.
+
+    The file is hashed and uploaded as a stream, never held whole in memory: a
+    100 MB clip read into a bytes object is a fifth of the worker's RAM before
+    Cloudinary's chunker has copied anything.
+    """
+    _validate_video(file)
+
+    file_hash = hash_file(file)
+    existing = _existing_asset(file_hash, categories)
+    if existing is not None:
+        return existing, True
+
+    upload_kwargs = {'public_id': file_hash}
+    if folder:
+        upload_kwargs['folder'] = folder
+    resp = storage.store_video(file, **upload_kwargs)
+
+    storage_key = storage.strip_prefix(resp.get('public_id') or file_hash)
+    width       = resp.get('width')
+    height      = resp.get('height')
+    variants    = storage.build_video_variants(storage_key, original_width=width)
+
+    asset = MediaAsset.objects.create(
+        storage_key       = storage_key,
+        media_type        = 'video',
+        file_hash         = file_hash,
+        original_filename = os.path.basename(filename),
+        mime_type         = _VIDEO_MIME.get(container, 'video/mp4'),
+        width             = width,
+        height            = height,
+        duration          = resp.get('duration'),
+        # Cloudinary reports what it received; getattr is the fallback for a
+        # response shape that omits it.
+        file_size         = resp.get('bytes') or getattr(file, 'size', None),
+        title             = title,
+        alt_text          = alt_text,
+        folder            = folder or '',
+        variants          = variants,
+        uploaded_by       = uploaded_by,
+    )
+    if categories:
+        asset.categories.add(*categories)
+    return asset, False
+
+
 def ingest_upload(file, *, uploaded_by=None, folder=None, filename=None,
                   title='', alt_text='', categories=None):
     """
-    Ingest one uploaded image, deduplicating by content hash.
+    Ingest one uploaded image or video, deduplicating by content hash.
 
-    `categories` is an iterable of Category ids — the library sections the image
+    The kind is decided from the file's own signature, so callers (the Django
+    admin picker, the JWT admin API) stay a single upload endpoint that accepts
+    whatever the admin drops on it.
+
+    `categories` is an iterable of Category ids — the library sections the file
     should appear under. They are ADDED, never replaced, so re-uploading a photo
     into a second section files it under both instead of moving it.
 
@@ -117,22 +277,22 @@ def ingest_upload(file, *, uploaded_by=None, folder=None, filename=None,
     """
     filename = filename or getattr(file, 'name', '') or 'upload'
 
+    container = sniff_video_container(_read_head(file))
+    if container is not None:
+        return _ingest_video(
+            file, container, uploaded_by=uploaded_by, folder=folder,
+            filename=filename, title=title, alt_text=alt_text,
+            categories=categories,
+        )
+
     source_format = _validate(file)
     data, stored_name = _final_bytes(file, filename, source_format)
 
     file_hash = compute_hash(data)
 
     # ── Dedup: does this exact content already exist? ──────────────────────────
-    existing = MediaAsset.objects.filter(file_hash=file_hash).first()
+    existing = _existing_asset(file_hash, categories)
     if existing is not None:
-        if existing.deleted_at is not None:
-            # Someone re-uploaded a previously soft-deleted image — revive it
-            # rather than creating a hash-colliding row (the unique constraint
-            # would reject that anyway).
-            existing.deleted_at = None
-            existing.save(update_fields=['deleted_at', 'updated_at'])
-        if categories:
-            existing.categories.add(*categories)
         return existing, True
 
     # ── New content: store it and record the asset ────────────────────────────
@@ -235,10 +395,25 @@ def attach_assets(attachable_type, attachable_id, media_ids, role='gallery'):
     dropped. Enforcing it server-side also heals entities that ended up with
     several primaries — the next cover pick collapses them back to one.
     """
-    live_ids = set(live_assets().filter(id__in=media_ids).values_list('id', flat=True))
-    missing = [m for m in media_ids if m not in live_ids]
+    live = {a.id: a for a in live_assets().filter(id__in=media_ids)}
+    missing = [m for m in media_ids if m not in live]
     if missing:
         raise ValueError(f'Unknown or deleted media: {missing}')
+
+    # A video can sit in a gallery but never in a single-image slot. The cover,
+    # the category tile and the hero banner are all rendered as <img> and are
+    # what the share card and the catalogue grid read; a video there would show
+    # as a broken image, and for a product it would also empty the legacy
+    # `image` column that the catalogue queryset filters on — quietly delisting
+    # the product. Refuse it here rather than in the UI, since both the Django
+    # admin picker and the JWT API reach this function.
+    if role != 'gallery':
+        videos = [a.original_filename or a.id for a in live.values()
+                  if a.media_type == 'video']
+        if videos:
+            raise ValueError(
+                f'Video can only be added to a gallery, not to the "{role}" slot: {videos}'
+            )
 
     if role == 'primary':
         media_ids = media_ids[:1]
@@ -345,10 +520,16 @@ def sync_legacy(attachable_type, attachable_id, role):
     Model = apps.get_model(cfg['model'])
     field = cfg['field']
 
+    # Images only. The legacy columns are ImageFields, so a video written into
+    # one would break the storefront's <img> and the Django admin's thumbnail
+    # alike — and there is nothing to bridge anyway, because the storefront
+    # reads video straight off the attachments (ProductSerializer.library_media)
+    # rather than from a legacy column.
     atts = list(
         MediaAttachment.objects
         .filter(attachable_type=attachable_type, attachable_id=attachable_id,
-                role=role, media__deleted_at__isnull=True)
+                role=role, media__deleted_at__isnull=True,
+                media__media_type='image')
         .select_related('media').order_by('sort_order', 'id')
     )
     desired = [(a.media.storage_key, a.sort_order, a.media.alt_text or '') for a in atts]

@@ -2,12 +2,14 @@ import React, { useEffect, useState, useMemo, useRef, useCallback } from 'react'
 import { useParams, useNavigate } from 'react-router-dom';
 import {
   ArrowLeft, Loader, BadgeCheck, ShoppingCart,
-  AlertCircle, CheckCircle2, Lock, MoveRight, Info,
+  AlertCircle, CheckCircle2, Lock, MoveRight, Info, Play,
 } from 'lucide-react';
 import api from '../api/axios';
 import { useAuthStore } from '../store/useAuthStore';
 import { useCartStore } from '../store/useCartStore';
 import ResponsiveImage from '../components/shared/ResponsiveImage';
+import ProductVideo from '../components/shared/ProductVideo';
+import { formatDuration } from '../utils/cloudinary';
 import Seo from '../components/seo/Seo';
 import JsonLd from '../components/seo/JsonLd';
 import { productSchema } from '../config/schema';
@@ -206,6 +208,11 @@ const ProductDetail = () => {
   const [showToast, setShowToast]   = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [mainImage, setMainImage]   = useState(null);
+  // The video currently on the stage, or null when the stage shows a photo.
+  // Two pieces of state rather than one "active media" object because the photo
+  // path — zoom, the colour swatches, the srcset — is untouched by video and
+  // stays exactly as simple as it was.
+  const [activeVideo, setActiveVideo] = useState(null);
   const [activeColor, setActiveColor] = useState(null);
 
   useEffect(() => {
@@ -227,8 +234,24 @@ const ProductDetail = () => {
     return [...seen.values()];
   }, [product]);
 
+  // Videos come from the media library rather than from gallery_images: the
+  // legacy columns are ImageFields and can only ever hold photos. They are
+  // product-level, so they stay in the strip whichever colour is selected —
+  // a fabric or fit clip describes the garment, not one colourway, and hiding
+  // it behind a swatch would make it unreachable from the default view.
+  const videos = useMemo(() => (
+    (product?.library_media ?? [])
+      .filter(att => att.media?.media_type === 'video')
+      .map(att => ({ ...att.media, key: `vid-${att.id}` }))
+  ), [product]);
+
+  // Picking a photo leaves the video stage; picking a video does not disturb
+  // which photo is behind it, so returning to the strip lands where it was.
+  const showImage = (src) => { setActiveVideo(null); setMainImage(src); };
+
   const handleSwatchClick = (colorName) => {
     setActiveColor(colorName);
+    setActiveVideo(null);
     const match = product.variations.find(v => (v.color_name || v.color) === colorName);
     if (!match) { setMainImage(product.image); return; }
     // prefer first gallery image, fall back to the single variation image, then product image
@@ -317,7 +340,19 @@ const ProductDetail = () => {
         <div className="flex flex-col lg:flex-row gap-8 items-start">
 
           <div className="w-full lg:w-96 xl:w-[420px] shrink-0">
-            <ZoomableImage src={mainImage} alt={imageAlt(product)} />
+            {activeVideo ? (
+              // Keyed on the asset so switching clips remounts the player
+              // instead of leaving the previous one's position and play state
+              // attached to a new source.
+              <ProductVideo
+                key={activeVideo.key}
+                sources={activeVideo.sources}
+                poster={activeVideo.poster_url}
+                title={activeVideo.alt_text || imageAlt(product)}
+              />
+            ) : (
+              <ZoomableImage src={mainImage} alt={imageAlt(product)} />
+            )}
 
             {(() => {
               // When a color is active, collect all images for that color's variations
@@ -340,16 +375,38 @@ const ProductDetail = () => {
                 );
               }
 
-              if (thumbs.length === 0) return null;
+              if (thumbs.length === 0 && videos.length === 0) return null;
               return (
                 <div className="flex gap-3 mt-4 overflow-x-auto pb-2">
                   {thumbs.map(t => (
-                    <button key={t.key} onClick={() => setMainImage(t.src)}
-                      className={`w-20 h-20 shrink-0 rounded-xl overflow-hidden border-2 transition-all ${mainImage === t.src ? 'border-accent' : 'border-transparent hover:border-gray-300 dark:hover:border-zinc-600'}`}>
+                    <button key={t.key} onClick={() => showImage(t.src)}
+                      className={`w-20 h-20 shrink-0 rounded-xl overflow-hidden border-2 transition-all ${!activeVideo && mainImage === t.src ? 'border-accent' : 'border-transparent hover:border-gray-300 dark:hover:border-zinc-600'}`}>
                       {/* 80px on screen — a 200px derivative, not the original. */}
                       <ResponsiveImage src={t.src} alt={t.alt} widths={[200, 400]} sizes="80px"
                         className="w-full h-full object-cover"
                         onError={(e) => { e.target.style.display = 'none'; }} />
+                    </button>
+                  ))}
+
+                  {/* Videos sit after the photos, marked as videos. thumb_url is
+                      a poster frame, so this is still an <img> — the play badge
+                      and the length are what say it is not another photo. */}
+                  {videos.map(v => (
+                    <button key={v.key} onClick={() => setActiveVideo(v)}
+                      aria-label={`Play video: ${v.alt_text || imageAlt(product)}`}
+                      className={`relative w-20 h-20 shrink-0 rounded-xl overflow-hidden border-2 transition-all bg-black ${activeVideo?.key === v.key ? 'border-accent' : 'border-transparent hover:border-gray-300 dark:hover:border-zinc-600'}`}>
+                      <img src={v.thumb_url} alt="" loading="lazy"
+                        className="w-full h-full object-cover opacity-80" />
+                      <span className="absolute inset-0 flex items-center justify-center">
+                        <span className="w-7 h-7 rounded-full bg-white/85 flex items-center justify-center">
+                          <Play className="w-3.5 h-3.5 text-gray-900 fill-gray-900 ml-0.5" />
+                        </span>
+                      </span>
+                      {formatDuration(v.duration) && (
+                        <span className="absolute bottom-1 right-1 text-[10px] font-bold text-white bg-black/70 px-1 rounded">
+                          {formatDuration(v.duration)}
+                        </span>
+                      )}
                     </button>
                   ))}
                 </div>
@@ -379,7 +436,7 @@ const ProductDetail = () => {
                       );
                     })}
                     {activeColor && (
-                      <button onClick={() => { setActiveColor(null); setMainImage(product.image); }}
+                      <button onClick={() => { setActiveColor(null); showImage(product.image); }}
                         className="text-xs text-gray-400 hover:text-accent transition-colors self-center ml-1">
                         Reset
                       </button>

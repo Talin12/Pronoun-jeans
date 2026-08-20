@@ -7,7 +7,7 @@ from django.db.models import ProtectedError
 from django.test import TestCase
 from PIL import Image
 
-from . import services
+from . import presenters, services, storage
 from .models import MediaAsset, MediaAttachment
 
 
@@ -159,6 +159,227 @@ class IngestUploadTests(TestCase):
         with self.assertRaises(services.MediaValidationError):
             services.ingest_upload(bmp)
         store_mock.assert_not_called()
+
+
+# ── Video ─────────────────────────────────────────────────────────────────
+
+# Container headers, which is all sniff_video_container reads. The rest of the
+# file is padding: nothing on the ingest path decodes a video.
+MP4_HEADER  = b'\x00\x00\x00\x20ftypisom'
+MOV_HEADER  = b'\x00\x00\x00\x14ftypqt  '
+WEBM_HEADER = b'\x1a\x45\xdf\xa3'
+
+
+def make_video(name='fit.mp4', header=MP4_HEADER, tail=b'\x00' * 64):
+    return SimpleUploadedFile(name, header + tail, content_type='video/mp4')
+
+
+def _fake_store_video(fileobj, public_id, folder=storage.MEDIA_FOLDER):
+    # Mirrors store_video: the folder is baked into the public_id it reports.
+    key = f'{storage.delivery_id(folder)}/{public_id}' if folder else public_id
+    return {'public_id': key, 'secure_url': f'https://cdn.test/{key}',
+            'width': 1080, 'height': 1920, 'duration': 12.5,
+            'bytes': len(fileobj.read())}
+
+
+def _fake_video_variants(storage_key, original_width=None):
+    return {
+        'mp4':          f'https://cdn.test/f_mp4/{storage_key}',
+        'webm':         f'https://cdn.test/f_webm/{storage_key}',
+        'poster':       f'https://cdn.test/poster/{storage_key}.jpg',
+        'poster_thumb': f'https://cdn.test/poster_200/{storage_key}.jpg',
+        'original':     f'https://cdn.test/{storage_key}',
+    }
+
+
+class SniffVideoContainerTests(TestCase):
+    def test_recognises_the_containers_we_accept(self):
+        self.assertEqual(services.sniff_video_container(MP4_HEADER), 'mp4')
+        self.assertEqual(services.sniff_video_container(WEBM_HEADER), 'webm')
+
+    def test_quicktime_brand_is_distinguished_from_mp4(self):
+        """MOV and MP4 share the ftyp header and differ only by brand."""
+        self.assertEqual(services.sniff_video_container(MOV_HEADER), 'mov')
+
+    def test_an_image_is_not_a_video(self):
+        self.assertIsNone(services.sniff_video_container(make_image_bytes()[:16]))
+
+
+@mock.patch('medialib.storage.build_video_variants', side_effect=_fake_video_variants)
+@mock.patch('medialib.storage.store_video', side_effect=_fake_store_video)
+class IngestVideoTests(TestCase):
+    def test_new_video_creates_a_video_asset(self, store_mock, variants_mock):
+        asset, deduped = services.ingest_upload(make_video())
+
+        self.assertFalse(deduped)
+        self.assertEqual(asset.media_type, 'video')
+        self.assertEqual(asset.mime_type, 'video/mp4')
+        self.assertEqual(asset.duration, 12.5)
+        self.assertEqual((asset.width, asset.height), (1080, 1920))
+        self.assertEqual(asset.file_size, len(MP4_HEADER) + 64)
+        self.assertIn('poster', asset.variants)
+        store_mock.assert_called_once()
+
+    def test_the_upload_is_streamed_not_buffered(self, store_mock, variants_mock):
+        """store_video gets the file object itself. Reading a 100 MB clip into
+        a bytes object first is a fifth of the worker's RAM."""
+        services.ingest_upload(make_video())
+        sent = store_mock.call_args.args[0]
+        self.assertTrue(hasattr(sent, 'read'))
+        self.assertNotIsInstance(sent, bytes)
+
+    def test_video_does_not_go_through_the_image_pipeline(self, store_mock, variants_mock):
+        """A clip must never reach store_image — it would upload as the wrong
+        Cloudinary resource type and then deliver a broken URL."""
+        with mock.patch('medialib.storage.store_image') as image_mock:
+            services.ingest_upload(make_video())
+        image_mock.assert_not_called()
+
+    def test_quicktime_upload_records_its_own_mime(self, store_mock, variants_mock):
+        asset, _ = services.ingest_upload(make_video(name='clip.mov', header=MOV_HEADER))
+        self.assertEqual(asset.mime_type, 'video/quicktime')
+
+    def test_duplicate_video_is_deduped(self, store_mock, variants_mock):
+        first, _ = services.ingest_upload(make_video(name='a.mp4'))
+        second, deduped = services.ingest_upload(make_video(name='b.mp4'))
+
+        self.assertTrue(deduped)
+        self.assertEqual(first.pk, second.pk)
+        store_mock.assert_called_once()
+
+    def test_oversized_video_is_rejected(self, store_mock, variants_mock):
+        big = make_video()
+        big.size = services.MAX_VIDEO_UPLOAD_BYTES + 1
+        with self.assertRaises(services.MediaValidationError):
+            services.ingest_upload(big)
+        store_mock.assert_not_called()
+
+    def test_video_over_the_image_cap_is_still_accepted(self, store_mock, variants_mock):
+        """The image cap is 15 MB. A video is allowed far past it — applying the
+        image limit to a clip is what would reject every real upload."""
+        clip = make_video()
+        clip.size = services.MAX_UPLOAD_BYTES + 1
+        asset, _ = services.ingest_upload(clip)
+        self.assertEqual(asset.media_type, 'video')
+
+    def test_unplayable_container_is_rejected(self, store_mock, variants_mock):
+        avi = SimpleUploadedFile('x.avi', b'RIFF\x00\x00\x00\x00AVI LIST',
+                                 content_type='video/x-msvideo')
+        with self.assertRaises(services.MediaValidationError):
+            services.ingest_upload(avi)
+        store_mock.assert_not_called()
+
+
+class StoreVideoTests(TestCase):
+    """The storage seam itself, with Cloudinary's uploader mocked out."""
+
+    @mock.patch('cloudinary.uploader.upload_large')
+    def test_folder_is_baked_into_the_public_id(self, upload_mock):
+        """Regression: upload_large re-sends public_id on every chunk after the
+        first. A `folder` left in the options is then applied a second time, so
+        a video over one chunk lands at media/x/media/x/<hash> and every URL we
+        build for it 404s."""
+        upload_mock.return_value = {'public_id': 'media/media_library/abc'}
+        storage.store_video(io.BytesIO(b'clip'), 'abc')
+
+        _, kwargs = upload_mock.call_args
+        self.assertNotIn('folder', kwargs)
+        self.assertEqual(kwargs['public_id'], 'media/media_library/abc')
+        self.assertEqual(kwargs['resource_type'], 'video')
+        self.assertFalse(kwargs['overwrite'])
+
+    @mock.patch('cloudinary.uploader.upload_large')
+    def test_a_custom_folder_lands_under_the_delivery_prefix(self, upload_mock):
+        upload_mock.return_value = {'public_id': 'x'}
+        storage.store_video(io.BytesIO(b'clip'), 'abc', folder='products/gallery')
+
+        _, kwargs = upload_mock.call_args
+        self.assertEqual(kwargs['public_id'], 'media/products/gallery/abc')
+        # …and strips back to the key convention the legacy bridge expects.
+        self.assertEqual(storage.strip_prefix(kwargs['public_id']),
+                         'products/gallery/abc')
+
+
+class VideoPresenterTests(TestCase):
+    def _video(self, **kw):
+        defaults = dict(
+            storage_key='media/media_library/vid', file_hash='d' * 64,
+            media_type='video', mime_type='video/mp4', duration=8.0,
+            variants=_fake_video_variants('media/media_library/vid'),
+        )
+        defaults.update(kw)
+        return MediaAsset.objects.create(**defaults)
+
+    def test_thumbnail_is_a_poster_frame(self):
+        """Every existing grid renders thumb_url into an <img>; for a video that
+        has to be a still, or all of them break at once."""
+        data = presenters.serialize_asset(self._video())
+        self.assertEqual(data['media_type'], 'video')
+        self.assertIn('poster_200', data['thumb_url'])
+
+    def test_sources_are_offered_webm_first_then_mp4(self):
+        data = presenters.serialize_asset(self._video())
+        self.assertEqual([s['type'] for s in data['sources']],
+                         ['video/webm', 'video/mp4'])
+        self.assertEqual(data['duration'], 8.0)
+
+    def test_images_carry_no_video_keys(self):
+        """Clients branch on media_type, not on the presence of null fields."""
+        image = MediaAsset.objects.create(storage_key='media/img', file_hash='e' * 64)
+        data = presenters.serialize_asset(image)
+        self.assertEqual(data['media_type'], 'image')
+        self.assertNotIn('sources', data)
+        self.assertNotIn('duration', data)
+
+
+class VideoAttachmentTests(TestCase):
+    def setUp(self):
+        from products.models import Product
+        self.product = Product.objects.create(name='Cargo', slug='cargo')
+        self.video = MediaAsset.objects.create(
+            storage_key='media/media_library/clip', file_hash='f' * 64,
+            media_type='video', mime_type='video/mp4', original_filename='clip.mp4',
+        )
+        self.image = MediaAsset.objects.create(
+            storage_key='media/products/gallery/shot', file_hash='1' * 64,
+            mime_type='image/jpeg', original_filename='shot.jpg',
+        )
+
+    def test_video_in_a_gallery_creates_no_legacy_image_row(self):
+        """The legacy columns are ImageFields. A video written into one is a
+        broken <img> on the storefront and in the Django admin alike."""
+        from products.models import ProductImage
+        services.attach_assets('product', self.product.id,
+                               [self.image.id, self.video.id], 'gallery')
+
+        rows = list(ProductImage.objects.filter(product=self.product))
+        self.assertEqual([r.image.name for r in rows],
+                         ['media/products/gallery/shot'])
+        # The attachment itself is real — only the legacy mirror skips it.
+        self.assertEqual(
+            MediaAttachment.objects.filter(attachable_type='product',
+                                           attachable_id=self.product.id).count(), 2)
+
+    def test_detaching_the_image_does_not_disturb_the_video(self):
+        from products.models import ProductImage
+        services.attach_assets('product', self.product.id,
+                               [self.image.id, self.video.id], 'gallery')
+        services.detach_assets('product', self.product.id, media_id=self.image.id)
+
+        self.assertFalse(ProductImage.objects.filter(product=self.product).exists())
+        self.assertTrue(MediaAttachment.objects.filter(media=self.video).exists())
+
+    def test_video_is_refused_as_a_cover(self):
+        """A video in the single-image slot would empty Product.image, and the
+        catalogue queryset drops products without one — a silent delisting."""
+        with self.assertRaises(ValueError):
+            services.attach_assets('product', self.product.id, [self.video.id], 'primary')
+        self.assertFalse(MediaAttachment.objects.filter(media=self.video).exists())
+
+    def test_image_is_still_accepted_as_a_cover(self):
+        services.attach_assets('product', self.product.id, [self.image.id], 'primary')
+        self.product.refresh_from_db()
+        self.assertEqual(self.product.image.name, 'media/products/gallery/shot')
 
 
 # ── Phase 3: admin API views ──────────────────────────────────────────────────

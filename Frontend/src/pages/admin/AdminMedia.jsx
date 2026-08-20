@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
-  Images, Loader, Search, UploadCloud, FolderTree, X, Check, FolderInput,
+  Images, Loader, Play, Search, UploadCloud, FolderTree, X, Check, FolderInput,
 } from 'lucide-react';
 import {
   listAssets, listMediaSections, uploadAssetsInBatches, categorizeAssets,
@@ -190,17 +190,18 @@ export default function AdminMedia() {
           >
             <UploadCloud size={30} className="mx-auto text-gray-400 mb-2" />
             <p className="text-sm font-semibold text-gray-600 dark:text-zinc-300">
-              Drag images here, or click to browse — uploads go to <span className="text-accent">{activeName}</span>
+              Drag images or videos here, or click to browse — uploads go to <span className="text-accent">{activeName}</span>
             </p>
             <p className="text-xs text-gray-400 mt-1">
-              JPG, PNG, WebP, AVIF · up to 15 MB each · many at once, sent a few at a time
+              JPG, PNG, WebP, AVIF · up to 15 MB each — MP4, WebM, MOV · up to 100 MB each ·
+              many at once, sent a few at a time
             </p>
             {progress && (
               <p className="text-xs font-semibold text-accent mt-2 flex items-center justify-center gap-1.5">
                 <Loader size={12} className="animate-spin" /> {progress}
               </p>
             )}
-            <input ref={fileRef} type="file" multiple accept="image/*" className="hidden"
+            <input ref={fileRef} type="file" multiple accept="image/*,video/*" className="hidden"
               onChange={e => { doUpload(e.target.files); e.target.value = ''; }} />
           </div>
 
@@ -260,7 +261,7 @@ export default function AdminMedia() {
           {!loading && !assets.length ? (
             <div className="text-center py-16 text-gray-400">
               <Images size={38} className="mx-auto mb-3 opacity-40" />
-              <p className="font-semibold">No images in {activeName} yet</p>
+              <p className="font-semibold">Nothing in {activeName} yet</p>
               <p className="text-sm mt-1">Drop files above to upload them straight into this section.</p>
             </div>
           ) : (
@@ -271,8 +272,17 @@ export default function AdminMedia() {
                   className={`relative aspect-square rounded-xl overflow-hidden border-2 transition-all ${
                     selected.has(a.id) ? 'border-accent ring-2 ring-accent/30' : 'border-transparent hover:border-gray-300 dark:hover:border-white/20'
                   }`}>
+                  {/* thumb_url is a poster frame for a video, so the tile is an
+                      <img> either way — the badge is what tells them apart. */}
                   <img src={a.thumb_url} alt={a.alt_text || a.original_filename} loading="lazy"
                     className="w-full h-full object-cover bg-gray-100 dark:bg-zinc-800" />
+                  {a.media_type === 'video' && !selected.has(a.id) && (
+                    <span className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                      <span className="w-8 h-8 rounded-full bg-black/60 flex items-center justify-center">
+                        <Play size={16} className="text-white fill-white ml-0.5" />
+                      </span>
+                    </span>
+                  )}
                   {selected.has(a.id) && (
                     <span className="absolute inset-0 bg-accent/10 flex items-center justify-center">
                       <span className="w-6 h-6 rounded-full bg-accent text-white flex items-center justify-center"><Check size={14} /></span>

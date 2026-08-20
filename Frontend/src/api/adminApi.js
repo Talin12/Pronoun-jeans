@@ -150,6 +150,11 @@ export const uploadAssets = (files, folder, categoryId) => {
  * gunicorn out. A file that is still oversized on its own travels alone, which
  * keeps its failure from taking healthy files down with it.
  *
+ * Videos pass through both stages untouched — compressImage returns anything
+ * that is not an image as-is, and a clip is always over the byte budget, so it
+ * gets a request to itself. That is the behaviour we want: a 60 MB upload
+ * should not be able to take a batch of photos down with it.
+ *
  * Compression renames files (photo.png becomes photo.jpg), so results and
  * errors both carry `sourceFilename` — the name the caller handed in, and the
  * one its queue rows are labelled with.
