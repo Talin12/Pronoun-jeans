@@ -616,6 +616,149 @@ class SetPricingTests(TestCase):
         self.assertEqual(ProductVariation.objects.get().b2b_price, Decimal('2000.00'))
 
 
+class VariantEditTests(TestCase):
+    """
+    Editing one variant on its own.
+
+    The bulk builder prices and stocks a whole colour × size grid identically,
+    which is the right starting point and the wrong finishing one: stock moves
+    per colour, and a size set that costs more to cut is priced per row. These
+    cover the single-variant PATCH the panel's per-row editor uses.
+    """
+
+    def setUp(self):
+        self.client, self.user = _superuser_client()
+        self.product = Product.objects.create(name='Denim Pant', slug='denim-pant', code='574')
+        self.black   = Color.objects.create(name='Black', hex_code='#000000')
+        self.blue    = Color.objects.create(name='Blue', hex_code='#0000ff')
+        self.size    = SizeSet.objects.create(name='30 TO 36')
+        self.four    = SizeSetBreakdown.objects.create(
+            size_set=self.size, label='1x30, 1x32, 1x34, 1x36',
+            breakdown_string='1x30, 1x32, 1x34, 1x36', pieces=4)
+        self.two     = SizeSetBreakdown.objects.create(
+            size_set=self.size, label='1x30, 1x32',
+            breakdown_string='1x30, 1x32', pieces=2)
+        self.variant = ProductVariation.objects.create(
+            product=self.product, color_palette=self.black, size_set=self.size,
+            size_breakdown=self.four, sku='574_BLACK_30TO36_4PCS',
+            per_piece_price=Decimal('250.00'), b2b_price=Decimal('1000.00'),
+            stock_quantity=5,
+        )
+
+    def _patch(self, **data):
+        return self.client.patch(f'/api/admin/variations/{self.variant.id}/',
+                                 data, format='json')
+
+    # ── stock ────────────────────────────────────────────────────────────────
+
+    def test_stock_can_be_edited_on_its_own(self):
+        """The common case: one colour sold out, the rest untouched."""
+        r = self._patch(stock_quantity=42)
+        self.assertEqual(r.status_code, 200, r.content)
+        self.variant.refresh_from_db()
+        self.assertEqual(self.variant.stock_quantity, 42)
+
+    def test_a_stock_edit_does_not_disturb_the_price(self):
+        """ProductVariation.save() recomputes the set total only when a pricing
+        input changed. A stock edit that recalculated would overwrite a
+        deliberately negotiated total with the formula result."""
+        self.variant.b2b_price = Decimal('950.00')      # negotiated, not 250×4
+        self.variant.save(update_fields=['b2b_price'])
+
+        self._patch(stock_quantity=7)
+        self.variant.refresh_from_db()
+        self.assertEqual(self.variant.b2b_price, Decimal('950.00'))
+
+    def test_stock_may_be_set_to_zero(self):
+        r = self._patch(stock_quantity=0)
+        self.assertEqual(r.status_code, 200, r.content)
+        self.variant.refresh_from_db()
+        self.assertEqual(self.variant.stock_quantity, 0)
+
+    # ── pricing ──────────────────────────────────────────────────────────────
+
+    def test_editing_the_per_piece_price_recomputes_the_set_total(self):
+        r = self._patch(per_piece_price='300.00')
+        self.assertEqual(r.status_code, 200, r.content)
+        self.assertEqual(r.json()['b2b_price'], '1200.00')      # 300 × 4
+
+    def test_editing_the_mrp_per_piece_recomputes_the_set_mrp(self):
+        r = self._patch(mrp_per_piece='400.00')
+        self.assertEqual(r.status_code, 200, r.content)
+        self.assertEqual(r.json()['mrp'], '1600.00')            # 400 × 4
+
+    def test_changing_the_breakdown_reprices_the_set(self):
+        """Fewer pieces in the set means a smaller total at the same per-piece
+        price — the panel lets the breakdown be changed, so this has to hold."""
+        r = self._patch(size_breakdown=self.two.id)
+        self.assertEqual(r.status_code, 200, r.content)
+        self.assertEqual(r.json()['b2b_price'], '500.00')       # 250 × 2
+
+    def test_a_posted_set_total_is_still_ignored(self):
+        r = self._patch(b2b_price='1.00')
+        self.assertEqual(r.status_code, 200, r.content)
+        self.variant.refresh_from_db()
+        self.assertEqual(self.variant.b2b_price, Decimal('1000.00'))
+
+    # ── colour and SKU ───────────────────────────────────────────────────────
+
+    def test_changing_the_colour_updates_the_denormalised_name(self):
+        r = self._patch(color_palette=self.blue.id)
+        self.assertEqual(r.status_code, 200, r.content)
+        self.variant.refresh_from_db()
+        self.assertEqual(self.variant.color, 'Blue')
+
+    def test_clearing_the_sku_regenerates_it_from_the_new_colour(self):
+        """A variant recoloured but still called ..._BLACK_... is a picking
+        error waiting to happen. Blanking the field asks for a fresh one."""
+        r = self._patch(color_palette=self.blue.id, sku='')
+        self.assertEqual(r.status_code, 200, r.content)
+        self.assertEqual(r.json()['sku'], '574_BLUE_30TO36_4PCS')
+
+    def test_a_typed_sku_is_kept(self):
+        r = self._patch(sku='CUSTOM-001')
+        self.assertEqual(r.status_code, 200, r.content)
+        self.assertEqual(r.json()['sku'], 'CUSTOM-001')
+
+    def test_editing_a_variant_keeps_its_own_sku_available(self):
+        """Regeneration excludes the row being edited from the taken set —
+        otherwise re-saving an unchanged variant would collide with itself and
+        get a -2 suffix."""
+        r = self._patch(sku='', stock_quantity=9)
+        self.assertEqual(r.status_code, 200, r.content)
+        self.assertEqual(r.json()['sku'], '574_BLACK_30TO36_4PCS')
+
+    def test_a_duplicate_sku_is_refused(self):
+        ProductVariation.objects.create(
+            product=self.product, color_palette=self.blue, size_set=self.size,
+            size_breakdown=self.four, sku='TAKEN-1',
+            per_piece_price=Decimal('250.00'), b2b_price=Decimal('1000.00'))
+        r = self._patch(sku='TAKEN-1')
+        self.assertEqual(r.status_code, 400, r.content)
+
+    def test_moving_a_variant_onto_an_existing_combo_is_refused(self):
+        """(product, size_set, color) is unique. The panel offers colour and
+        size as editable fields, so this collision is reachable from the UI and
+        has to come back as a 400, not a 500."""
+        ProductVariation.objects.create(
+            product=self.product, color_palette=self.blue, size_set=self.size,
+            size_breakdown=self.four, sku='574_BLUE_30TO36_4PCS',
+            per_piece_price=Decimal('250.00'), b2b_price=Decimal('1000.00'))
+
+        r = self._patch(color_palette=self.blue.id, sku='')
+        self.assertEqual(r.status_code, 400, r.content)
+        self.variant.refresh_from_db()
+        self.assertEqual(self.variant.color_palette_id, self.black.id)
+
+    # ── permissions ──────────────────────────────────────────────────────────
+
+    def test_requires_superuser(self):
+        client = APIClient()
+        r = client.patch(f'/api/admin/variations/{self.variant.id}/',
+                         {'stock_quantity': 1}, format='json')
+        self.assertIn(r.status_code, (401, 403))
+
+
 class ProductBaseUpdateTests(TestCase):
     """
     Publishing must carry the Base Details with it.

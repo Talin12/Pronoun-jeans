@@ -3,11 +3,12 @@ import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import {
   ArrowLeft, ArrowRight, Loader, Save, Trash2, Plus, Check, Lock,
   Image as ImageIcon, Layers, FileText, ClipboardCheck, AlertCircle, X, ChevronDown, ChevronUp,
+  Pencil,
 } from 'lucide-react';
 import {
   createProduct, getProduct, updateProduct,
   listCategories, listColors, createColor, listSizeSets, createSizeSet,
-  createVariation, deleteVariation,
+  createVariation, updateVariation, deleteVariation,
   setProductOgImage, clearProductOgImage,
 } from '../../api/adminApi';
 import { SeoSection, FieldHeader, GooglePreview } from '../../components/admin/SeoFields';
@@ -538,7 +539,10 @@ const Row = ({ label, value }) => (
 function VariantsEditor({ productId, productName, productCode, colors, sizeSets, categoryId, variations, onChange, onColorsChange, onSizeSetsChange }) {
   const [adding, setAdding]   = useState(false);
   const [bulk, setBulk]       = useState(false);
-  const [expanded, setExpanded] = useState(null);
+  // Which row has a panel open, and which one: { id, kind: 'edit' | 'images' }.
+  // One at a time — the builder already prices a whole grid at once, and two
+  // half-filled forms open on different rows is how the wrong one gets saved.
+  const [panel, setPanel]     = useState(null);
   const [note, setNote]       = useState('');
   // The builder opens these modals through its own "+ New" buttons.
   const [colorModal, setColorModal] = useState(false);
@@ -547,6 +551,18 @@ function VariantsEditor({ productId, productName, productCode, colors, sizeSets,
   const remove = (vid) => {
     if (!window.confirm('Delete this variant?')) return;
     deleteVariation(vid).then(() => onChange(variations.filter(v => v.id !== vid)));
+  };
+
+  const openPanel = (id, kind) =>
+    setPanel(p => (p?.id === id && p.kind === kind ? null : { id, kind }));
+
+  // The server returns the saved row, including the recalculated set total and
+  // any regenerated SKU — so the summary line updates from what was actually
+  // stored rather than from what was typed.
+  const replaceVariant = (saved) => {
+    onChange(variations.map(v => (v.id === saved.id ? saved : v)));
+    setPanel(null);
+    setNote(`Saved ${saved.sku}`);
   };
 
   return (
@@ -566,15 +582,34 @@ function VariantsEditor({ productId, productName, productCode, colors, sizeSets,
                   </p>
                 </div>
                 <div className="flex items-center gap-1 ml-auto">
-                  <button onClick={() => setExpanded(expanded === v.id ? null : v.id)}
+                  <button onClick={() => { setNote(''); openPanel(v.id, 'edit'); }}
                     className="inline-flex items-center gap-1 px-2 py-2 text-xs font-semibold text-accent hover:underline">
-                    <ImageIcon size={14} /> Images {expanded === v.id ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+                    <Pencil size={14} /> Edit {panel?.id === v.id && panel.kind === 'edit' ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+                  </button>
+                  <button onClick={() => openPanel(v.id, 'images')}
+                    className="inline-flex items-center gap-1 px-2 py-2 text-xs font-semibold text-accent hover:underline">
+                    <ImageIcon size={14} /> Images {panel?.id === v.id && panel.kind === 'images' ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
                   </button>
                   <button onClick={() => remove(v.id)} aria-label="Delete variant"
                     className="p-2 text-gray-400 hover:text-red-500"><Trash2 size={15} /></button>
                 </div>
               </div>
-              {expanded === v.id && (
+              {panel?.id === v.id && panel.kind === 'edit' && (
+                <div className="px-3 pb-3 pt-3 border-t border-gray-100 dark:border-white/5 bg-gray-50/50 dark:bg-white/[0.02]">
+                  {/* Keyed on the row so switching rows remounts the form with
+                      that variant's values instead of carrying the last one's
+                      edits across. */}
+                  <VariantForm
+                    key={v.id}
+                    variation={v}
+                    productId={productId} productCode={productCode}
+                    colors={colors} sizeSets={sizeSets}
+                    onColorsChange={onColorsChange} onSizeSetsChange={onSizeSetsChange}
+                    onCancel={() => setPanel(null)}
+                    onSaved={replaceVariant} />
+                </div>
+              )}
+              {panel?.id === v.id && panel.kind === 'images' && (
                 <div className="px-3 pb-3 pt-1 border-t border-gray-100 dark:border-white/5 bg-gray-50/50 dark:bg-white/[0.02]">
                   <p className="text-xs text-gray-400 dark:text-zinc-500 my-2">Images for this colour/variant:</p>
                   <MediaPicker type="variation" id={v.id} role="gallery" folder="variations/gallery" label="variant images"
@@ -637,11 +672,32 @@ function VariantsEditor({ productId, productName, productCode, colors, sizeSets,
   );
 }
 
-function VariantForm({ productId, productCode, colors, sizeSets, onColorsChange, onSizeSetsChange, onCancel, onSaved }) {
-  const [v, setV] = useState({
-    size_set: '', size_breakdown: '', color_palette: '', sku: '',
-    per_piece_price: '', mrp_per_piece: '', stock_quantity: 0,
-  });
+/**
+ * One variant's details — used both to add a new one and to edit an existing
+ * one in place.
+ *
+ * Pass `variation` to edit: the fields prefill from it and saving PATCHes that
+ * row instead of creating another. One form for both because the fields are the
+ * same fields, and a separate edit form is how the two drift until only one of
+ * them knows that the set total is derived.
+ *
+ * Editing matters because the bulk builder deliberately gives every
+ * combination the same price and stock. That is the right way to start a
+ * product and the wrong way to leave it: stock moves per colour, and a size set
+ * that costs more to cut is priced per row.
+ */
+function VariantForm({ productId, productCode, colors, sizeSets, variation = null,
+                       onColorsChange, onSizeSetsChange, onCancel, onSaved }) {
+  const editing = variation !== null;
+  const [v, setV] = useState(() => ({
+    size_set:        variation?.size_set ?? '',
+    size_breakdown:  variation?.size_breakdown ?? '',
+    color_palette:   variation?.color_palette ?? '',
+    sku:             variation?.sku ?? '',
+    per_piece_price: variation?.per_piece_price ?? '',
+    mrp_per_piece:   variation?.mrp_per_piece ?? '',
+    stock_quantity:  variation?.stock_quantity ?? 0,
+  }));
   const [saving, setSaving] = useState(false);
   const [err, setErr] = useState('');
   const [colorModal, setColorModal] = useState(false);
@@ -664,8 +720,7 @@ function VariantForm({ productId, productCode, colors, sizeSets, onColorsChange,
 
   const save = () => {
     setSaving(true); setErr('');
-    createVariation({
-      product: productId,
+    const payload = {
       size_set: v.size_set || null,
       size_breakdown: v.size_breakdown || null,
       color_palette: v.color_palette || null,
@@ -673,14 +728,21 @@ function VariantForm({ productId, productCode, colors, sizeSets, onColorsChange,
       per_piece_price: v.per_piece_price || null,
       mrp_per_piece: v.mrp_per_piece || null,
       stock_quantity: Number(v.stock_quantity) || 0,
-    }).then(onSaved).catch(e => {
+    };
+    const request = editing
+      ? updateVariation(variation.id, payload)
+      : createVariation({ product: productId, ...payload });
+
+    request.then(onSaved).catch(e => {
       const d = e.response?.data;
       setErr(d ? Object.entries(d).map(([k, val]) => `${k}: ${val}`).join(' • ') : 'Failed to save variant.');
     }).finally(() => setSaving(false));
   };
 
   return (
-    <div className="border border-gray-200 dark:border-white/10 rounded-2xl p-4 bg-gray-50/50 dark:bg-white/[0.02]">
+    // Editing renders inside the row's own panel, which already has a border
+    // and a tint — repeating them boxes the form inside a box.
+    <div className={editing ? '' : 'border border-gray-200 dark:border-white/10 rounded-2xl p-4 bg-gray-50/50 dark:bg-white/[0.02]'}>
       {err && <p className="text-sm text-red-600 dark:text-red-400 mb-3">{err}</p>}
       <div className="grid sm:grid-cols-3 gap-3">
         <div>
@@ -689,6 +751,14 @@ function VariantForm({ productId, productCode, colors, sizeSets, onColorsChange,
               Typing here overrides it for this one variant. */}
           <input className={inputCls} value={v.sku} onChange={e => set('sku', e.target.value.toUpperCase())}
                  placeholder={autoSku || 'Generated automatically'} />
+          {editing && (
+            // A variant recoloured but still called ..._BLACK_... is a picking
+            // error waiting to happen, and the admin has no other way to ask
+            // for a fresh one.
+            <p className="text-[11px] text-gray-400 dark:text-zinc-500 mt-1">
+              Clear it to rebuild from the colour and size set{autoSku ? ` — ${autoSku}` : ''}
+            </p>
+          )}
         </div>
         <div>
           <div className="flex items-center justify-between">
@@ -734,8 +804,15 @@ function VariantForm({ productId, productCode, colors, sizeSets, onColorsChange,
                        pieces={breakdowns.find(b => b.id === Number(v.size_breakdown))?.pieces} />
       <div className="flex justify-end gap-2 mt-4">
         <button onClick={onCancel} className={btnGhost}>Cancel</button>
-        <button onClick={save} disabled={saving || !v.per_piece_price} className={btnPrimary}>
-          {saving ? <Loader size={15} className="animate-spin" /> : <Check size={15} />} Save variant
+        {/* A new variant must be priced. An existing one need not be re-priced
+            to correct its stock — and variants predating the per-piece rule
+            carry a set total with no per-piece figure, so demanding one would
+            lock them out of every other edit. */}
+        <button onClick={save}
+          disabled={saving || (!v.per_piece_price && !(editing && variation.b2b_price))}
+          className={btnPrimary}>
+          {saving ? <Loader size={15} className="animate-spin" /> : <Check size={15} />}
+          {editing ? 'Save changes' : 'Save variant'}
         </button>
       </div>
 

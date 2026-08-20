@@ -225,6 +225,58 @@ class ProductVariationSerializer(serializers.ModelSerializer):
                       .values_list('sku', flat=True)),
         )
 
+    def _resolved(self, attrs, field):
+        """The value a field will have after this write.
+
+        A PATCH omits everything it is not changing, so `attrs.get(field)` alone
+        would read an unchanged colour as "no colour" and wave a real collision
+        through.
+        """
+        if field in attrs:
+            return attrs[field]
+        return getattr(self.instance, field, None) if self.instance else None
+
+    def _check_combo_is_free(self, attrs):
+        """
+        Refuse a second variant with the same product + size set + colour.
+
+        The database enforces this (ProductVariation.Meta.unique_together), but
+        it does so on `color` — the denormalised name that ProductVariation.save()
+        copies off color_palette — and `color` is read-only here, which puts the
+        constraint out of reach of DRF's automatic unique-together validator.
+        Without this check the collision arrives as an IntegrityError, i.e. a
+        500 with no field attached to it.
+
+        The per-variant editor is what makes this reachable: it offers colour
+        and size set as editable dropdowns, so recolouring a variant onto a
+        colour the product already has in that size set is an ordinary slip,
+        not an abuse of the API.
+        """
+        product     = self._resolved(attrs, 'product')
+        size_set    = self._resolved(attrs, 'size_set')
+        palette     = self._resolved(attrs, 'color_palette')
+        # save() only writes `color` when a palette is set, so an untouched
+        # colour on a palette-less row keeps whatever string it already had.
+        color_name  = palette.name if palette else getattr(self.instance, 'color', None)
+
+        # NULL never equals NULL in SQL, so a colourless variant does not
+        # collide with another one — matching the constraint rather than being
+        # stricter than it.
+        if product is None or not color_name:
+            return
+
+        clash = (ProductVariation.objects
+                 .filter(product=product, size_set=size_set, color=color_name)
+                 .exclude(pk=getattr(self.instance, 'pk', None))
+                 .exists())
+        if clash:
+            size_label = size_set.name if size_set else 'no size set'
+            raise serializers.ValidationError({
+                'color_palette': f'{product.name} already has a "{color_name}" '
+                                 f'variant in {size_label}. Edit that one, or '
+                                 f'pick a different colour or size set.',
+            })
+
     def validate(self, attrs):
         # SKUs are generated, not typed — the panel sends a blank one and gets
         # the standard format back.
@@ -236,6 +288,8 @@ class ProductVariationSerializer(serializers.ModelSerializer):
                 raise serializers.ValidationError({
                     'sku': 'Could not build a SKU — pick a product first.',
                 })
+
+        self._check_combo_is_free(attrs)
 
         # The set total is computed from the per-piece price, so that price is
         # the one required input. Variants predating this rule may carry a
