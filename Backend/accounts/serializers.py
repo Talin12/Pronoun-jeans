@@ -124,11 +124,20 @@ class AgentBuyerSerializer(serializers.ModelSerializer):
 
 
 class AddressSerializer(serializers.ModelSerializer):
+    # What a courier or an invoice would actually use: the address's own
+    # contact if one was entered, otherwise the account's. Read-only, so the
+    # panel can show the real answer without having to re-implement the
+    # fallback and drift from it.
+    effective_phone = serializers.CharField(read_only=True)
+    effective_email = serializers.CharField(read_only=True)
+
     class Meta:
         model  = Address
         fields = [
             'id', 'address_line_1', 'address_line_2', 'city', 'state',
-            'pincode', 'is_default_shipping', 'is_default_billing',
+            'pincode', 'contact_phone', 'contact_email',
+            'effective_phone', 'effective_email',
+            'is_default_shipping', 'is_default_billing',
         ]
 
     def create(self, validated_data):

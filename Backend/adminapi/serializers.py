@@ -388,10 +388,17 @@ class ProductDetailSerializer(serializers.ModelSerializer):
 # not offered — deactivating keeps the account's orders intact.
 
 class AddressSerializer(serializers.ModelSerializer):
+    # Resolved through the account's details when the address carries none —
+    # the panel is where support looks up who to ring about a delivery.
+    effective_phone = serializers.CharField(read_only=True)
+    effective_email = serializers.CharField(read_only=True)
+
     class Meta:
         model  = Address
         fields = ['id', 'address_line_1', 'address_line_2', 'city', 'state',
-                  'pincode', 'is_default_shipping', 'is_default_billing']
+                  'pincode', 'contact_phone', 'contact_email',
+                  'effective_phone', 'effective_email',
+                  'is_default_shipping', 'is_default_billing']
 
 
 class AgentProfileSerializer(serializers.ModelSerializer):

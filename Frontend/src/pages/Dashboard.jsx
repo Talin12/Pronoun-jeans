@@ -12,7 +12,19 @@ const TAB_ACCOUNT = 'account';
 
 const EMPTY_ADDRESS = {
   address_line_1: '', address_line_2: '', city: '', state: '',
-  pincode: '', is_default_shipping: false, is_default_billing: false,
+  pincode: '', contact_phone: '', contact_email: '',
+  is_default_shipping: false, is_default_billing: false,
+};
+
+/** Flatten a DRF error body into one readable line. */
+const fieldErrors = (err) => {
+  const data = err.response?.data;
+  if (!data) return '';
+  if (typeof data === 'string') return data;
+  if (data.detail) return data.detail;
+  return Object.entries(data)
+    .map(([field, msgs]) => `${field.replace(/_/g, ' ')}: ${[].concat(msgs).join(' ')}`)
+    .join(' • ');
 };
 
 const STATUS_COLORS = {
@@ -187,7 +199,7 @@ const Addresses = () => {
   const openAdd  = () => { setEditTarget(null); setForm(EMPTY_ADDRESS); setError(''); setShowForm(true); };
   const openEdit = (addr) => {
     setEditTarget(addr.id);
-    setForm({ address_line_1: addr.address_line_1, address_line_2: addr.address_line_2 || '', city: addr.city, state: addr.state, pincode: addr.pincode, is_default_shipping: addr.is_default_shipping, is_default_billing: addr.is_default_billing });
+    setForm({ address_line_1: addr.address_line_1, address_line_2: addr.address_line_2 || '', city: addr.city, state: addr.state, pincode: addr.pincode, contact_phone: addr.contact_phone || '', contact_email: addr.contact_email || '', is_default_shipping: addr.is_default_shipping, is_default_billing: addr.is_default_billing });
     setError(''); setShowForm(true);
   };
   const handleDelete = async (id) => {
@@ -203,7 +215,7 @@ const Addresses = () => {
       if (editTarget) { await api.put(`accounts/addresses/${editTarget}/`, form); }
       else { await api.post('accounts/addresses/', form); }
       setShowForm(false); fetchAddresses();
-    } catch (err) { setError(err.response?.data?.detail || 'Failed to save address.'); }
+    } catch (err) { setError(fieldErrors(err) || 'Failed to save address.'); }
     finally { setSubmitting(false); }
   };
 
@@ -230,6 +242,13 @@ const Addresses = () => {
             <FormInput label="City *"           value={form.city}           onChange={v => setForm(p => ({ ...p, city: v }))} />
             <FormInput label="State *"          value={form.state}          onChange={v => setForm(p => ({ ...p, state: v }))} />
             <FormInput label="Pincode *"        value={form.pincode}        onChange={v => setForm(p => ({ ...p, pincode: v }))} />
+            {/* Optional. Wholesale deliveries often go to a warehouse with its
+                own manager and number while the invoice goes to the office —
+                blank falls back to the account's details. */}
+            <FormInput label="Contact Phone"    value={form.contact_phone}  onChange={v => setForm(p => ({ ...p, contact_phone: v }))}
+                       type="tel"   placeholder="Defaults to your account's number" />
+            <FormInput label="Contact Email"    value={form.contact_email}  onChange={v => setForm(p => ({ ...p, contact_email: v }))}
+                       type="email" placeholder="Defaults to your account's email" />
           </div>
           <div className="flex flex-col sm:flex-row gap-4">
             <label className="flex items-center gap-2 text-gray-600 dark:text-zinc-300 text-sm cursor-pointer">
@@ -263,6 +282,13 @@ const Addresses = () => {
               <p className="text-gray-900 dark:text-zinc-100 font-semibold text-sm pr-20">{addr.address_line_1}</p>
               {addr.address_line_2 && <p className="text-gray-500 dark:text-zinc-400 text-sm">{addr.address_line_2}</p>}
               <p className="text-gray-500 dark:text-zinc-400 text-sm">{addr.city}, {addr.state} — {addr.pincode}</p>
+              {/* effective_*, so the card shows the contact that would actually
+                  be used rather than blanking when the address has none. */}
+              {(addr.effective_phone || addr.effective_email) && (
+                <p className="text-gray-400 dark:text-zinc-500 text-xs mt-1.5">
+                  {[addr.effective_phone, addr.effective_email].filter(Boolean).join(' · ')}
+                </p>
+              )}
               <div className="flex items-center gap-3 mt-4">
                 <button onClick={() => openEdit(addr)} className="flex items-center gap-1 text-xs text-gray-500 hover:text-gray-900 dark:text-zinc-400 dark:hover:text-white transition-colors font-semibold">
                   <Pencil className="w-3 h-3" /> Edit
@@ -386,10 +412,13 @@ const AccountDetails = () => {
   );
 };
 
-const FormInput = ({ label, value, onChange, disabled = false }) => (
+const FormInput = ({ label, value, onChange, disabled = false, type = 'text', placeholder }) => (
   <div>
     <label className="text-gray-500 dark:text-zinc-400 text-xs font-bold uppercase tracking-widest block mb-1.5">{label}</label>
+    {/* type drives the phone/email keypad on mobile — a buyer entering a
+        delivery number on a phone should not be hunting for digits. */}
     <input value={value} onChange={e => onChange(e.target.value)} disabled={disabled}
+      type={type} placeholder={placeholder}
       className="w-full bg-gray-50 dark:bg-zinc-800 border border-gray-200 dark:border-white/10 text-gray-900 dark:text-zinc-100 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-accent transition-colors disabled:opacity-50 disabled:cursor-not-allowed" />
   </div>
 );

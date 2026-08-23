@@ -119,6 +119,12 @@ def generate_invoice_pdf(order):
         if a.address_line_2:
             parts.append(a.address_line_2)
         parts.append(f'{a.city}, {a.state} {a.pincode}')
+        # The delivery contact, resolved through the account when the address
+        # carries none. A shipping block with no number on it is the one a
+        # courier calls the office about.
+        contact = ' · '.join(x for x in (a.effective_phone, a.effective_email) if x)
+        if contact:
+            parts.append(contact)
         ship = Table(
             [[_p('<b>SHIP TO</b>', size=8, color=GREY), _p(', '.join(parts), size=9)]],
             colWidths=['18%', '82%'],

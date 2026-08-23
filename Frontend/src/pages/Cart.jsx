@@ -289,9 +289,22 @@ const CartRow = ({ item, index, onQtyChange, saving }) => {
 
 // ── Address Form ──────────────────────────────────────────────────────────────
 
+/** Flatten a DRF error body into one readable line. */
+const fieldErrors = (err) => {
+  const data = err.response?.data;
+  if (!data) return '';
+  if (typeof data === 'string') return data;
+  if (data.detail) return data.detail;
+  return Object.entries(data)
+    .map(([field, msgs]) => `${field.replace(/_/g, ' ')}: ${[].concat(msgs).join(' ')}`)
+    .join(' • ');
+};
+
+
 const EMPTY_ADDR = {
   address_line_1: '', address_line_2: '', city: '', state: '',
-  pincode: '', is_default_shipping: false, is_default_billing: false,
+  pincode: '', contact_phone: '', contact_email: '',
+  is_default_shipping: false, is_default_billing: false,
 };
 
 const AddressForm = ({ initial = EMPTY_ADDR, editId = null, onSaved, onCancel }) => {
@@ -309,7 +322,10 @@ const AddressForm = ({ initial = EMPTY_ADDR, editId = null, onSaved, onCancel })
       else        await api.post('accounts/addresses/', form);
       onSaved();
     } catch (err) {
-      setError(err.response?.data?.detail || 'Failed to save address.');
+      // DRF reports a bad phone or email as {contact_phone: [...]}, not as
+      // `detail` — reading only `detail` turned every field error into the
+      // same unhelpful "Failed to save address."
+      setError(fieldErrors(err) || 'Failed to save address.');
     } finally { setSaving(false); }
   };
 
@@ -326,10 +342,19 @@ const AddressForm = ({ initial = EMPTY_ADDR, editId = null, onSaved, onCancel })
           { label: 'City *',           key: 'city'           },
           { label: 'State *',          key: 'state'          },
           { label: 'Pincode *',        key: 'pincode'        },
-        ].map(({ label, key }) => (
+          // Optional, and left optional on purpose: the account already has an
+          // email and a phone, and these exist for the common wholesale case
+          // where the warehouse taking delivery is not the office that placed
+          // the order. Blank falls back to the account's details.
+          { label: 'Contact Phone',    key: 'contact_phone', type: 'tel',
+            placeholder: "Defaults to your account's number" },
+          { label: 'Contact Email',    key: 'contact_email', type: 'email',
+            placeholder: "Defaults to your account's email" },
+        ].map(({ label, key, type, placeholder }) => (
           <div key={key}>
             <label className="text-gray-500 dark:text-zinc-400 text-xs font-bold uppercase tracking-widest block mb-1">{label}</label>
-            <input value={form[key] || ''} onChange={e => setForm(p => ({ ...p, [key]: e.target.value }))}
+            <input value={form[key] || ''} type={type || 'text'} placeholder={placeholder}
+              onChange={e => setForm(p => ({ ...p, [key]: e.target.value }))}
               className="w-full bg-gray-50 dark:bg-zinc-800 border border-gray-200 dark:border-white/10 text-gray-900 dark:text-zinc-100 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:border-accent transition-colors" />
           </div>
         ))}
@@ -374,6 +399,13 @@ const AddressCard = ({ addr, selected, onSelect, type, onEdit, onDelete }) => {
         <p className="text-gray-900 dark:text-zinc-100 text-sm font-semibold">{addr.address_line_1}</p>
         {addr.address_line_2 && <p className="text-gray-500 text-xs">{addr.address_line_2}</p>}
         <p className="text-gray-500 text-xs">{addr.city}, {addr.state} — {addr.pincode}</p>
+        {/* effective_*, so this shows the number a courier would actually ring
+            rather than going blank whenever the address has none of its own. */}
+        {(addr.effective_phone || addr.effective_email) && (
+          <p className="text-gray-400 dark:text-zinc-500 text-xs mt-1">
+            {[addr.effective_phone, addr.effective_email].filter(Boolean).join(' · ')}
+          </p>
+        )}
       </div>
       <div className="mt-2 flex items-center gap-3">
         <button onClick={() => onEdit(addr)} className="flex items-center gap-1 text-xs text-gray-400 hover:text-accent transition-colors font-semibold">
