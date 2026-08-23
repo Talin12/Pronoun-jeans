@@ -6,7 +6,9 @@ from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import AllowAny, BasePermission
 from rest_framework.response import Response
 
-from .models import Category, Product, HeroSlide
+from django.db.models import Prefetch
+
+from .models import Category, Product, ProductVariation, HeroSlide
 from .serializers import CategorySerializer, ProductSerializer
 
 
@@ -73,7 +75,25 @@ class ProductViewSet(viewsets.ReadOnlyModelViewSet):
             .filter(is_active=True)
             .exclude(image__isnull=True)
             .exclude(image__exact='')
-            .prefetch_related('variations__gallery_images', 'gallery_images')
+            .select_related('category')
+            .prefetch_related(
+                'subcategories',
+                'gallery_images',
+                # Shared per product+color gallery, used by
+                # ProductVariationSerializer.get_gallery_images. Prefetching
+                # here lets that method filter in Python instead of firing one
+                # ProductColorImage query per variation (N+1 → worker timeout).
+                'color_images',
+                # size_set / size_breakdown / color_palette are FKs read for
+                # every variation during serialization. Without select_related
+                # each one is a separate query per variation.
+                Prefetch(
+                    'variations',
+                    queryset=ProductVariation.objects
+                    .select_related('size_set', 'size_breakdown', 'color_palette')
+                    .prefetch_related('gallery_images'),
+                ),
+            )
         )
         category_slug = self.request.query_params.get('category')
         if category_slug:

@@ -73,10 +73,23 @@ class ProductVariationSerializer(serializers.ModelSerializer):
         model (or if a variation has no color_palette set).
         """
         if obj.color_palette_id:
-            color_images = ProductColorImage.objects.filter(
-                product_id=obj.product_id, color_id=obj.color_palette_id
-            ).order_by('order', 'id')
-            if color_images.exists():
+            # Prefer the parent product's prefetched color_images (catalog list
+            # path) so we don't fire one ProductColorImage query per variation.
+            # Falls back to a direct query when the product isn't prefetched
+            # (e.g. admin create responses that serialize bare variations).
+            product = obj._state.fields_cache.get('product')
+            if product is not None and 'color_images' in getattr(product, '_prefetched_objects_cache', {}):
+                color_images = sorted(
+                    (ci for ci in product.color_images.all() if ci.color_id == obj.color_palette_id),
+                    key=lambda ci: (ci.order, ci.id),
+                )
+            else:
+                color_images = list(
+                    ProductColorImage.objects.filter(
+                        product_id=obj.product_id, color_id=obj.color_palette_id
+                    ).order_by('order', 'id')
+                )
+            if color_images:
                 return ProductColorImageSerializer(color_images, many=True, context=self.context).data
         return VariationImageSerializer(obj.gallery_images.all(), many=True, context=self.context).data
 

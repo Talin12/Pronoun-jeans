@@ -5,11 +5,14 @@ The API contract for the same fields lives in adminapi/tests.py; these pin the
 behaviour that happens in save(), where the panel cannot see it.
 """
 
+from django.core.cache import cache
 from django.test import TestCase
+from django.test.utils import CaptureQueriesContext
+from django.db import connection
 
 from .models import (
     ALT_TEXT_MAX, Category, Color, Product, ProductColorImage, ProductImage,
-    default_alt_text,
+    ProductVariation, SizeSet, SizeSetBreakdown, default_alt_text,
 )
 
 
@@ -85,3 +88,57 @@ class SeoFieldTests(TestCase):
         category = Category.objects.create(name='Shorts', slug='shorts')
         self.assertEqual(category.description, '')
         self.assertIsNotNone(category.updated_at)
+
+
+class CatalogQueryCountTests(TestCase):
+    """
+    The catalog list serializes every product with all of its variations, and
+    each variation reads size_set / size_breakdown / color_palette and its
+    shared color gallery. Those must be prefetched so the query count stays
+    flat as the number of variations grows — otherwise the endpoint N+1s until
+    gunicorn times out and SIGKILLs the worker (production incident 2026-08-23).
+    """
+
+    def _make_product(self, slug, variation_count):
+        category = Category.objects.create(name=f'Cat {slug}', slug=f'cat-{slug}')
+        product = Product.objects.create(
+            name=f'Product {slug}', slug=slug, category=category,
+            image='products/hero.jpg',
+        )
+        size_set = SizeSet.objects.create(name=f'Set {slug}')
+        breakdown = SizeSetBreakdown.objects.create(
+            size_set=size_set, label='1xL, 1xXL', breakdown_string='1xL, 1xXL', pieces=2,
+        )
+        for i in range(variation_count):
+            color = Color.objects.create(name=f'Color {slug} {i}', hex_code='#123456')
+            ProductColorImage.objects.create(
+                product=product, color=color, image=f'products/colors/{slug}-{i}.jpg',
+            )
+            ProductVariation.objects.create(
+                product=product, size_set=size_set, size_breakdown=breakdown,
+                color_palette=color, sku=f'{slug}-sku-{i}',
+                b2b_price='100.00', per_piece_price='50.00',
+                mrp='200.00', mrp_per_piece='100.00', stock_quantity=10,
+            )
+        return category
+
+    def _catalog_query_count(self, category_slug):
+        cache.clear()  # cache_page would otherwise serve later hits with 0 queries
+        with CaptureQueriesContext(connection) as ctx:
+            resp = self.client.get('/api/products/catalog/', {'category': category_slug})
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(len(resp.json()), 1)
+        return len(ctx)
+
+    def test_query_count_does_not_grow_with_variations(self):
+        few = self._make_product('few', variation_count=2)
+        many = self._make_product('many', variation_count=10)
+
+        few_queries = self._catalog_query_count(few.slug)
+        many_queries = self._catalog_query_count(many.slug)
+
+        self.assertEqual(
+            few_queries, many_queries,
+            f'Catalog N+1: 2 variations took {few_queries} queries, '
+            f'10 took {many_queries}. They must be equal.',
+        )
