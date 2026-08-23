@@ -9,14 +9,26 @@ build Cloudinary thumbnail URLs and human labels for usage listings.
 import cloudinary.utils
 
 from .models import MediaAttachment
-from .storage import delivery_id
+from .storage import delivery_id, video_poster_url, video_url
+
+
+def is_video(asset):
+    return asset.media_type == 'video'
 
 
 def thumb_url(asset, width=200):
-    """A small transform URL for grids — from the stored recipe, else built live."""
-    key = str(width)
+    """
+    A small transform URL for grids — from the stored recipe, else built live.
+
+    A video's thumbnail is a frame from the video, not the video, so every grid
+    that already renders `thumb_url` into an <img> keeps working unchanged the
+    moment videos appear in it.
+    """
+    key = 'poster_thumb' if is_video(asset) and width <= 200 else str(width)
     if asset.variants and key in asset.variants:
         return asset.variants[key]
+    if is_video(asset):
+        return video_poster_url(asset.storage_key, width=width)
     url, _ = cloudinary.utils.cloudinary_url(
         delivery_id(asset.storage_key), width=width, crop='limit',
         fetch_format='auto', quality='auto', secure=True,
@@ -27,14 +39,39 @@ def thumb_url(asset, width=200):
 def full_url(asset):
     if asset.variants and 'original' in asset.variants:
         return asset.variants['original']
+    if is_video(asset):
+        return video_url(asset.storage_key, fmt=None)
     url, _ = cloudinary.utils.cloudinary_url(delivery_id(asset.storage_key), secure=True)
     return url
+
+
+def video_sources(asset):
+    """
+    The <source> list for a video asset, widest-support-last.
+
+    Two entries rather than one f_auto URL because the browser picks by `type`
+    without a request: Chrome and Firefox take the smaller WebM, Safari — which
+    plays neither WebM nor an f_auto negotiation it never asked for — falls
+    through to MP4. Empty for an image.
+    """
+    if not is_video(asset):
+        return []
+    variants = asset.variants or {}
+    return [
+        {'src': variants.get('webm') or video_url(asset.storage_key, fmt='webm'),
+         'type': 'video/webm'},
+        {'src': variants.get('mp4') or video_url(asset.storage_key, fmt='mp4'),
+         'type': 'video/mp4'},
+    ]
 
 
 def serialize_asset(asset, *, with_usage=False):
     data = {
         'id':                asset.id,
         'storage_key':       asset.storage_key,
+        # 'image' or 'video'. Every consumer branches on this, so it comes
+        # first in the payload and is never omitted.
+        'media_type':        asset.media_type,
         'thumb_url':         thumb_url(asset, 200),
         'preview_url':       thumb_url(asset, 400),
         'url':               full_url(asset),
@@ -51,6 +88,14 @@ def serialize_asset(asset, *, with_usage=False):
         'categories':        [{'id': c.id, 'name': c.name} for c in asset.categories.all()],
         'created_at':        asset.created_at.isoformat() if asset.created_at else None,
     }
+    if is_video(asset):
+        # Only on videos: an image payload carrying null sources and a null
+        # duration would invite clients to branch on those instead of on
+        # media_type, which is the field that actually means it.
+        variants = asset.variants or {}
+        data['duration'] = asset.duration
+        data['poster_url'] = variants.get('poster') or video_poster_url(asset.storage_key)
+        data['sources'] = video_sources(asset)
     if with_usage:
         data['usage_count'] = asset.attachments.count()
     return data

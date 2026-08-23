@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
-  ChevronLeft, ChevronRight, FolderTree, ImagePlus, Loader, Search, UploadCloud, X, Star,
+  ChevronLeft, ChevronRight, FolderTree, ImagePlus, Loader, Play, Search,
+  UploadCloud, X, Star,
 } from 'lucide-react';
 import {
   attachMedia, detachMedia, getAttachments, listAssets, listMediaSections,
@@ -8,7 +9,22 @@ import {
 } from '../../api/adminApi';
 
 /**
- * Upload-once / choose-anywhere image picker for the custom admin.
+ * Marks a tile as a video. Every grid here renders `thumb_url` into an <img>,
+ * and for a video that URL is a poster frame — so without this badge a clip is
+ * indistinguishable from a still.
+ */
+const VideoBadge = ({ size = 'md' }) => (
+  <span className="absolute inset-0 flex items-center justify-center pointer-events-none">
+    <span className={`${size === 'sm' ? 'w-6 h-6' : 'w-8 h-8'} rounded-full bg-black/60 flex items-center justify-center`}>
+      <Play className={`${size === 'sm' ? 'w-3 h-3' : 'w-4 h-4'} text-white fill-white ml-0.5`} />
+    </span>
+  </span>
+);
+
+const isVideo = (asset) => asset?.media_type === 'video';
+
+/**
+ * Upload-once / choose-anywhere media picker for the custom admin.
  *
  * Renders the entity's current attachments (drag to reorder, click × to detach)
  * plus a "Choose from library" modal with Library + Upload tabs. Uploading a
@@ -22,6 +38,11 @@ import {
  *
  * `categoryId` preselects that library section, so adding images to a boxer
  * product starts from the Boxers photos and "All images" is one click away.
+ *
+ * Videos are offered for gallery roles only. The single-image slots — the
+ * cover, the category tile, the hero banner — are rendered as <img> across the
+ * storefront and the share card, so the server refuses a video there; hiding
+ * them from the picker means the admin never meets that refusal.
  */
 export default function MediaPicker({
   type, id, role = 'gallery', single = false, folder = '', label = 'Images',
@@ -93,6 +114,7 @@ export default function MediaPicker({
           >
             <img src={att.media.thumb_url} alt={att.media.alt_text || ''}
                  className="w-full h-full object-cover" />
+            {isVideo(att.media) && <VideoBadge size="sm" />}
             {!single && !att.media.alt_text && (
               <span className="absolute bottom-1 left-1 text-[10px] font-bold px-1 rounded bg-amber-500/90 text-white">alt?</span>
             )}
@@ -147,6 +169,7 @@ export default function MediaPicker({
         <LibraryModal
           folder={folder}
           single={single}
+          allowVideo={role === 'gallery'}
           categoryId={categoryId}
           onClose={() => setOpen(false)}
           onConfirm={(ids) => handleAttach(ids).then(() => setOpen(false))}
@@ -162,8 +185,11 @@ export default function MediaPicker({
  * Exported because the bulk variant builder picks images before the variants
  * they belong to exist — it collects asset ids and attaches them afterwards,
  * rather than attaching to an entity as MediaPicker does.
+ *
+ * `allowVideo` false hides clips from the grid and refuses them on upload, for
+ * the slots that can only hold a still.
  */
-export function LibraryModal({ folder, single, categoryId, onClose, onConfirm }) {
+export function LibraryModal({ folder, single, allowVideo = true, categoryId, onClose, onConfirm }) {
   const [tab, setTab]         = useState('library');
   const [assets, setAssets]   = useState([]);
   const [page, setPage]       = useState(1);
@@ -186,12 +212,16 @@ export function LibraryModal({ folder, single, categoryId, onClose, onConfirm })
     const p = reset ? 1 : page;
     listAssets({ page: p, search, ...(section ? { category: section } : {}) })
       .then(d => {
-        setAssets(prev => reset ? (d.results || []) : [...prev, ...(d.results || [])]);
+        // Filtered client-side rather than by a query param: the page the
+        // server returned is what "Load more" pages through, and dropping a few
+        // tiles from it keeps that cursor honest.
+        const results = (d.results || []).filter(a => allowVideo || !isVideo(a));
+        setAssets(prev => reset ? results : [...prev, ...results]);
         setHasNext(d.has_next);
         setPage(p + 1);
       })
       .finally(() => setLoad(false));
-  }, [page, search, section]);
+  }, [page, search, section, allowVideo]);
 
   useEffect(() => {
     const t = setTimeout(() => fetchAssets(true), 200);
@@ -210,15 +240,41 @@ export function LibraryModal({ folder, single, categoryId, onClose, onConfirm })
 
   const doUpload = async (files) => {
     if (!files || !files.length) return;
+
+    // Caught here as well as server-side: a clip dropped onto a cover picker
+    // would otherwise upload in full — tens of megabytes — before the attach
+    // step rejected it.
+    const picked = Array.from(files);
+    const rejected = allowVideo ? [] : picked.filter(f => f.type.startsWith('video/'));
+    const accepted = allowVideo ? picked : picked.filter(f => !f.type.startsWith('video/'));
+    if (rejected.length) {
+      setUploads(prev => [
+        ...rejected.map(f => ({ name: f.name, status: 'videos cannot be used here' })),
+        ...prev,
+      ]);
+    }
+    if (!accepted.length) return;
+    files = accepted;
+
     const names = Array.from(files).map(f => ({ name: f.name, status: 'waiting…' }));
     setUploads(prev => [...names, ...prev]);
 
-    // Batched, so a slow phone connection or one rejected file cannot take the
-    // whole selection down. Per-file reasons are shown against each row.
-    const { results, errors } = await uploadAssetsInBatches(files, folder, section || undefined);
+    // Compressed in the browser and batched by size, so a slow phone connection
+    // or one rejected file cannot take the whole selection down. Per-file
+    // reasons are shown against each row.
+    const { results, errors } = await uploadAssetsInBatches(files, folder, section || undefined, {
+      // Rows are prepended, so index i is file i of this selection.
+      onProgress: ({ phase, done }) => setUploads(prev => prev.map((u, i) => {
+        if (phase === 'compressing') {
+          return i === done && u.status === 'waiting…' ? { ...u, status: 'preparing…' } : u;
+        }
+        return u.status === 'preparing…' || u.status === 'waiting…'
+          ? { ...u, status: 'uploading…' } : u;
+      })),
+    });
 
     setUploads(prev => prev.map(u => {
-      const ok = results.find(r => r.asset.original_filename === u.name);
+      const ok = results.find(r => r.sourceFilename === u.name);
       if (ok) return { ...u, status: ok.deduplicated ? 'already in library — reused' : 'uploaded' };
       const bad = errors.find(e => e.filename === u.name);
       return bad ? { ...u, status: bad.error } : u;
@@ -291,6 +347,7 @@ export function LibraryModal({ folder, single, categoryId, onClose, onConfirm })
                     }`}>
                     <img src={a.thumb_url} alt={a.alt_text || a.original_filename} loading="lazy"
                          className="w-full h-full object-cover bg-gray-100 dark:bg-zinc-800" />
+                    {isVideo(a) && !selected.has(a.id) && <VideoBadge />}
                     {selected.has(a.id) && (
                       <span className="absolute inset-0 bg-accent/10 flex items-center justify-center">
                         <span className="w-6 h-6 rounded-full bg-accent text-white text-xs font-bold flex items-center justify-center">✓</span>
@@ -318,13 +375,23 @@ export function LibraryModal({ folder, single, categoryId, onClose, onConfirm })
               >
                 <UploadCloud size={36} className="mx-auto text-gray-400 mb-2" />
                 <p className="text-sm font-semibold text-gray-600 dark:text-zinc-300">
-                  Drag images here, or click to browse — they go to{' '}
+                  Drag {allowVideo ? 'images or videos' : 'images'} here, or click to browse — they go to{' '}
                   <span className="text-accent">
                     {sections.find(s => String(s.id) === section)?.name || 'All images'}
                   </span>
                 </p>
-                <p className="text-xs text-gray-400 mt-1">JPG, PNG, WebP, AVIF · up to 15 MB · many at once · uploaded once, reused anywhere</p>
-                <input ref={fileRef} type="file" multiple accept="image/*" className="hidden"
+                <p className="text-xs text-gray-400 mt-1">
+                  JPG, PNG, WebP, AVIF · up to 15 MB
+                  {allowVideo && ' — MP4, WebM, MOV · up to 100 MB'}
+                  {' · many at once · uploaded once, reused anywhere'}
+                </p>
+                {allowVideo && (
+                  <p className="text-xs text-gray-400 mt-1">
+                    A video is uploaded as-is and takes a while on a slow connection — leave this tab open.
+                  </p>
+                )}
+                <input ref={fileRef} type="file" multiple
+                       accept={allowVideo ? 'image/*,video/*' : 'image/*'} className="hidden"
                        onChange={(e) => { doUpload(e.target.files); e.target.value = ''; }} />
               </div>
               {uploads.length > 0 && (

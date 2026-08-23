@@ -5,6 +5,25 @@ from django.db import models
 
 from core.utils.images import CompressedImageField
 
+# Field lengths that mirror what search engines actually render, so the admin
+# panel's character counters and the database agree on the limit.
+META_TITLE_MAX = 70
+META_DESCRIPTION_MAX = 160
+ALT_TEXT_MAX = 255
+
+
+def default_alt_text(product):
+    """
+    The alt text an image gets when nobody typed one.
+
+    "<Product name> — <Category>" is not inspired, but it is accurate, and it
+    beats the alternative: a gallery of images with alt="" that screen readers
+    skip silently and search engines cannot read at all.
+    """
+    category = product.category.name if product.category_id else None
+    text = f'{product.name} — {category}' if category else product.name
+    return text[:ALT_TEXT_MAX]
+
 
 class Category(models.Model):
     name   = models.CharField(max_length=255)
@@ -15,6 +34,12 @@ class Category(models.Model):
         related_name='subcategories',
         help_text='Leave blank for a main category. Set this to nest it as a sub-category.',
     )
+    description = models.TextField(
+        blank=True,
+        help_text='Used as the meta description on the category page. '
+                  'Left blank, one is generated from the category name.',
+    )
+    updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
         verbose_name_plural = "Categories"
@@ -69,6 +94,30 @@ class Product(models.Model):
     moq            = models.PositiveIntegerField(default=10)
     image          = CompressedImageField(upload_to='products/', blank=True, null=True)
     created_at     = models.DateTimeField(auto_now_add=True)
+    # Drives <lastmod> in the sitemap. auto_now, so it cannot drift from
+    # reality the way a hand-maintained date would.
+    updated_at     = models.DateTimeField(auto_now=True)
+
+    # ── SEO overrides ─────────────────────────────────────────────────────
+    # All optional. The storefront generates perfectly serviceable metadata
+    # from the name, category, fabric and MOQ; these exist for the products
+    # worth writing by hand. Blank means "use the generated one" — never an
+    # empty tag.
+    meta_title = models.CharField(
+        max_length=META_TITLE_MAX, blank=True,
+        help_text=f'Overrides the search-result title. Up to {META_TITLE_MAX} characters. '
+                  'Blank uses the generated one.',
+    )
+    meta_description = models.CharField(
+        max_length=META_DESCRIPTION_MAX, blank=True,
+        help_text=f'Overrides the search-result description. Up to {META_DESCRIPTION_MAX} '
+                  'characters. Blank uses the generated one.',
+    )
+    og_image = CompressedImageField(
+        upload_to='products/og/', blank=True, null=True,
+        help_text='Image used when the product is shared on WhatsApp or social. '
+                  'Blank falls back to the cover image, then the site card.',
+    )
 
     def __str__(self):
         return self.name
@@ -82,6 +131,11 @@ class ProductImage(models.Model):
 
     class Meta:
         ordering = ['order', 'id']
+
+    def save(self, *args, **kwargs):
+        if not self.alt_text:
+            self.alt_text = default_alt_text(self.product)
+        super().save(*args, **kwargs)
 
     def __str__(self):
         return f"Gallery image for {self.product.name} (#{self.pk})"
@@ -115,6 +169,13 @@ class ProductColorImage(models.Model):
         ordering            = ['product', 'color', 'order', 'id']
         verbose_name        = 'Product Color Image'
         verbose_name_plural = 'Product Color Images'
+
+    def save(self, *args, **kwargs):
+        if not self.alt_text:
+            # Colour-specific, since these images differ only by colour and
+            # identical alt text across a gallery is barely better than none.
+            self.alt_text = f'{default_alt_text(self.product)} — {self.color.name}'[:ALT_TEXT_MAX]
+        super().save(*args, **kwargs)
 
     def __str__(self):
         return f"{self.product.name} — {self.color.name} (#{self.pk})"

@@ -293,6 +293,14 @@ export default function AdminUserProfile() {
                 {addresses.map(a => (
                   <li key={a.id} className="text-sm text-gray-700 dark:text-zinc-300 border border-gray-100 dark:border-white/5 rounded-xl px-3 py-2">
                     {a.address_line_1}{a.address_line_2 ? `, ${a.address_line_2}` : ''}, {a.city}, {a.state} — {a.pincode}
+                    {/* Who to ring about a delivery to this address — the whole
+                        reason support opens this page. effective_*, so it falls
+                        back to the account rather than showing nothing. */}
+                    {(a.effective_phone || a.effective_email) && (
+                      <span className="block text-xs text-gray-400 dark:text-zinc-500 mt-0.5">
+                        {[a.effective_phone, a.effective_email].filter(Boolean).join(' · ')}
+                      </span>
+                    )}
                     {(a.is_default_shipping || a.is_default_billing) && (
                       <span className="ml-2 text-[11px] font-bold text-accent">
                         {a.is_default_shipping ? 'default shipping' : ''}

@@ -1,9 +1,14 @@
 import React, { useState } from 'react';
 import { MapPin, Phone, Mail, Send, Loader2 } from 'lucide-react';
+import Seo from '../components/seo/Seo';
+import JsonLd from '../components/seo/JsonLd';
+import { contactLocalBusinessSchema } from '../config/schema';
+import { usePrerenderReady } from '../hooks/usePrerenderReady';
 
 const Contact = () => {
   const [form, setForm]       = useState({ name: '', email: '', company: '', message: '' });
   const [submitted, setSubmitted] = useState(false);
+  usePrerenderReady();
 
   const handleSubmit = (e) => {
     e.preventDefault();
@@ -12,6 +17,13 @@ const Contact = () => {
 
   return (
     <div className="bg-gray-50 dark:bg-zinc-950 min-h-screen">
+      <Seo
+        title="Contact — Wholesale Enquiries & Bulk Orders"
+        description="Contact Pronoun Jeans, Ahmedabad, for wholesale enquiries and bulk orders. Call +91 93751 43100, message us on WhatsApp, or send your MOQ requirement."
+        canonical="/contact"
+      >
+        <JsonLd data={contactLocalBusinessSchema()} />
+      </Seo>
       <div className="max-w-5xl mx-auto px-6 py-20">
 
         <div className="mb-12 text-center">

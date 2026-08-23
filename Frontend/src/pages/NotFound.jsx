@@ -1,11 +1,23 @@
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { ArrowLeft, Search } from 'lucide-react';
+import Seo from '../components/seo/Seo';
+import { usePrerenderReady } from '../hooks/usePrerenderReady';
 
 const NotFound = () => {
   const navigate = useNavigate();
+  const { pathname } = useLocation();
+  usePrerenderReady();
 
   return (
     <div className="min-h-[80vh] bg-gray-50 dark:bg-zinc-950 flex items-center justify-center px-4">
+      {/* Canonical tracks the URL that missed, so the tag stays honest even
+          though noindex means Google will not act on it. */}
+      <Seo
+        title="Page Not Found"
+        description="This page does not exist. Browse the Pronoun Jeans wholesale catalogue of men's jeans, cargo pants and joggers, available in bulk size sets."
+        canonical={pathname}
+        noindex
+      />
       <div className="w-full max-w-lg text-center">
 
         {/* 404 number — large, understated, on-brand */}

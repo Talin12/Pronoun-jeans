@@ -64,6 +64,12 @@ const Navbar = () => {
             widths={[200, 400]}
             sizes="160px"
             priority
+            /* Intrinsic 716x348. Every other image on the site renders into a
+               box the stylesheet has already sized; this one is `w-auto`, so
+               without these its width is 0 until it loads and the nav links
+               jump sideways. CSS still governs the rendered size. */
+            width={716}
+            height={348}
             className="h-12 w-auto dark:[filter:brightness(0)_invert(1)]"
           />
         </Link>

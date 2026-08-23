@@ -20,7 +20,10 @@ class MediaAssetAdmin(admin.ModelAdmin):
     list_display       = ['thumb', 'label', 'used_in', 'dimensions', 'created_at']
     list_display_links = ['thumb', 'label']
     search_fields      = ['original_filename', 'title', 'alt_text', 'storage_key', 'tags']
-    list_filter        = ['mime_type', 'folder']
+    # media_type first: "show me the videos" is the one filter that gets used
+    # constantly once a library holds both, and mime_type buries it under a
+    # separate row per container.
+    list_filter        = ['media_type', 'mime_type', 'folder']
     ordering           = ['-created_at']
     list_per_page      = 60
 
@@ -34,13 +37,14 @@ class MediaAssetAdmin(admin.ModelAdmin):
         ('Used in',          {'fields': ('used_in_detail',)}),
         ('Technical (read-only)', {
             'classes': ('collapse',),
-            'fields': ('storage_key', 'file_hash', 'mime_type', 'dimensions',
-                       'file_size', 'uploaded_by', 'created_at', 'updated_at'),
+            'fields': ('storage_key', 'file_hash', 'media_type', 'mime_type',
+                       'dimensions', 'duration', 'file_size', 'uploaded_by',
+                       'created_at', 'updated_at'),
         }),
     )
     readonly_fields = ['big_preview', 'used_in_detail', 'storage_key', 'file_hash',
-                       'mime_type', 'dimensions', 'file_size', 'uploaded_by',
-                       'created_at', 'updated_at']
+                       'media_type', 'mime_type', 'dimensions', 'duration',
+                       'file_size', 'uploaded_by', 'created_at', 'updated_at']
 
     def get_queryset(self, request):
         # Live assets only; annotate usage once to avoid an N+1 in the list.

@@ -1,6 +1,6 @@
 from rest_framework import serializers
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
-from .models import CustomUser, Address, AgentProfile
+from .models import CustomUser, Address, AgentProfile, phone_validator
 
 
 class B2BTokenObtainPairSerializer(TokenObtainPairSerializer):
@@ -124,12 +124,62 @@ class AgentBuyerSerializer(serializers.ModelSerializer):
 
 
 class AddressSerializer(serializers.ModelSerializer):
+    # Required here, but left blank=True on the model on purpose. Addresses
+    # saved before this existed have neither, and a NOT NULL column would have
+    # meant either a data migration inventing contacts or a table full of rows
+    # that can no longer be loaded. Enforcing it at the write boundary instead
+    # means every address saved from now on carries a contact, and a legacy one
+    # is asked for it the first time the buyer opens it — while an order placed
+    # against it in the meantime still goes through.
+    contact_phone = serializers.CharField(
+        required=True, allow_blank=False, max_length=20,
+        validators=[phone_validator],
+        error_messages={
+            'blank':    'Enter a contact number for this address.',
+            'required': 'Enter a contact number for this address.',
+        },
+    )
+    contact_email = serializers.EmailField(
+        required=True, allow_blank=False,
+        error_messages={
+            'blank':    'Enter a contact email for this address.',
+            'required': 'Enter a contact email for this address.',
+        },
+    )
+
+    # What a courier or an invoice would actually use: the address's own
+    # contact, falling back to the account's for the legacy rows that predate
+    # the requirement. Read-only, so the panel can show the real answer without
+    # having to re-implement the fallback and drift from it.
+    effective_phone = serializers.CharField(read_only=True)
+    effective_email = serializers.CharField(read_only=True)
+
     class Meta:
         model  = Address
         fields = [
             'id', 'address_line_1', 'address_line_2', 'city', 'state',
-            'pincode', 'is_default_shipping', 'is_default_billing',
+            'pincode', 'contact_phone', 'contact_email',
+            'effective_phone', 'effective_email',
+            'is_default_shipping', 'is_default_billing',
         ]
+
+    def validate(self, attrs):
+        """
+        Enforce the contact on every write path, not just the complete ones.
+
+        `required=True` above is skipped for whatever a PATCH leaves out, so on
+        its own it would let a legacy address be edited over and over — city,
+        pincode, default flags — without ever gaining a contact. Checking the
+        value the row will actually end up with is what makes "mandatory" mean
+        mandatory rather than "mandatory when the client happens to send it".
+        """
+        for field, label in (('contact_phone', 'contact number'),
+                             ('contact_email', 'contact email')):
+            value = attrs.get(field, getattr(self.instance, field, '') if self.instance else '')
+            if not (value or '').strip():
+                raise serializers.ValidationError(
+                    {field: f'Enter a {label} for this address.'})
+        return attrs
 
     def create(self, validated_data):
         validated_data['user'] = self.context['request'].user

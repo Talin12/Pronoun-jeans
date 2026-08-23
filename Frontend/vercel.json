@@ -192,71 +192,63 @@
   "rewrites": [
     {
       "source": "/catalog",
-      "destination": "/index.html"
-    },
-    {
-      "source": "/catalog/:path*",
-      "destination": "/index.html"
-    },
-    {
-      "source": "/product/:path*",
-      "destination": "/index.html"
+      "destination": "/app.html"
     },
     {
       "source": "/about",
-      "destination": "/index.html"
+      "destination": "/app.html"
     },
     {
       "source": "/contact",
-      "destination": "/index.html"
+      "destination": "/app.html"
     },
     {
       "source": "/terms",
-      "destination": "/index.html"
+      "destination": "/app.html"
     },
     {
       "source": "/privacy",
-      "destination": "/index.html"
+      "destination": "/app.html"
     },
     {
       "source": "/refund",
-      "destination": "/index.html"
+      "destination": "/app.html"
     },
     {
       "source": "/login",
-      "destination": "/index.html"
+      "destination": "/app.html"
     },
     {
       "source": "/cart",
-      "destination": "/index.html"
+      "destination": "/app.html"
     },
     {
       "source": "/history",
-      "destination": "/index.html"
+      "destination": "/app.html"
     },
     {
       "source": "/dashboard",
-      "destination": "/index.html"
+      "destination": "/app.html"
     },
     {
       "source": "/reset-password/:path*",
-      "destination": "/index.html"
+      "destination": "/app.html"
     },
     {
       "source": "/agent",
-      "destination": "/index.html"
+      "destination": "/app.html"
     },
     {
       "source": "/agent/:path*",
-      "destination": "/index.html"
+      "destination": "/app.html"
     },
     {
       "source": "/admin",
-      "destination": "/index.html"
+      "destination": "/app.html"
     },
     {
       "source": "/admin/:path*",
-      "destination": "/index.html"
+      "destination": "/app.html"
     }
   ],
   "headers": [
@@ -266,6 +258,24 @@
         {
           "key": "Cache-Control",
           "value": "public, max-age=31536000, immutable"
+        }
+      ]
+    },
+    {
+      "source": "/app",
+      "headers": [
+        {
+          "key": "X-Robots-Tag",
+          "value": "noindex, nofollow"
+        }
+      ]
+    },
+    {
+      "source": "/app.html",
+      "headers": [
+        {
+          "key": "X-Robots-Tag",
+          "value": "noindex, nofollow"
         }
       ]
     }

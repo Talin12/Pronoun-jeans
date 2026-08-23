@@ -4,6 +4,7 @@
  * handled automatically. The backend enforces IsSuperUser on all of these.
  */
 import api from './axios';
+import { compressImage, planBatches } from '../utils/imageCompression';
 
 // ── Users, permissions & verification ──────────────────────────────────────
 export const listUsers = (params = {}) =>
@@ -30,6 +31,26 @@ export const createProduct = (data) =>
 
 export const updateProduct = (id, data) =>
   api.patch(`admin/products/${id}/`, data).then(r => r.data);
+
+/**
+ * The share image is a file, so it cannot ride in the JSON Base Details
+ * payload. Kept as its own call for that reason — and so that touching it can
+ * never disturb the publish flow, which sends every base field at once.
+ */
+export const setProductOgImage = async (id, file) => {
+  const fd = new FormData();
+  // Share cards are 1200x630 crops of whatever is uploaded, so sending a raw
+  // camera photo only buys a slow request — shrink it the same way media
+  // library uploads are shrunk.
+  fd.append('og_image', await compressImage(file).catch(() => file));
+  return api.patch(`admin/products/${id}/`, fd, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+  }).then(r => r.data);
+};
+
+/** Clearing needs JSON: multipart has no way to say null. */
+export const clearProductOgImage = (id) =>
+  api.patch(`admin/products/${id}/`, { og_image: null }).then(r => r.data);
 
 export const deleteProduct = (id) =>
   api.delete(`admin/products/${id}/`).then(r => r.data);
@@ -97,6 +118,16 @@ export const listAssets = (params = {}) =>
 export const listMediaSections = () =>
   api.get('admin/media/sections/').then(r => r.data);
 
+// One request's worth of image bytes. Compression puts most photos near 1–2 MB,
+// so this is a ceiling for the odd heavy file rather than a typical payload —
+// big enough that small images still travel together, small enough that a batch
+// finishes well inside gunicorn's 120 s timeout on a phone connection.
+const REQUEST_BUDGET_BYTES = 15 * 1024 * 1024;
+
+// Bytes alone would let fifty thumbnails share one request; this bounds what a
+// single failure costs and how many images the server decodes per request.
+const MAX_FILES_PER_BATCH = 8;
+
 /** `categoryId` files the upload under that section as well as All images. */
 export const uploadAssets = (files, folder, categoryId) => {
   const fd = new FormData();
@@ -109,41 +140,93 @@ export const uploadAssets = (files, folder, categoryId) => {
 };
 
 /**
- * Upload many files as several small requests instead of one large one.
+ * Upload many files as several requests, sized by bytes rather than by count.
  *
- * Ten 5 MB phone photos in a single POST is ~50 MB that has to arrive, decode
- * and reach Cloudinary inside one request — slow phone upstream alone can pass
- * gunicorn's timeout, and then the whole batch is lost. In batches, a failure
- * costs you that batch and names the files, and the rest still land.
+ * Every file is re-encoded in the browser first (see utils/imageCompression),
+ * which is what makes the rest predictable: a 12 MB camera photo becomes ~1.5 MB
+ * before it ever touches the network. The compressed files are then packed to a
+ * REQUEST_BUDGET_BYTES budget, so a request carries two 7 MB images or a dozen
+ * small ones — but never a fixed three that happen to add up to 30 MB and time
+ * gunicorn out. A file that is still oversized on its own travels alone, which
+ * keeps its failure from taking healthy files down with it.
+ *
+ * Videos pass through both stages untouched — compressImage returns anything
+ * that is not an image as-is, and a clip is always over the byte budget, so it
+ * gets a request to itself. That is the behaviour we want: a 60 MB upload
+ * should not be able to take a batch of photos down with it.
+ *
+ * Compression renames files (photo.png becomes photo.jpg), so results and
+ * errors both carry `sourceFilename` — the name the caller handed in, and the
+ * one its queue rows are labelled with.
  *
  * Always resolves: per-file problems come back in `errors`, never as a throw.
  */
 export const uploadAssetsInBatches = async (
-  files, folder, categoryId, { batchSize = 3, onProgress } = {},
+  files, folder, categoryId,
+  { budgetBytes = REQUEST_BUDGET_BYTES, maxPerBatch = MAX_FILES_PER_BATCH, onProgress } = {},
 ) => {
   const all = Array.from(files);
   const results = [];
   const errors  = [];
 
-  for (let i = 0; i < all.length; i += batchSize) {
-    const batch = all.slice(i, i + batchSize);
+  // Sequential: decoding a 48 MP photo costs a few hundred MB of canvas memory,
+  // and doing several at once is how a phone browser tab gets killed.
+  const prepared = [];
+  for (const [i, file] of all.entries()) {
+    onProgress?.({ phase: 'compressing', done: i, total: all.length });
+    const compressed = await compressImage(file).catch(() => file);
+    prepared.push({ file: compressed, sourceFilename: file.name });
+  }
+
+  const batches = planBatches(prepared, {
+    budgetBytes, maxPerBatch, sizeOf: p => p.file.size || 0,
+  });
+
+  // Map one response back onto the files that produced it. The server echoes
+  // the compressed filename on failures and reports both lists in request
+  // order, so every outcome can be traced to the file the caller handed in —
+  // whatever compression renamed it to.
+  const absorb = (payload, batch) => {
+    const failed = new Set();
+    (payload.errors || []).forEach(e => {
+      const i = batch.findIndex((p, n) => !failed.has(n) && p.file.name === e.filename);
+      if (i >= 0) failed.add(i);
+      errors.push({ ...e, filename: i >= 0 ? batch[i].sourceFilename : e.filename });
+    });
+    const uploaded = batch.filter((_, i) => !failed.has(i));
+    (payload.results || []).forEach((r, i) => {
+      results.push({
+        ...r,
+        sourceFilename: uploaded[i]?.sourceFilename ?? r.asset?.original_filename,
+      });
+    });
+  };
+
+  let done = 0;
+  for (const batch of batches) {
     try {
-      const d = await uploadAssets(batch, folder, categoryId);
-      results.push(...(d.results || []));
-      errors.push(...(d.errors || []));
+      absorb(await uploadAssets(batch.map(p => p.file), folder, categoryId), batch);
     } catch (err) {
       const status = err.response?.status;
       const body   = err.response?.data;
-      const detail = body?.error || body?.detail
-        || (typeof body === 'string' && body.slice(0, 120));
-      const message = detail
-        || (status === 413 ? 'Files too large for one request'
-          : status === 502 || status === 504 ? 'The server timed out processing these'
-          : status ? `Server error ${status}`
-          : 'Network dropped or the request timed out');
-      batch.forEach(f => errors.push({ filename: f.name, error: message }));
+      // A batch where every file was rejected comes back as 400 with the same
+      // per-file reasons a mixed batch reports inline — worth keeping, since
+      // "too large" is far more useful than "server error 400".
+      if (Array.isArray(body?.errors) && body.errors.length) {
+        absorb(body, batch);
+      } else {
+        const detail = body?.error || body?.detail
+          || (typeof body === 'string' && body.slice(0, 120));
+        const message = detail
+          || (status === 413 ? 'Files too large for one request'
+            : status === 502 || status === 504 ? 'The server timed out processing these'
+            : status ? `Server error ${status}`
+            : 'Network dropped or the request timed out');
+        batch.forEach(p => errors.push({ filename: p.sourceFilename, error: message }));
+      }
     }
-    onProgress?.({ done: Math.min(i + batchSize, all.length), total: all.length });
+    done += batch.length;
+    onProgress?.({ phase: 'uploading', done, total: all.length });
   }
   return { results, errors };
 };

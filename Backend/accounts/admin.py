@@ -66,8 +66,12 @@ class CustomUserAdmin(UserAdmin):
 
 @admin.register(Address)
 class AddressAdmin(admin.ModelAdmin):
-    list_display        = ['user', 'address_line_1', 'city', 'state', 'pincode', 'is_default_shipping', 'is_default_billing']
+    list_display        = ['user', 'address_line_1', 'city', 'state', 'pincode',
+                           'contact_phone', 'is_default_shipping', 'is_default_billing']
     list_select_related = ['user']
     autocomplete_fields = ['user']
     list_filter         = ['state', 'is_default_shipping', 'is_default_billing']
-    search_fields       = ['user__email', 'city', 'pincode']
+    # Support looks an address up by the number that was on the parcel at least
+    # as often as by the account it belongs to.
+    search_fields       = ['user__email', 'city', 'pincode',
+                           'contact_phone', 'contact_email']

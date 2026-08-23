@@ -11,5 +11,6 @@ Disallow: /dashboard
 Disallow: /login
 Disallow: /reset-password/
 Disallow: /*?subcategory=
+Disallow: /app
 
 Sitemap: https://www.pronounjeans.com/sitemap.xml

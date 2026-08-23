@@ -23,6 +23,45 @@ covers all eleven admin children, `/agent/:path*` all five agent children.
 
 ---
 
+## Rewrites now fall back to `/app.html`, not `/index.html`
+
+`npm run build` prerenders every public route to its own file —
+`dist/catalog/shorts/index.html` and so on — and `dist/index.html` is the
+prerendered **homepage**, not a blank shell any more.
+
+Vercel checks the filesystem before it applies rewrites, so those files win and
+the rewrites below only ever fire for paths that have no prerendered file.
+Pointing them at `/index.html` would therefore serve homepage copy, and a
+homepage canonical, on some other URL. `scripts/prerender.mjs` keeps a copy of
+the bare shell at `dist/app.html` for exactly this, and every rewrite targets
+it.
+
+`/app` is `Disallow`ed in `robots.txt` and carries `X-Robots-Tag: noindex,
+nofollow`, so the shell cannot be indexed in its own right.
+
+---
+
+## `/catalog/:path*` and `/product/:path*` are deliberately NOT rewritten
+
+Every real category and product is prerendered, so a path under those prefixes
+with no file on disk is not a page — and it now gets a real 404 instead of the
+SPA shell and an HTTP 200. That is the whole point of the allowlist, applied to
+the two prefixes that used to be blanket wildcards.
+
+**The trade:** a product added in the admin panel 404s until the site
+rebuilds. `Backend/products/signals.py` fires a Vercel deploy hook on save, so
+the window is one build (~6 minutes), not until someone notices — but it is not
+zero. If that ever becomes unacceptable, restoring
+
+```json
+{ "source": "/product/:path*", "destination": "/app.html" }
+```
+
+brings back client-side rendering for unknown slugs, at the cost of soft-404s
+(HTTP 200 + a "not found" page) on every mistyped or retired URL.
+
+---
+
 ## Why this exists
 
 `vercel.json` used to be a single catch-all:

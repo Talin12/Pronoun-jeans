@@ -1,4 +1,5 @@
 from django.contrib.auth.models import AbstractUser
+from django.core.validators import RegexValidator
 from django.db import models, transaction
 from django.db.models import Q
 
@@ -76,6 +77,16 @@ class AgentPayment(models.Model):
         return f"Payment ₹{self.amount} → {self.agent.email} on {self.paid_on}"
 
 
+# Deliberately loose: Indian landlines, mobiles, and the "+91 " / "022-" /
+# "(022) " shapes people actually type all have to pass. The point is to keep a
+# name or a pasted sentence out of the field the courier will call, not to
+# decide what a valid number looks like.
+phone_validator = RegexValidator(
+    regex=r'^[0-9+()\-\s]{7,20}$',
+    message='Enter a phone number using digits, spaces, +, - or brackets.',
+)
+
+
 class Address(models.Model):
     user                = models.ForeignKey(CustomUser, on_delete=models.CASCADE, related_name='addresses')
     address_line_1      = models.CharField(max_length=255)
@@ -83,11 +94,48 @@ class Address(models.Model):
     city                = models.CharField(max_length=100)
     state               = models.CharField(max_length=100)
     pincode             = models.CharField(max_length=10)
+
+    # Per-address contact details, required of every address saved through the
+    # API — see AddressSerializer, which is where that is enforced.
+    #
+    # They are per address rather than per account because in wholesale the two
+    # genuinely differ: goods go to a warehouse with its own manager and number,
+    # while the invoice goes to the office. A courier calling the account holder
+    # about a delivery to a site they have never visited is the failure this
+    # prevents.
+    #
+    # blank=True even so. Addresses saved before the fields existed have
+    # neither, and making the column NOT NULL would have meant either inventing
+    # contacts for them in a data migration or leaving rows that can no longer
+    # be loaded. They stay loadable, fall back to the account below, and are
+    # asked for a real contact the first time someone edits them.
+    contact_phone       = models.CharField(
+        max_length=20, blank=True, validators=[phone_validator],
+        help_text='Person to call about this address.',
+    )
+    contact_email       = models.EmailField(
+        blank=True,
+        help_text='Where paperwork for this address goes.',
+    )
+
     is_default_shipping = models.BooleanField(default=False)
     is_default_billing  = models.BooleanField(default=False)
 
     class Meta:
         ordering = ['-is_default_shipping', 'id']
+
+    # The fallback lives here rather than at each call site so the invoice, the
+    # API and the panel cannot disagree about which number a courier should
+    # ring. It covers the addresses that predate the requirement — nothing saved
+    # since is blank — so a legacy row still prints a number on an invoice
+    # instead of nothing at all.
+    @property
+    def effective_phone(self):
+        return self.contact_phone or (self.user.phone_number if self.user_id else '') or ''
+
+    @property
+    def effective_email(self):
+        return self.contact_email or (self.user.email if self.user_id else '') or ''
 
     def save(self, *args, **kwargs):
         with transaction.atomic():

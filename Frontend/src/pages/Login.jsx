@@ -6,6 +6,7 @@ import {
   CheckCircle2, X, Building, Phone, FileText, Tag, Eye, EyeOff,
 } from 'lucide-react';
 import api from '../api/axios';
+import Seo from '../components/seo/Seo';
 
 const Login = () => {
   const [email, setEmail]               = useState('');
@@ -47,6 +48,12 @@ const Login = () => {
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-zinc-950 flex items-center justify-center px-4">
+      <Seo
+        title="Partner Login"
+        description="Sign in to the Pronoun Jeans wholesale partner portal to view B2B pricing, size sets and place bulk orders."
+        canonical="/login"
+        noindex
+      />
       <div className="w-full max-w-md">
 
         <div className="text-center mb-10">

@@ -27,3 +27,30 @@ export function cldSrcSet(url, widths = SRCSET_WIDTHS) {
   if (!isCloudinaryUrl(url)) return undefined;
   return widths.map((w) => `${cldUrl(url, { width: w })} ${w}w`).join(', ');
 }
+
+// Open Graph and Twitter want a fixed 1200x630 frame, and both cache the first
+// image they see — so the tag has to state dimensions that are actually true.
+// Cloudinary can crop any source image to exactly that, which means product
+// pages get their own share card instead of falling back to the site default.
+// `g_auto` keeps the garment in frame; `f_jpg` avoids serving AVIF to scrapers
+// that only decode JPEG/PNG. Returns null for non-Cloudinary URLs, so callers
+// can fall back rather than publish a size they cannot vouch for.
+export function cldOgUrl(url) {
+  if (!isCloudinaryUrl(url)) return null;
+  return url.replace('/upload/', '/upload/f_jpg,q_auto,w_1200,h_630,c_fill,g_auto/');
+}
+
+// ── Video ────────────────────────────────────────────────────────────────────
+
+/**
+ * mm:ss for a duration in seconds — the label on a gallery video thumbnail.
+ *
+ * Blank rather than "0:00" when the length is unknown: a video whose duration
+ * the API did not report should show no badge at all, not a badge claiming it
+ * is empty.
+ */
+export function formatDuration(seconds) {
+  if (seconds == null || Number.isNaN(seconds)) return '';
+  const total = Math.round(seconds);
+  return `${Math.floor(total / 60)}:${String(total % 60).padStart(2, '0')}`;
+}

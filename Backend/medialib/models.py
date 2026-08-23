@@ -35,19 +35,40 @@ ROLE_CHOICES = [
     ('swatch',  'Swatch'),
 ]
 
+# What kind of file an asset holds. Videos live in the same library, under the
+# same attachments, so a product gallery is one ordered list of mixed media
+# rather than two lists the storefront would have to interleave. The type is
+# recorded because almost everything downstream branches on it: Cloudinary
+# delivers video under a different resource type, a video's thumbnail is a
+# generated poster frame rather than the file itself, and the Phase 7 legacy
+# bridge below must never write a video into an ImageField column.
+MEDIA_TYPES = [
+    ('image', 'Image'),
+    ('video', 'Video'),
+]
+
 
 class MediaAsset(models.Model):
     """
-    One physical image, stored once on Cloudinary and referenced everywhere.
+    One physical file — image or video — stored once on Cloudinary and
+    referenced everywhere.
 
     `file_hash` (SHA-256 of the *stored* bytes, i.e. after CompressedImageField
     has re-encoded the upload) is the deduplication key: an upload whose hash
     already exists returns the existing asset instead of writing a second copy.
+    Video is hashed as uploaded, since it is transcoded on delivery rather than
+    on ingest.
     """
 
     # Cloudinary public_id / storage path. This IS the identity we key on for
     # the file on Cloudinary — no re-upload needed to reuse it.
     storage_key       = models.CharField(max_length=500, unique=True)
+
+    # 'image' or 'video'. Defaults to image so every row that existed before
+    # video support keeps describing itself correctly without a data migration.
+    media_type        = models.CharField(
+        max_length=8, choices=MEDIA_TYPES, default='image', db_index=True,
+    )
 
     # SHA-256 hex digest of the stored bytes. The dedup key.
     file_hash         = models.CharField(max_length=64, unique=True, db_index=True)
@@ -57,6 +78,11 @@ class MediaAsset(models.Model):
     width             = models.PositiveIntegerField(null=True, blank=True)
     height            = models.PositiveIntegerField(null=True, blank=True)
     file_size         = models.BigIntegerField(null=True, blank=True, help_text='Bytes')
+
+    # Video only, and null for images. Stored because the gallery labels a video
+    # thumbnail with its length, and reading that back from Cloudinary on every
+    # page render would be a network call per tile.
+    duration          = models.FloatField(null=True, blank=True, help_text='Seconds (video only)')
 
     # Set ONCE per asset and reused at every placement — this is the direct SEO
     # win: edit alt text on the asset, not per-placement.

@@ -3,6 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#dc2626" />
     <!-- Square PN brand mark, cropped from the monogram in logo.png. Google (and
          browser tabs) require a SQUARE favicon; the full 716x348 wordmark was
          rejected, which is why search showed the generic globe. Rendered on solid
@@ -11,7 +12,118 @@
     <link rel="icon" type="image/png" sizes="96x96" href="/favicon-96.png" />
     <link rel="icon" type="image/png" sizes="192x192" href="/favicon-192.png" />
     <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
-    <title>Pronoun Jeans</title>
+
+    <!-- Site-wide metadata defaults. <div id="root"> is empty until React runs,
+         so these are the only tags a scraper that does not execute JavaScript
+         will ever see. Every tag marked data-default-meta is removed the moment
+         the first <Seo> mounts (src/components/seo/Seo.jsx), handing metadata
+         over to the route without leaving a duplicate behind.
+
+         Deliberately absent: rel="canonical". A static canonical here would
+         point every URL on the site at the homepage for any crawler that
+         stopped before hydration, which is far worse than having none. -->
+    <title data-default-meta>Wholesale Jeans Manufacturer in Ahmedabad | Pronoun Jeans</title>
+    <meta data-default-meta name="description" content="Pronoun Jeans manufactures wholesale men's jeans, cargo pants and joggers in Ahmedabad. Bulk size sets, MOQ pricing and pan-India dispatch for retailers." />
+    <meta data-default-meta property="og:type" content="website" />
+    <meta data-default-meta property="og:site_name" content="Pronoun Jeans" />
+    <meta data-default-meta property="og:title" content="Wholesale Jeans Manufacturer in Ahmedabad | Pronoun Jeans" />
+    <meta data-default-meta property="og:description" content="Pronoun Jeans manufactures wholesale men's jeans, cargo pants and joggers in Ahmedabad. Bulk size sets, MOQ pricing and pan-India dispatch for retailers." />
+    <meta data-default-meta property="og:url" content="https://www.pronounjeans.com/" />
+    <meta data-default-meta property="og:image" content="https://www.pronounjeans.com/og-default.jpg" />
+    <meta data-default-meta property="og:image:width" content="1200" />
+    <meta data-default-meta property="og:image:height" content="630" />
+    <meta data-default-meta property="og:locale" content="en_IN" />
+    <meta data-default-meta name="twitter:card" content="summary_large_image" />
+    <meta data-default-meta name="twitter:title" content="Wholesale Jeans Manufacturer in Ahmedabad | Pronoun Jeans" />
+    <meta data-default-meta name="twitter:description" content="Pronoun Jeans manufactures wholesale men's jeans, cargo pants and joggers in Ahmedabad. Bulk size sets, MOQ pricing and pan-India dispatch for retailers." />
+    <meta data-default-meta name="twitter:image" content="https://www.pronounjeans.com/og-default.jpg" />
+
+    <!-- Static entity markup. Not marked data-default-meta: it describes the
+         business, not the page, so it stays valid on every route and must
+         survive hydration. Page-level JSON-LD is passed to <Seo> as children. -->
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@graph": [
+        {
+          "@type": "Organization",
+          "@id": "https://www.pronounjeans.com/#organization",
+          "name": "Pronoun Jeans",
+          "legalName": "Pronoun Jeans Pvt. Ltd.",
+          "url": "https://www.pronounjeans.com/",
+          "logo": {
+            "@type": "ImageObject",
+            "url": "https://www.pronounjeans.com/logo.png",
+            "width": 716,
+            "height": 348
+          },
+          "image": "https://www.pronounjeans.com/og-default.jpg",
+          "description": "B2B manufacturer and wholesale supplier of men's jeans, denim, cargo pants and joggers, based in Ahmedabad, Gujarat.",
+          "email": "pronounjeans@gmail.com",
+          "telephone": "+91-93751-43100",
+          "address": {
+            "@type": "PostalAddress",
+            "streetAddress": "Textile Market, Ring Road",
+            "addressLocality": "Ahmedabad",
+            "addressRegion": "Gujarat",
+            "postalCode": "380002",
+            "addressCountry": "IN"
+          },
+          "areaServed": {
+            "@type": "Country",
+            "name": "IN"
+          },
+          "sameAs": [
+            "https://www.instagram.com/pronounjeans/",
+            "https://www.facebook.com/pronounjeans/"
+          ],
+          "contactPoint": {
+            "@type": "ContactPoint",
+            "contactType": "sales",
+            "telephone": "+91-93751-43100",
+            "email": "pronounjeans@gmail.com",
+            "areaServed": "IN",
+            "availableLanguage": ["en", "hi", "gu"]
+          }
+        },
+        {
+          "@type": "LocalBusiness",
+          "@id": "https://www.pronounjeans.com/#localbusiness",
+          "parentOrganization": { "@id": "https://www.pronounjeans.com/#organization" },
+          "name": "Pronoun Jeans",
+          "url": "https://www.pronounjeans.com/",
+          "image": "https://www.pronounjeans.com/og-default.jpg",
+          "telephone": "+91-93751-43100",
+          "email": "pronounjeans@gmail.com",
+          "priceRange": "$$",
+          "address": {
+            "@type": "PostalAddress",
+            "streetAddress": "Textile Market, Ring Road",
+            "addressLocality": "Ahmedabad",
+            "addressRegion": "Gujarat",
+            "postalCode": "380002",
+            "addressCountry": "IN"
+          },
+          "areaServed": {
+            "@type": "Country",
+            "name": "IN"
+          },
+          "sameAs": [
+            "https://www.instagram.com/pronounjeans/",
+            "https://www.facebook.com/pronounjeans/"
+          ],
+          "openingHoursSpecification": [
+            {
+              "@type": "OpeningHoursSpecification",
+              "dayOfWeek": ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"],
+              "opens": "10:00",
+              "closes": "18:30"
+            }
+          ]
+        }
+      ]
+    }
+    </script>
   </head>
   <body>
     <div id="root"></div>
