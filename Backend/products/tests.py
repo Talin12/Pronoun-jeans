@@ -142,3 +142,83 @@ class CatalogQueryCountTests(TestCase):
             f'Catalog N+1: 2 variations took {few_queries} queries, '
             f'10 took {many_queries}. They must be equal.',
         )
+
+
+class VariantVideoTests(TestCase):
+    """
+    A per-colour video attached to a variation must reach the storefront via
+    the variation's `videos` field, and adding more of them must not add
+    queries (the catalog would otherwise N+1 back into a worker timeout).
+    """
+
+    def _video_asset(self, key):
+        from medialib.models import MediaAsset
+        return MediaAsset.objects.create(
+            storage_key=f'medialib/{key}', media_type='video',
+            file_hash=key.ljust(64, '0'), original_filename=f'{key}.mp4',
+            mime_type='video/mp4', duration=12.0,
+            # Fully populated so serialization never calls out to Cloudinary.
+            variants={
+                'webm': f'https://cdn/{key}.webm', 'mp4': f'https://cdn/{key}.mp4',
+                'poster': f'https://cdn/{key}-poster.jpg',
+                'poster_thumb': f'https://cdn/{key}-thumb.jpg',
+                'original': f'https://cdn/{key}-orig.mp4',
+            },
+        )
+
+    def _variation_with_video(self, product, size_set, sku, video_key):
+        from medialib.models import MediaAttachment
+        color = Color.objects.create(name=f'C-{sku}', hex_code='#222222')
+        variation = ProductVariation.objects.create(
+            product=product, size_set=size_set, color_palette=color, sku=sku,
+            b2b_price='100.00', stock_quantity=5,
+        )
+        MediaAttachment.objects.create(
+            media=self._video_asset(video_key), attachable_type='variation',
+            attachable_id=variation.id, role='gallery',
+        )
+        return variation
+
+    def setUp(self):
+        self.category = Category.objects.create(name='Joggers', slug='joggers')
+        self.product = Product.objects.create(
+            name='Trail Jogger', slug='trail-jogger', category=self.category,
+            image='products/hero.jpg',
+        )
+        self.size_set = SizeSet.objects.create(name='M TO 2XL')
+
+    def test_variation_video_reaches_the_storefront(self):
+        self._variation_with_video(self.product, self.size_set, 'tj-black', 'vidblack')
+        cache.clear()
+        resp = self.client.get(f'/api/products/catalog/{self.product.slug}/')
+        self.assertEqual(resp.status_code, 200)
+        variation = resp.json()['variations'][0]
+        self.assertEqual(len(variation['videos']), 1)
+        media = variation['videos'][0]['media']
+        self.assertEqual(media['media_type'], 'video')
+        self.assertEqual(media['duration'], 12.0)
+        # The <source> list the player needs, both codecs present.
+        types = {s['type'] for s in media['sources']}
+        self.assertEqual(types, {'video/webm', 'video/mp4'})
+
+    def test_variation_videos_do_not_add_queries(self):
+        self._variation_with_video(self.product, self.size_set, 'tj-a', 'vida')
+
+        def count():
+            cache.clear()
+            with CaptureQueriesContext(connection) as ctx:
+                resp = self.client.get(f'/api/products/catalog/{self.product.slug}/')
+            self.assertEqual(resp.status_code, 200)
+            return len(ctx)
+
+        one_video = count()
+        # Two more variations, each with its own video.
+        self._variation_with_video(self.product, self.size_set, 'tj-b', 'vidb')
+        self._variation_with_video(self.product, self.size_set, 'tj-c', 'vidc')
+        three_videos = count()
+
+        self.assertEqual(
+            one_video, three_videos,
+            f'Variant-video N+1: 1 video took {one_video} queries, '
+            f'3 took {three_videos}. They must be equal.',
+        )

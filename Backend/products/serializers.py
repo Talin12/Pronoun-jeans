@@ -48,6 +48,10 @@ class ProductVariationSerializer(serializers.ModelSerializer):
     size          = serializers.SerializerMethodField()
     size_display  = serializers.SerializerMethodField()
     set_breakdown = serializers.SerializerMethodField()
+    # Per-colour video clips. Legacy gallery columns are ImageFields, so a
+    # colourway's video lives only as a media-library attachment on this
+    # variation. Empty for variations with no video, which is most of them.
+    videos        = serializers.SerializerMethodField()
 
     class Meta:
         model  = ProductVariation
@@ -62,8 +66,29 @@ class ProductVariationSerializer(serializers.ModelSerializer):
             'pieces',
             'margin_percentage',
             'set_breakdown',
-            'stock_quantity', 'image', 'gallery_images',
+            'stock_quantity', 'image', 'gallery_images', 'videos',
         ]
+
+    def get_videos(self, obj):
+        """
+        Video attachments on THIS variation (attachable_type 'variation'),
+        serialized like the product's library_media so the storefront reads
+        them the same way. The view batches these into context to avoid N+1;
+        falls back to a direct query for callers that don't set it up (e.g.
+        the admin create response, which serializes a handful of variations).
+        """
+        from medialib.presenters import serialize_attachment
+        mapping = self.context.get('videos_by_variation')
+        if mapping is not None:
+            atts = mapping.get(obj.id, [])
+        else:
+            from medialib.models import MediaAttachment
+            atts = (MediaAttachment.objects
+                    .filter(attachable_type='variation', attachable_id=obj.id,
+                            media__media_type='video',
+                            media__deleted_at__isnull=True)
+                    .select_related('media').order_by('sort_order', 'id'))
+        return [serialize_attachment(a) for a in atts]
 
     def get_gallery_images(self, obj):
         """

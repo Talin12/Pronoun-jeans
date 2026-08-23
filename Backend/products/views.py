@@ -53,7 +53,15 @@ class ProductViewSet(viewsets.ReadOnlyModelViewSet):
         """
         if args:
             instance = args[0]
-            objs = instance if isinstance(instance, (list, tuple)) else [instance]
+            # many=True (the list page) hands us a QuerySet or a pagination
+            # Page, not a list — materialise it once so the batch maps below
+            # actually get built (and so the prefetch cache is populated before
+            # serialization iterates it). A single retrieve() hands us one
+            # instance. Getting this wrong silently skips batching and N+1s.
+            if kwargs.get('many'):
+                objs = list(instance)
+            else:
+                objs = [instance]
             ids = [o.id for o in objs if getattr(o, 'id', None) is not None]
             if ids:
                 from collections import defaultdict
@@ -62,11 +70,32 @@ class ProductViewSet(viewsets.ReadOnlyModelViewSet):
                 atts = (MediaAttachment.objects
                         .filter(attachable_type='product', attachable_id__in=ids,
                                 media__deleted_at__isnull=True)
-                        .select_related('media').order_by('sort_order', 'id'))
+                        .select_related('media')
+                        # serialize_asset reads media.categories (m2m) — prefetch
+                        # it or every asset costs an extra query.
+                        .prefetch_related('media__categories')
+                        .order_by('sort_order', 'id'))
                 for a in atts:
                     mapping[a.attachable_id].append(a)
                 ctx = kwargs.setdefault('context', self.get_serializer_context())
                 ctx['media_by_product'] = mapping
+
+                # Per-variation video clips, batched the same way. Variations
+                # are already prefetched (get_queryset), so reading .variations
+                # here is free. One extra query total, not one per variation.
+                var_ids = [v.id for o in objs for v in o.variations.all()]
+                videos_by_variation = defaultdict(list)
+                if var_ids:
+                    vatts = (MediaAttachment.objects
+                             .filter(attachable_type='variation', attachable_id__in=var_ids,
+                                     media__media_type='video',
+                                     media__deleted_at__isnull=True)
+                             .select_related('media')
+                             .prefetch_related('media__categories')
+                             .order_by('sort_order', 'id'))
+                    for a in vatts:
+                        videos_by_variation[a.attachable_id].append(a)
+                ctx['videos_by_variation'] = videos_by_variation
         return super().get_serializer(*args, **kwargs)
 
     def get_queryset(self):

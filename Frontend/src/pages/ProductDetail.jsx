@@ -235,15 +235,30 @@ const ProductDetail = () => {
   }, [product]);
 
   // Videos come from the media library rather than from gallery_images: the
-  // legacy columns are ImageFields and can only ever hold photos. They are
-  // product-level, so they stay in the strip whichever colour is selected —
-  // a fabric or fit clip describes the garment, not one colourway, and hiding
-  // it behind a swatch would make it unreachable from the default view.
-  const videos = useMemo(() => (
+  // legacy columns are ImageFields and can only ever hold photos.
+  //
+  // Product-level clips (a fabric or fit video describing the garment, not one
+  // colourway) stay in the strip whichever colour is selected. Per-variation
+  // clips follow their colour the same way variant photos do: they appear only
+  // when that swatch is active, so a colour's video isn't stranded behind the
+  // default view nor shown against the wrong colour.
+  const productVideos = useMemo(() => (
     (product?.library_media ?? [])
       .filter(att => att.media?.media_type === 'video')
-      .map(att => ({ ...att.media, key: `vid-${att.id}` }))
+      .map(att => ({ ...att.media, key: `pvid-${att.id}` }))
   ), [product]);
+
+  const videos = useMemo(() => {
+    if (!product) return [];
+    const list = [...productVideos];
+    if (activeColor) {
+      product.variations
+        .filter(v => (v.color_name || v.color) === activeColor)
+        .forEach(v => (v.videos || []).forEach(att =>
+          list.push({ ...att.media, key: `vvid-${att.id}` })));
+    }
+    return list;
+  }, [product, productVideos, activeColor]);
 
   // Picking a photo leaves the video stage; picking a video does not disturb
   // which photo is behind it, so returning to the strip lands where it was.
