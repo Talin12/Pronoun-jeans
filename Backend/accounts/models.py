@@ -95,21 +95,27 @@ class Address(models.Model):
     state               = models.CharField(max_length=100)
     pincode             = models.CharField(max_length=10)
 
-    # Per-address contact details. Optional, and blank on every address that
-    # existed before this — which is why nothing may require them.
+    # Per-address contact details, required of every address saved through the
+    # API — see AddressSerializer, which is where that is enforced.
     #
     # They are per address rather than per account because in wholesale the two
     # genuinely differ: goods go to a warehouse with its own manager and number,
     # while the invoice goes to the office. A courier calling the account holder
     # about a delivery to a site they have never visited is the failure this
     # prevents.
+    #
+    # blank=True even so. Addresses saved before the fields existed have
+    # neither, and making the column NOT NULL would have meant either inventing
+    # contacts for them in a data migration or leaving rows that can no longer
+    # be loaded. They stay loadable, fall back to the account below, and are
+    # asked for a real contact the first time someone edits them.
     contact_phone       = models.CharField(
         max_length=20, blank=True, validators=[phone_validator],
-        help_text="Person to call about this address. Blank uses the account's number.",
+        help_text='Person to call about this address.',
     )
     contact_email       = models.EmailField(
         blank=True,
-        help_text="Where paperwork for this address goes. Blank uses the account's email.",
+        help_text='Where paperwork for this address goes.',
     )
 
     is_default_shipping = models.BooleanField(default=False)
@@ -120,7 +126,9 @@ class Address(models.Model):
 
     # The fallback lives here rather than at each call site so the invoice, the
     # API and the panel cannot disagree about which number a courier should
-    # ring. Blank means "use the account's", never "there isn't one".
+    # ring. It covers the addresses that predate the requirement — nothing saved
+    # since is blank — so a legacy row still prints a number on an invoice
+    # instead of nothing at all.
     @property
     def effective_phone(self):
         return self.contact_phone or (self.user.phone_number if self.user_id else '') or ''

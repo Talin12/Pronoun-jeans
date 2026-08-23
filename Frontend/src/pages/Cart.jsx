@@ -313,7 +313,8 @@ const AddressForm = ({ initial = EMPTY_ADDR, editId = null, onSaved, onCancel })
   const [error, setError]   = useState('');
 
   const handleSave = async () => {
-    if (!form.address_line_1 || !form.city || !form.state || !form.pincode) {
+    if (!form.address_line_1 || !form.city || !form.state || !form.pincode
+        || !(form.contact_phone || '').trim() || !(form.contact_email || '').trim()) {
       setError('Please fill in all required fields.'); return;
     }
     setSaving(true); setError('');
@@ -342,14 +343,14 @@ const AddressForm = ({ initial = EMPTY_ADDR, editId = null, onSaved, onCancel })
           { label: 'City *',           key: 'city'           },
           { label: 'State *',          key: 'state'          },
           { label: 'Pincode *',        key: 'pincode'        },
-          // Optional, and left optional on purpose: the account already has an
-          // email and a phone, and these exist for the common wholesale case
-          // where the warehouse taking delivery is not the office that placed
-          // the order. Blank falls back to the account's details.
-          { label: 'Contact Phone',    key: 'contact_phone', type: 'tel',
-            placeholder: "Defaults to your account's number" },
-          { label: 'Contact Email',    key: 'contact_email', type: 'email',
-            placeholder: "Defaults to your account's email" },
+          // Required. In wholesale the delivery contact is routinely not the
+          // account holder — goods go to a warehouse with its own manager
+          // while the invoice goes to the office — so asking per address is
+          // the only way to get a number a courier can actually ring.
+          { label: 'Contact Phone *',  key: 'contact_phone', type: 'tel',
+            placeholder: 'Who the courier should call' },
+          { label: 'Contact Email *',  key: 'contact_email', type: 'email',
+            placeholder: 'Where paperwork for this address goes' },
         ].map(({ label, key, type, placeholder }) => (
           <div key={key}>
             <label className="text-gray-500 dark:text-zinc-400 text-xs font-bold uppercase tracking-widest block mb-1">{label}</label>

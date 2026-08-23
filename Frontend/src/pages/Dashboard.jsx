@@ -209,7 +209,8 @@ const Addresses = () => {
   };
   const handleSubmit = async () => {
     setError('');
-    if (!form.address_line_1 || !form.city || !form.state || !form.pincode) { setError('Please fill in all required fields.'); return; }
+    if (!form.address_line_1 || !form.city || !form.state || !form.pincode
+        || !(form.contact_phone || '').trim() || !(form.contact_email || '').trim()) { setError('Please fill in all required fields.'); return; }
     setSubmitting(true);
     try {
       if (editTarget) { await api.put(`accounts/addresses/${editTarget}/`, form); }
@@ -242,13 +243,13 @@ const Addresses = () => {
             <FormInput label="City *"           value={form.city}           onChange={v => setForm(p => ({ ...p, city: v }))} />
             <FormInput label="State *"          value={form.state}          onChange={v => setForm(p => ({ ...p, state: v }))} />
             <FormInput label="Pincode *"        value={form.pincode}        onChange={v => setForm(p => ({ ...p, pincode: v }))} />
-            {/* Optional. Wholesale deliveries often go to a warehouse with its
-                own manager and number while the invoice goes to the office —
-                blank falls back to the account's details. */}
-            <FormInput label="Contact Phone"    value={form.contact_phone}  onChange={v => setForm(p => ({ ...p, contact_phone: v }))}
-                       type="tel"   placeholder="Defaults to your account's number" />
-            <FormInput label="Contact Email"    value={form.contact_email}  onChange={v => setForm(p => ({ ...p, contact_email: v }))}
-                       type="email" placeholder="Defaults to your account's email" />
+            {/* Required. Wholesale deliveries often go to a warehouse with its
+                own manager and number while the invoice goes to the office, so
+                the account's details are the wrong ones to assume. */}
+            <FormInput label="Contact Phone *"  value={form.contact_phone}  onChange={v => setForm(p => ({ ...p, contact_phone: v }))}
+                       type="tel"   placeholder="Who the courier should call" />
+            <FormInput label="Contact Email *"  value={form.contact_email}  onChange={v => setForm(p => ({ ...p, contact_email: v }))}
+                       type="email" placeholder="Where paperwork for this address goes" />
           </div>
           <div className="flex flex-col sm:flex-row gap-4">
             <label className="flex items-center gap-2 text-gray-600 dark:text-zinc-300 text-sm cursor-pointer">
