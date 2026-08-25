@@ -185,6 +185,19 @@ export default function AdminProductEditor() {
   const mainCategories = categories.filter(c => !c.parent);
   const subCategories  = categories.filter(c => c.parent === Number(form.category));
 
+  // Changing the main category has to drop the sub-categories belonging to the
+  // old one. They stay selected otherwise — the picker just stops rendering
+  // them, because it only lists the new parent's children — and the product
+  // saves filed under both, surfacing in a storefront listing nobody chose it
+  // for. Invisible until the Review step started naming them.
+  const selectCategory = (categoryId) => setForm(f => ({
+    ...f,
+    category: categoryId,
+    subcategories: f.subcategories.filter(
+      id => categories.some(c => c.id === id && c.parent === Number(categoryId)),
+    ),
+  }));
+
   const errMsg = (err, fallback) => {
     const d = err.response?.data;
     return d && typeof d === 'object'
@@ -337,7 +350,7 @@ export default function AdminProductEditor() {
                 </div>
                 <div>
                   <label className={labelCls}>Category</label>
-                  <select className={inputCls} value={form.category} onChange={e => set('category', e.target.value ? Number(e.target.value) : '')}>
+                  <select className={inputCls} value={form.category} onChange={e => selectCategory(e.target.value ? Number(e.target.value) : '')}>
                     <option value="">— Select —</option>
                     {mainCategories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
                   </select>
@@ -502,6 +515,16 @@ export default function AdminProductEditor() {
               <dl className="grid sm:grid-cols-2 gap-x-6 gap-y-4 text-sm">
                 <Row label="Name" value={form.name} />
                 <Row label="Category" value={mainCategories.find(c => c.id === Number(form.category))?.name || '—'} />
+                {/* Named, not counted. A product filed under the wrong
+                    sub-category shows up in the wrong storefront listing, and
+                    "2 selected" gives the reviewer nothing to check that
+                    against. '—' when the category has no sub-categories, which
+                    is a real state rather than an omission. */}
+                <Row label="Sub-categories"
+                     value={categories
+                       .filter(c => form.subcategories.includes(c.id))
+                       .map(c => c.name)
+                       .join(', ')} />
                 <Row label="MOQ" value={form.moq} />
                 <Row label="Variants" value={`${variations.length}`} />
                 <Row label="Status" value={form.is_active ? 'Active (live)' : 'Draft (hidden)'} />
