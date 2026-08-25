@@ -912,13 +912,14 @@ class CategoryDescriptionTests(TestCase):
 
 class CategoryDeleteGuardTests(TestCase):
     """
-    A category with products filed under it cannot be deleted.
+    Only a completely empty category can be deleted — no sub-categories, and
+    no products.
 
-    Nothing in the schema prevented it: Product.category is SET_NULL and
-    Product.subcategories is a plain M2M, so the delete succeeded and quietly
-    unfiled every product — they disappeared from the storefront listing with
-    nothing saying why. The API refuses with a count so the panel can say how
-    much work clearing it is.
+    Nothing in the schema enforced either half. Product.category is SET_NULL
+    and Product.subcategories is a plain M2M, so a delete quietly unfiled every
+    product; and `parent` cascades, so it silently took the sub-categories with
+    it. The API refuses with counts for both, so the panel can say what is in
+    the way rather than only that something is.
     """
 
     def setUp(self):
@@ -973,12 +974,25 @@ class CategoryDeleteGuardTests(TestCase):
         r = self._delete(self.men)
         self.assertIn('Slim Fit Jean', r.json()['product_names'])
 
-    def test_the_message_says_how_many_and_what_to_do(self):
+    def test_the_message_says_what_is_inside_and_what_to_do(self):
+        self.boxers.delete()
         Product.objects.create(name='Jean', slug='jean', category=self.men)
         message = self._delete(self.men).json()['error']
+
         self.assertIn('1 product', message)
         self.assertIn('Men', message)
-        self.assertIn('remove this category', message)
+        self.assertIn('completely empty', message)
+
+    def test_the_message_does_not_mention_a_blocker_that_is_not_there(self):
+        """"0 sub-categories" in a refusal is noise an admin has to decode."""
+        self.boxers.delete()
+        Product.objects.create(name='Jean', slug='jean', category=self.men)
+        self.assertNotIn('sub-categor', self._delete(self.men).json()['error'])
+
+    def test_one_product_is_not_reported_as_plural(self):
+        self.boxers.delete()
+        Product.objects.create(name='Jean', slug='jean', category=self.men)
+        self.assertIn('1 product ', self._delete(self.men).json()['error'])
 
     def test_an_inactive_product_still_blocks(self):
         """Deactivated is not deleted — it is still filed here and would still
@@ -993,13 +1007,37 @@ class CategoryDeleteGuardTests(TestCase):
         self.assertEqual(r.status_code, 204, r.content)
         self.assertFalse(Category.objects.filter(pk=self.empty.pk).exists())
 
-    def test_an_empty_parent_with_an_empty_child_deletes(self):
+    def test_a_parent_with_a_child_is_refused_even_when_both_are_empty(self):
+        """`parent` cascades, so this delete would take the sub-category with
+        it. Nothing is lost, but nobody asked for it to go — the branch comes
+        apart from the bottom up so every step is one an admin can see."""
         r = self._delete(self.men)
-        self.assertEqual(r.status_code, 204, r.content)
-        self.assertFalse(Category.objects.filter(pk=self.boxers.pk).exists())
+
+        self.assertEqual(r.status_code, 409, r.content)
+        self.assertEqual(r.json()['child_count'], 1)
+        self.assertEqual(r.json()['product_count'], 0)
+        self.assertTrue(Category.objects.filter(pk=self.boxers.pk).exists())
+
+    def test_the_child_is_named(self):
+        self.assertIn('Boxers', self._delete(self.men).json()['child_names'])
+
+    def test_both_blockers_are_reported_together(self):
+        Product.objects.create(name='Jean', slug='jean', category=self.men)
+        body = self._delete(self.men).json()
+
+        self.assertEqual(body['child_count'], 1)
+        self.assertEqual(body['product_count'], 1)
+        self.assertIn('1 sub-category and 1 product', body['error'])
+
+    def test_a_parent_deletes_once_its_child_is_gone(self):
+        """The path the message tells the admin to take, from the bottom up."""
+        self.assertEqual(self._delete(self.men).status_code, 409)
+        self.boxers.delete()
+        self.assertEqual(self._delete(self.men).status_code, 204)
 
     def test_it_deletes_once_the_products_move_away(self):
         """The path the message tells the admin to take has to actually work."""
+        self.boxers.delete()                       # empty the branch first
         product = Product.objects.create(name='Jean', slug='jean', category=self.men)
         self.assertEqual(self._delete(self.men).status_code, 409)
 
@@ -1009,6 +1047,7 @@ class CategoryDeleteGuardTests(TestCase):
         self.assertEqual(self._delete(self.men).status_code, 204)
 
     def test_a_product_elsewhere_does_not_block(self):
+        self.boxers.delete()
         Product.objects.create(name='Jean', slug='jean', category=self.empty)
         self.assertEqual(self._delete(self.men).status_code, 204)
 
@@ -1042,6 +1081,10 @@ class CategoryDjangoAdminDeleteGuardTests(TestCase):
 
     def test_delete_is_allowed_for_an_empty_category(self):
         self.assertTrue(self.admin.has_delete_permission(self.request, self.men))
+
+    def test_delete_is_refused_for_a_category_with_a_sub_category(self):
+        Category.objects.create(name='Boxers', slug='boxers', parent=self.men)
+        self.assertFalse(self.admin.has_delete_permission(self.request, self.men))
 
     def test_the_bulk_delete_action_is_removed(self):
         """delete_selected checks the permission once with no object, so the

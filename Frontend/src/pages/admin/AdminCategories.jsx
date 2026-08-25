@@ -50,8 +50,8 @@ export default function AdminCategories() {
         // it comes back with the count, so say which category and how many
         // rather than the old blanket "it may be in use".
         const data = err.response?.data;
-        if (err.response?.status === 409 && data?.product_count) {
-          setBlocked({ category: cat, count: data.product_count, names: data.product_names || [] });
+        if (err.response?.status === 409 && (data?.product_count || data?.child_count)) {
+          setBlocked({ category: cat, ...data });
         } else {
           setError(data?.error || `Could not delete "${cat.name}".`);
         }
@@ -135,7 +135,7 @@ export default function AdminCategories() {
       )}
 
       {blocked && (
-        <BlockedByProducts
+        <NotEmptyDialog
           {...blocked}
           onView={() => navigate(`/admin/categories/${blocked.category.id}`)}
           onClose={() => setBlocked(null)}
@@ -148,17 +148,26 @@ export default function AdminCategories() {
 /**
  * Why a category could not be deleted.
  *
- * The count is the point: "in use" tells an admin nothing about how much work
- * clearing it is, and they cannot tell whether they are looking at one stray
- * product or the whole catalogue. Naming the first few turns it into something
- * actionable, and "View products" lands on the list already filtered to them.
+ * A category is deletable only when it is completely empty, so there are two
+ * reasons it can be refused and they can both apply at once. Each is listed
+ * separately with what it contains, because "not empty" leaves an admin
+ * guessing which of the two to go and fix.
+ *
+ * The counts come from the server rather than the loaded category list: a
+ * sub-category's products are not on this page, and a stale count on a refusal
+ * dialog is worse than none.
  */
-function BlockedByProducts({ category, count, names, onView, onClose }) {
+function NotEmptyDialog({
+  category, child_count = 0, product_count = 0,
+  child_names = [], product_names = [], onView, onClose,
+}) {
+  const label = category.parent ? 'sub-category' : 'category';
+
   return (
     <div className="fixed inset-0 z-[70] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm" onClick={onClose}>
       <div className="bg-white dark:bg-zinc-900 rounded-2xl shadow-2xl w-full max-w-md p-5 max-h-[85vh] overflow-y-auto"
            onClick={e => e.stopPropagation()}>
-        <div className="flex items-start justify-between gap-3 mb-3">
+        <div className="flex items-start justify-between gap-3 mb-1">
           <h3 className="text-base font-black text-gray-900 dark:text-zinc-100">
             Can&apos;t delete &ldquo;{category.name}&rdquo;
           </h3>
@@ -166,29 +175,28 @@ function BlockedByProducts({ category, count, names, onView, onClose }) {
             <X size={18} />
           </button>
         </div>
+        <p className="text-sm text-gray-500 dark:text-zinc-400 mb-4">
+          A {label} can only be deleted once it is completely empty.
+        </p>
 
-        <div className="flex items-start gap-2.5 bg-amber-50 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-500/20 rounded-xl px-4 py-3 text-sm text-amber-800 dark:text-amber-300">
-          <PackageOpen size={16} className="mt-0.5 shrink-0" />
-          <p>
-            <span className="font-bold">{count} product{count === 1 ? '' : 's'}</span>{' '}
-            {count === 1 ? 'is' : 'are'} still filed under this
-            {category.parent ? ' sub-category' : ' category'}. Edit{' '}
-            {count === 1 ? 'it' : 'them'} and remove this
-            {category.parent ? ' sub-category' : ' category'} first, then delete it.
-          </p>
-        </div>
+        {child_count > 0 && (
+          <Blocker
+            icon={FolderTree}
+            heading={`${child_count} sub-categor${child_count === 1 ? 'y' : 'ies'}`}
+            instruction="Empty and delete these first."
+            names={child_names}
+            total={child_count}
+          />
+        )}
 
-        {names.length > 0 && (
-          <ul className="mt-3 space-y-1 text-sm text-gray-600 dark:text-zinc-400">
-            {names.map(n => (
-              <li key={n} className="truncate">• {n}</li>
-            ))}
-            {count > names.length && (
-              <li className="text-gray-400 dark:text-zinc-500">
-                …and {count - names.length} more
-              </li>
-            )}
-          </ul>
+        {product_count > 0 && (
+          <Blocker
+            icon={PackageOpen}
+            heading={`${product_count} product${product_count === 1 ? '' : 's'}`}
+            instruction={`Edit ${product_count === 1 ? 'it' : 'them'} and remove this ${label}.`}
+            names={product_names}
+            total={product_count}
+          />
         )}
 
         <div className="flex justify-end gap-2 mt-5">
@@ -196,11 +204,31 @@ function BlockedByProducts({ category, count, names, onView, onClose }) {
             className="px-4 py-2 rounded-xl border border-gray-200 dark:border-white/10 text-sm font-bold text-gray-600 dark:text-zinc-300 hover:bg-gray-50 dark:hover:bg-white/5">
             Close
           </button>
-          <button onClick={onView}
-            className="px-4 py-2 rounded-xl bg-accent text-white text-sm font-bold hover:brightness-110 transition">
-            View products
-          </button>
+          {product_count > 0 && (
+            <button onClick={onView}
+              className="px-4 py-2 rounded-xl bg-accent text-white text-sm font-bold hover:brightness-110 transition">
+              View products
+            </button>
+          )}
         </div>
+      </div>
+    </div>
+  );
+}
+
+/** One reason the category is not empty, with a sample of what is in it. */
+function Blocker({ icon: Icon, heading, instruction, names, total }) {
+  return (
+    <div className="flex items-start gap-2.5 bg-amber-50 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-500/20 rounded-xl px-4 py-3 text-sm text-amber-800 dark:text-amber-300 mb-2.5">
+      <Icon size={16} className="mt-0.5 shrink-0" />
+      <div className="min-w-0">
+        <p><span className="font-bold">{heading}</span> inside. {instruction}</p>
+        {names.length > 0 && (
+          <ul className="mt-1.5 space-y-0.5 text-amber-700/90 dark:text-amber-300/70">
+            {names.map(n => <li key={n} className="truncate">• {n}</li>)}
+            {total > names.length && <li>…and {total - names.length} more</li>}
+          </ul>
+        )}
       </div>
     </div>
   );

@@ -358,14 +358,14 @@ class CategoryAdmin(admin.ModelAdmin):
 
     # ── Deletion guard ────────────────────────────────────────────────────
     #
-    # Same rule the admin API enforces: a category with products filed under it
-    # cannot be deleted, because Product.category is SET_NULL and
-    # Product.subcategories is a plain M2M — the delete would succeed and
-    # silently unfile them. Guarding only the API would leave this page as a
-    # way around it.
+    # Same rule the admin API enforces: only a completely empty category can be
+    # deleted. Product.category is SET_NULL and Product.subcategories is a plain
+    # M2M, so a delete would silently unfile every product; and `parent`
+    # cascades, so it would take the sub-categories with it too. Guarding only
+    # the API would leave this page as a way around both.
 
     def has_delete_permission(self, request, obj=None):
-        if obj is not None and obj.linked_products().exists():
+        if obj is not None and not obj.is_empty():
             return False
         return super().has_delete_permission(request, obj)
 

@@ -73,6 +73,19 @@ class Category(models.Model):
             return [self.pk]                     # a sub-category has no children
         return [self.pk, *self.subcategories.values_list('pk', flat=True)]
 
+    def is_empty(self):
+        """
+        True when deleting this category would take nothing with it.
+
+        Empty means no sub-categories AND no products, and both halves matter
+        for the same reason: `parent` cascades, so deleting a main category
+        takes its sub-categories with it, and anything filed under one of those
+        is unfiled without the delete ever mentioning it. Requiring the branch
+        to be dismantled from the bottom up means every step is one an admin
+        can actually see.
+        """
+        return not self.subcategories.exists() and not self.linked_products().exists()
+
     def linked_products(self):
         """
         Products this category cannot be deleted out from under — filed here as

@@ -296,35 +296,70 @@ class CategoryViewSet(viewsets.ModelViewSet):
 
     def destroy(self, request, *args, **kwargs):
         """
-        Refuse to delete a category that still has products filed under it.
+        Only a completely empty category can be deleted — no sub-categories,
+        no products.
 
-        Nothing in the schema prevents this: Product.category is SET_NULL and
-        Product.subcategories is a plain M2M, so the delete would succeed and
-        quietly unfile every product instead — they would vanish from the
-        storefront listing with nothing anywhere saying why. The products have
-        to be moved first, which is a decision only a person can make.
+        Nothing in the schema enforces either half. Product.category is
+        SET_NULL and Product.subcategories is a plain M2M, so a delete would
+        succeed and quietly unfile every product; and `parent` cascades, so
+        deleting "Men" would silently take "Men → Boxers" with it and unfile
+        everything under that too. Both are losses an admin never asked for and
+        would not see happen.
 
-        The count covers sub-categories too, because `parent` cascades:
-        deleting "Men" also deletes "Men → Boxers" and unfiles everything
-        under it.
+        Requiring the branch to be dismantled from the bottom up makes every
+        step visible: empty the sub-category, delete it, then the parent.
         """
         category = self.get_object()
+
+        children = category.subcategories.all()
+        child_count = children.count()
         products = category.linked_products()
-        count = products.count()
-        if count:
+        product_count = products.count()
+
+        if child_count or product_count:
             return Response(
-                {'error': f'{count} product(s) are still filed under '
-                          f'"{category}". Edit them and remove this category '
-                          f'first, then delete it.',
-                 'product_count': count,
-                 # Named so the panel can show which products are in the way
-                 # rather than only how many. Capped: the message is a prompt to
-                 # go and fix them, not a listing screen.
+                {'error': self._blocked_message(category, child_count, product_count),
+                 'child_count':   child_count,
+                 'product_count': product_count,
+                 # Named so the panel can show what is in the way rather than
+                 # only how much. Capped: this is a prompt to go and fix them,
+                 # not a listing screen.
+                 'child_names':   list(children.values_list('name', flat=True)[:10]),
                  'product_names': list(products.values_list('name', flat=True)[:10]),
-                 'category_id': category.pk},
+                 'category_id':   category.pk},
                 status=409,
             )
         return super().destroy(request, *args, **kwargs)
+
+    @staticmethod
+    def _blocked_message(category, child_count, product_count):
+        """
+        One sentence naming what is in the way and what to do about it.
+
+        Written per case rather than assembled from fragments: "1 products" and
+        "0 sub-categories" are what generic pluralisation produces here, and an
+        admin reading a refusal is the last person who should have to decode it.
+        """
+        label = 'sub-category' if category.parent_id else 'category'
+
+        inside, todo = [], []
+        if child_count:
+            inside.append(f'{child_count} sub-categor'
+                          f'{"y" if child_count == 1 else "ies"}')
+            todo.append('delete the sub-categories')
+        if product_count:
+            inside.append(f'{product_count} product'
+                          f'{"" if product_count == 1 else "s"}')
+            todo.append('move the products out')
+
+        # Only what is actually in the way: telling an admin to delete
+        # sub-categories that do not exist sends them looking for something
+        # they will not find.
+        return (
+            f'"{category}" still has {" and ".join(inside)} inside it. '
+            f'A {label} can only be deleted once it is completely empty — '
+            f'{" and ".join(todo)} first.'
+        )
 
 
 class ColorViewSet(viewsets.ModelViewSet):
