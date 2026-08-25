@@ -2,26 +2,70 @@ import React, { useCallback, useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Plus, Search, Loader, Package, ChevronLeft, ChevronRight, ImageOff, Pencil,
+  ArrowUpDown, FolderTree, ToggleLeft, X,
 } from 'lucide-react';
-import { listProducts, updateProduct } from '../../api/adminApi';
+import { listCategories, listProducts, updateProduct } from '../../api/adminApi';
 import StatusToggle from '../../components/admin/StatusToggle';
+
+// Every sort the list offers, as the `ordering` value the API expects. Kept as
+// one list so the dropdown and the request cannot disagree about what "Newest"
+// means — the API orders by -created_at, and a label that drifts from that is
+// a bug nobody notices.
+const SORTS = [
+  { value: '-created_at',      label: 'Newest first' },
+  { value: 'created_at',       label: 'Oldest first' },
+  { value: 'name',             label: 'Name A–Z' },
+  { value: '-name',            label: 'Name Z–A' },
+  { value: '-variation_count', label: 'Most variations' },
+  { value: 'variation_count',  label: 'Fewest variations' },
+];
+
+const selectCls = 'appearance-none pl-9 pr-8 py-2.5 rounded-xl border border-gray-200 '
+  + 'dark:border-white/10 bg-white dark:bg-zinc-900 text-base sm:text-sm font-semibold '
+  + 'text-gray-700 dark:text-zinc-200 focus:outline-none focus:ring-2 focus:ring-accent/40';
+
+/** A select with a leading icon, matching the search field's height. */
+const FilterSelect = ({ icon: Icon, value, onChange, children, label }) => (
+  <div className="relative">
+    <Icon size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
+    <select aria-label={label} value={value} onChange={e => onChange(e.target.value)}
+      className={selectCls}>
+      {children}
+    </select>
+  </div>
+);
 
 export default function AdminProducts() {
   const [data, setData]     = useState({ results: [], count: 0 });
   const [loading, setLoad]  = useState(true);
   const [search, setSearch] = useState('');
+  const [category, setCategory] = useState('');   // '' = every category
+  const [status, setStatus]     = useState('');   // '' = active and inactive
+  const [sort, setSort]         = useState(SORTS[0].value);
+  const [categories, setCategories] = useState([]);
   const [page, setPage]     = useState(1);
   const [busyId, setBusy]   = useState(null);
   const [error, setError]   = useState('');
   const navigate = useNavigate();
 
+  useEffect(() => {
+    listCategories().then(setCategories).catch(() => setCategories([]));
+  }, []);
+
   const fetch = useCallback(() => {
     setLoad(true);
-    listProducts({ search, page })
+    // Empty values are dropped rather than sent blank: the API treats an
+    // unrecognised is_active as "no filter", but a blank category would be
+    // parsed as an id and match nothing.
+    listProducts({
+      search, page, ordering: sort,
+      ...(category ? { category } : {}),
+      ...(status ? { is_active: status } : {}),
+    })
       .then(setData)
       .catch(() => setData({ results: [], count: 0 }))
       .finally(() => setLoad(false));
-  }, [search, page]);
+  }, [search, page, sort, category, status]);
 
   useEffect(() => {
     const t = setTimeout(fetch, 200);
@@ -47,6 +91,14 @@ export default function AdminProducts() {
     }
   };
 
+  // Sort is excluded on purpose: reordering the list hides nothing, so
+  // offering to "clear" it would imply results are being kept back.
+  const filtered = Boolean(search || category || status);
+
+  const clearFilters = () => {
+    setPage(1); setSearch(''); setCategory(''); setStatus('');
+  };
+
   const pageSize = 24;
   const totalPages = Math.max(1, Math.ceil((data.count || 0) / pageSize));
 
@@ -57,7 +109,8 @@ export default function AdminProducts() {
           <p className="text-accent text-xs font-black uppercase tracking-widest mb-1">Admin Panel</p>
           <h1 className="text-2xl font-black text-gray-900 dark:text-zinc-100">Products</h1>
           <p className="text-gray-500 dark:text-zinc-400 text-sm mt-1">
-            {loading ? '—' : `${data.count} product${data.count !== 1 ? 's' : ''}`}
+            {loading ? '—'
+              : `${data.count} product${data.count !== 1 ? 's' : ''}${filtered ? ' match' : ''}`}
           </p>
         </div>
         <button onClick={() => navigate('/admin/products/new')}
@@ -66,12 +119,49 @@ export default function AdminProducts() {
         </button>
       </div>
 
-      {/* text-base on phones: under 16px makes iOS Safari zoom in on focus. */}
-      <div className="relative mb-6 max-w-md">
-        <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-        <input value={search} onChange={e => { setPage(1); setSearch(e.target.value); }}
-          placeholder="Search by product name or SKU…"
-          className="w-full pl-9 pr-3 py-2.5 rounded-xl border border-gray-200 dark:border-white/10 bg-white dark:bg-zinc-900 text-base sm:text-sm text-gray-900 dark:text-zinc-100 focus:outline-none focus:ring-2 focus:ring-accent/40" />
+      {/* Search, filters and sort on one line, wrapping to their own rows on a
+          phone. Every one of them resets to page 1 — filtering while on page 3
+          otherwise lands on an empty list that looks like "no results". */}
+      <div className="flex flex-wrap items-center gap-3 mb-6">
+        {/* text-base on phones: under 16px makes iOS Safari zoom in on focus. */}
+        <div className="relative flex-1 min-w-[240px] max-w-md">
+          <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+          <input value={search} onChange={e => { setPage(1); setSearch(e.target.value); }}
+            placeholder="Search by product name or SKU…"
+            className="w-full pl-9 pr-3 py-2.5 rounded-xl border border-gray-200 dark:border-white/10 bg-white dark:bg-zinc-900 text-base sm:text-sm text-gray-900 dark:text-zinc-100 focus:outline-none focus:ring-2 focus:ring-accent/40" />
+        </div>
+
+        <FilterSelect icon={FolderTree} label="Filter by category"
+          value={category} onChange={v => { setPage(1); setCategory(v); }}>
+          <option value="">All categories</option>
+          {categories.filter(c => !c.parent).map(main => (
+            <optgroup key={main.id} label={main.name}>
+              <option value={main.id}>{main.name} (all)</option>
+              {categories.filter(c => c.parent === main.id).map(sub => (
+                <option key={sub.id} value={sub.id}>{main.name} → {sub.name}</option>
+              ))}
+            </optgroup>
+          ))}
+        </FilterSelect>
+
+        <FilterSelect icon={ToggleLeft} label="Filter by status"
+          value={status} onChange={v => { setPage(1); setStatus(v); }}>
+          <option value="">Active &amp; inactive</option>
+          <option value="true">Active only</option>
+          <option value="false">Inactive only</option>
+        </FilterSelect>
+
+        <FilterSelect icon={ArrowUpDown} label="Sort products"
+          value={sort} onChange={v => { setPage(1); setSort(v); }}>
+          {SORTS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+        </FilterSelect>
+
+        {filtered && (
+          <button onClick={clearFilters}
+            className="inline-flex items-center gap-1.5 px-3 py-2.5 rounded-xl text-sm font-semibold text-gray-500 dark:text-zinc-400 hover:text-accent transition">
+            <X size={15} /> Clear
+          </button>
+        )}
       </div>
 
       {error && (
@@ -86,6 +176,13 @@ export default function AdminProducts() {
         <div className="text-center py-20 text-gray-400">
           <Package size={40} className="mx-auto mb-3 opacity-40" />
           <p className="font-semibold">No products found</p>
+          {/* Without this an admin who filtered to an empty combination has no
+              hint that the catalogue is not simply empty. */}
+          {filtered && (
+            <button onClick={clearFilters} className="mt-3 text-sm font-bold text-accent hover:underline">
+              Clear search and filters
+            </button>
+          )}
         </div>
       ) : (
         <div className="grid gap-3">

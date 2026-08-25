@@ -54,7 +54,9 @@ class ProductViewSet(viewsets.ModelViewSet):
     pagination_class   = AdminPagination
     filter_backends    = [filters.SearchFilter, filters.OrderingFilter]
     search_fields      = ['name', 'slug', 'variations__sku']
-    ordering_fields    = ['created_at', 'name', 'moq']
+    # variation_count is the annotation below, not a column — it is here so the
+    # panel can surface the products that were started and never finished.
+    ordering_fields    = ['created_at', 'name', 'moq', 'variation_count']
     ordering           = ['-created_at']
 
     def get_queryset(self):
@@ -75,6 +77,13 @@ class ProductViewSet(viewsets.ModelViewSet):
                 Q(category_id=cid) | Q(subcategories__id=cid)
                 | Q(category__parent_id=cid) | Q(subcategories__parent_id=cid)
             ).distinct()
+
+        # ?is_active=true|false — the panel's Status filter. Anything else is
+        # ignored rather than treated as false, so a typo shows everything
+        # instead of silently hiding every live product.
+        is_active = self.request.query_params.get('is_active')
+        if is_active in ('true', 'false'):
+            qs = qs.filter(is_active=(is_active == 'true'))
 
         if self.action == 'retrieve':
             qs = qs.prefetch_related(

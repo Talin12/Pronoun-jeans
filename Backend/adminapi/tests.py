@@ -1091,3 +1091,113 @@ class CategoryDjangoAdminDeleteGuardTests(TestCase):
         per-object guard cannot see what it is about to remove — the action has
         to go rather than silently bypass the rule."""
         self.assertNotIn('delete_selected', self.admin.get_actions(self.request))
+
+
+class ProductListFilterTests(TestCase):
+    """
+    The Products page's search, filter and sort controls.
+
+    A catalogue of a few dozen products is already past the point where
+    scrolling finds anything, and every one of these narrows or orders the same
+    paginated list — so the count in the header and the page the admin lands on
+    both depend on them being applied server-side rather than to one page.
+    """
+
+    def setUp(self):
+        self.client, self.user = _superuser_client()
+        self.men = Category.objects.create(name='Men', slug='men')
+        self.boxers = Category.objects.create(name='Boxers', slug='boxers', parent=self.men)
+        self.shorts = Category.objects.create(name='Shorts', slug='shorts')
+
+        self.live = Product.objects.create(
+            name='Alpha Trouser', slug='alpha', category=self.men, is_active=True)
+        self.draft = Product.objects.create(
+            name='Beta Boxer', slug='beta', category=self.boxers, is_active=False)
+        self.other = Product.objects.create(
+            name='Gamma Short', slug='gamma', category=self.shorts, is_active=True)
+
+    def _list(self, **params):
+        r = self.client.get('/api/admin/products/', params)
+        self.assertEqual(r.status_code, 200, r.content)
+        return r.json()
+
+    def _names(self, **params):
+        return [p['name'] for p in self._list(**params)['results']]
+
+    # ── status ───────────────────────────────────────────────────────────────
+
+    def test_active_only(self):
+        self.assertEqual(sorted(self._names(is_active='true')),
+                         ['Alpha Trouser', 'Gamma Short'])
+
+    def test_inactive_only(self):
+        self.assertEqual(self._names(is_active='false'), ['Beta Boxer'])
+
+    def test_no_status_shows_both(self):
+        self.assertEqual(len(self._names()), 3)
+
+    def test_an_unrecognised_status_is_ignored_not_treated_as_false(self):
+        """A typo showing every product is recoverable; one silently hiding
+        every live product looks like the catalogue emptied itself."""
+        self.assertEqual(len(self._names(is_active='yes')), 3)
+
+    def test_the_count_reflects_the_filter(self):
+        """The header count comes from here, so it has to be the filtered
+        total rather than the page length."""
+        self.assertEqual(self._list(is_active='false')['count'], 1)
+
+    # ── category ─────────────────────────────────────────────────────────────
+
+    def test_filtering_by_a_main_category_includes_its_sub_categories(self):
+        """Picking "Men" has to bring back the products filed under Men →
+        Boxers as well, or the filter hides products from the very category it
+        claims to show."""
+        self.assertEqual(sorted(self._names(category=self.men.id)),
+                         ['Alpha Trouser', 'Beta Boxer'])
+
+    def test_filtering_by_a_sub_category_is_narrow(self):
+        self.assertEqual(self._names(category=self.boxers.id), ['Beta Boxer'])
+
+    # ── sort ─────────────────────────────────────────────────────────────────
+
+    def test_sort_by_name(self):
+        self.assertEqual(self._names(ordering='name'),
+                         ['Alpha Trouser', 'Beta Boxer', 'Gamma Short'])
+
+    def test_sort_by_name_descending(self):
+        self.assertEqual(self._names(ordering='-name'),
+                         ['Gamma Short', 'Beta Boxer', 'Alpha Trouser'])
+
+    def test_sort_by_variation_count(self):
+        """variation_count is an annotation, not a column — ordering by it only
+        works because it is declared on the viewset."""
+        size = SizeSet.objects.create(name='30 TO 36')
+        for i in range(3):
+            ProductVariation.objects.create(
+                product=self.other, size_set=size, color=f'C{i}',
+                sku=f'SKU-{i}', b2b_price=Decimal('100.00'))
+        ProductVariation.objects.create(
+            product=self.live, size_set=size, color='Solo',
+            sku='SKU-SOLO', b2b_price=Decimal('100.00'))
+
+        self.assertEqual(self._names(ordering='-variation_count')[0], 'Gamma Short')
+        self.assertEqual(self._names(ordering='variation_count')[0], 'Beta Boxer')
+
+    def test_default_order_is_newest_first(self):
+        self.assertEqual(self._names()[0], 'Gamma Short')
+
+    # ── together ─────────────────────────────────────────────────────────────
+
+    def test_filters_combine(self):
+        """They narrow the same queryset — applying one must not drop another."""
+        self.assertEqual(
+            self._names(category=self.men.id, is_active='true', ordering='name'),
+            ['Alpha Trouser'])
+
+    def test_search_still_applies_alongside_a_filter(self):
+        self.assertEqual(self._names(search='Boxer', is_active='false'), ['Beta Boxer'])
+
+    def test_a_filter_that_matches_nothing_returns_an_empty_page(self):
+        body = self._list(category=self.shorts.id, is_active='false')
+        self.assertEqual(body['count'], 0)
+        self.assertEqual(body['results'], [])
