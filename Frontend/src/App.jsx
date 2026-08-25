@@ -41,6 +41,7 @@ const AdminProductEditor   = lazy(() => import('./pages/admin/AdminProductEditor
 const AdminCategories      = lazy(() => import('./pages/admin/AdminCategories'));
 const AdminCategoryProducts = lazy(() => import('./pages/admin/AdminCategoryProducts'));
 const AdminSizeSets        = lazy(() => import('./pages/admin/AdminSizeSets'));
+const AdminAttributes      = lazy(() => import('./pages/admin/AdminAttributes'));
 const AdminMedia           = lazy(() => import('./pages/admin/AdminMedia'));
 const AdminUsers           = lazy(() => import('./pages/admin/AdminUsers'));
 const AdminUserProfile     = lazy(() => import('./pages/admin/AdminUserProfile'));
@@ -101,6 +102,7 @@ function App() {
           <Route path="categories"      element={<AdminCategories />} />
           <Route path="categories/:id"  element={<AdminCategoryProducts />} />
           <Route path="size-sets"       element={<AdminSizeSets />} />
+          <Route path="attributes"      element={<AdminAttributes />} />
           <Route path="media"           element={<AdminMedia />} />
           <Route path="users"           element={<AdminUsers />} />
           <Route path="users/new"       element={<AdminUserProfile />} />

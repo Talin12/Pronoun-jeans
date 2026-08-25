@@ -655,14 +655,36 @@ const ProductDetail = () => {
               </div>
             )}
 
-            {product.description && (
+            {(product.attributes?.length > 0 || product.description) && (
               <div className="mt-6 bg-white dark:bg-zinc-900 rounded-2xl border border-gray-200 dark:border-white/5 p-5 shadow-sm">
                 <h3 className="text-gray-900 dark:text-zinc-100 text-sm font-bold mb-3">Product Details</h3>
-                <div className="text-gray-500 dark:text-zinc-400 text-xs leading-relaxed space-y-1">
-                  {decodeHtml(product.description).split('\n').map((line, i) =>
-                    line.trim() ? <p key={i}>{line}</p> : null
-                  )}
-                </div>
+
+                {/* The tagged spec lines come first and as a table: fit, fabric
+                    and length are what a buyer scans for, and they read far
+                    faster in two columns than buried in a paragraph. The prose
+                    below keeps whatever is genuinely specific to this style. */}
+                {product.attributes?.length > 0 && (
+                  <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-2 text-xs mb-4">
+                    {product.attributes.map(attr => (
+                      <React.Fragment key={attr.slug}>
+                        <dt className="text-gray-400 dark:text-zinc-500 font-semibold uppercase tracking-wide">
+                          {attr.name}
+                        </dt>
+                        <dd className="text-gray-700 dark:text-zinc-200 font-semibold">
+                          {attr.values.join(', ')}
+                        </dd>
+                      </React.Fragment>
+                    ))}
+                  </dl>
+                )}
+
+                {product.description && (
+                  <div className="text-gray-500 dark:text-zinc-400 text-xs leading-relaxed space-y-1">
+                    {decodeHtml(product.description).split('\n').map((line, i) =>
+                      line.trim() ? <p key={i}>{line}</p> : null
+                    )}
+                  </div>
+                )}
               </div>
             )}
           </div>

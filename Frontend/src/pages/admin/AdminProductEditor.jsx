@@ -9,7 +9,7 @@ import {
   createProduct, getProduct, updateProduct,
   listCategories, listColors, createColor, listSizeSets, createSizeSet,
   createVariation, updateVariation, deleteVariation,
-  setProductOgImage, clearProductOgImage,
+  setProductOgImage, clearProductOgImage, listAttributes,
 } from '../../api/adminApi';
 import { SeoSection, FieldHeader, GooglePreview } from '../../components/admin/SeoFields';
 import { effectiveProductSeo, META_TITLE_MAX, META_DESCRIPTION_MAX } from '../../config/seoCopy';
@@ -17,6 +17,7 @@ import { SITE_URL } from '../../config/site';
 import MediaPicker from '../../components/admin/MediaPicker';
 import SizeRangeBuilder from '../../components/admin/SizeRangeBuilder';
 import BulkVariantBuilder from '../../components/admin/BulkVariantBuilder';
+import AttributePicker from '../../components/admin/AttributePicker';
 
 const card    = 'bg-white dark:bg-zinc-900 border border-gray-100 dark:border-white/5 rounded-2xl p-5 sm:p-7';
 const labelCls = 'block text-xs font-bold uppercase tracking-wide text-gray-500 dark:text-zinc-400 mb-1.5';
@@ -109,7 +110,7 @@ export default function AdminProductEditor() {
 
   const [form, setForm] = useState({
     name: '', code: '', category: '', subcategories: [], description: '',
-    fabric_details: '', moq: 1, is_active: false,
+    fabric_details: '', moq: 1, is_active: false, attribute_options: [],
     // Part of the base payload on purpose: every save path sends the whole
     // form, so these persist through Save & Next, Save as Draft and Publish
     // alike, and the "Unsaved changes" marker covers them for free.
@@ -123,6 +124,7 @@ export default function AdminProductEditor() {
   // What the server last confirmed. Base edits only persist through "Save &
   // Next", Save as Draft or Publish, so an unsaved change needs to be visible
   // rather than quietly dropped when the step changes.
+  const [attributes, setAttributes] = useState([]);
   const [savedForm, setSavedForm] = useState(null);
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
 
@@ -141,6 +143,7 @@ export default function AdminProductEditor() {
 
   const loadRefs = useCallback(() => {
     listCategories().then(setCategories);
+    listAttributes().then(setAttributes).catch(() => setAttributes([]));
     listColors().then(setColors);
     listSizeSets().then(setSizeSets);
   }, []);
@@ -154,6 +157,7 @@ export default function AdminProductEditor() {
           name: p.name || '', code: p.code || '', category: p.category || '',
           subcategories: p.subcategories || [], description: p.description || '',
           fabric_details: p.fabric_details || '', moq: p.moq ?? 1, is_active: p.is_active,
+          attribute_options: p.attribute_options || [],
           meta_title: p.meta_title || '', meta_description: p.meta_description || '',
         };
         setForm(loaded);
@@ -251,6 +255,7 @@ export default function AdminProductEditor() {
     name: form.name,
     category_name: mainCategories.find(c => c.id === Number(form.category))?.name || '',
     fabric_details: form.fabric_details,
+    attribute_options: form.attribute_options,
     moq: form.moq,
     meta_title: form.meta_title,
     meta_description: form.meta_description,
@@ -383,6 +388,25 @@ export default function AdminProductEditor() {
                 <div className="sm:col-span-2">
                   <label className={labelCls}>Fabric details</label>
                   <textarea rows={2} className={inputCls} value={form.fabric_details} onChange={e => set('fabric_details', e.target.value)} />
+                </div>
+
+                {/* The spec lines that used to be retyped into the description
+                    on every product. Picked here, rendered as a table above the
+                    description on the product page. */}
+                <div className="sm:col-span-2 pt-2 border-t border-gray-100 dark:border-white/5">
+                  <p className="text-xs font-bold uppercase tracking-wide text-gray-500 dark:text-zinc-400 mb-1">
+                    Product details
+                  </p>
+                  <p className="text-xs text-gray-400 dark:text-zinc-500 mb-3">
+                    Fit, fabric, length and the rest — pick them instead of typing them into the description.
+                  </p>
+                  <AttributePicker
+                    attributes={attributes}
+                    selected={form.attribute_options}
+                    onChange={v => set('attribute_options', v)}
+                    onAttributesChange={(updated) => setAttributes(list =>
+                      list.map(a => (a.id === updated.id ? updated : a)))}
+                  />
                 </div>
               </div>
 
@@ -526,6 +550,18 @@ export default function AdminProductEditor() {
                        .map(c => c.name)
                        .join(', ')} />
                 <Row label="MOQ" value={form.moq} />
+                {/* Named like the sub-categories row: a reviewer checking the
+                    spec table needs the values, not a count of them. */}
+                <Row label="Product details"
+                     value={attributes
+                       .map(a => {
+                         const picked = a.options
+                           .filter(o => form.attribute_options.includes(o.id))
+                           .map(o => o.value);
+                         return picked.length ? `${a.name}: ${picked.join(', ')}` : null;
+                       })
+                       .filter(Boolean)
+                       .join(' · ')} />
                 <Row label="Variants" value={`${variations.length}`} />
                 <Row label="Status" value={form.is_active ? 'Active (live)' : 'Draft (hidden)'} />
               </dl>

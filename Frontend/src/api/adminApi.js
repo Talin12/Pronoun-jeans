@@ -72,6 +72,38 @@ export const updateVariation = (id, data) =>
 export const deleteVariation = (id) =>
   api.delete(`admin/variations/${id}/`).then(r => r.data);
 
+// ── Product attributes (Fit, Fabric, Length, …) ────────────────────────────
+//
+// Active-only by default, which is what the product editor wants. The
+// management page passes includeInactive so a retired attribute stays visible.
+
+export const listAttributes = (includeInactive = false) =>
+  api.get('admin/attributes/', includeInactive ? { params: { include_inactive: 'true' } } : undefined)
+    .then(r => r.data);
+
+export const createAttribute = (data) =>
+  api.post('admin/attributes/', data).then(r => r.data);
+
+export const updateAttribute = (id, data) =>
+  api.patch(`admin/attributes/${id}/`, data).then(r => r.data);
+
+export const deleteAttribute = (id) =>
+  api.delete(`admin/attributes/${id}/`).then(r => r.data);
+
+/**
+ * Add one option to an existing attribute, keeping the ones already there.
+ *
+ * The API reconciles the whole options list on write, so anything left out is
+ * treated as removed — sending only the new option would delete the rest.
+ */
+export const addAttributeOption = (attribute, value) =>
+  updateAttribute(attribute.id, {
+    options: [
+      ...attribute.options.map(o => ({ id: o.id, value: o.value, order: o.order })),
+      { value },
+    ],
+  });
+
 // ── Reference data ─────────────────────────────────────────────────────────
 export const listCategories = () =>
   api.get('admin/categories/').then(r => r.data);

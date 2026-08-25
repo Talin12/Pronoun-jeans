@@ -23,15 +23,15 @@ from rest_framework.views import APIView
 from medialib import presenters, services
 from medialib.models import ATTACHABLE_TYPES, ROLE_CHOICES
 from products.models import (
-    Category, Color, Product, ProductVariation, SizeSet,
+    Attribute, Category, Color, Product, ProductVariation, SizeSet,
 )
 
 from .permissions import IsSuperUser
 from .skus import build_sku
 from .serializers import (
-    CategorySerializer, ColorSerializer, ProductDetailSerializer,
-    ProductListSerializer, ProductVariationSerializer, SizeSetSerializer,
-    UserDetailSerializer, UserListSerializer,
+    AttributeSerializer, CategorySerializer, ColorSerializer,
+    ProductDetailSerializer, ProductListSerializer, ProductVariationSerializer,
+    SizeSetSerializer, UserDetailSerializer, UserListSerializer,
 )
 
 _VALID_TYPES = {t for t, _ in ATTACHABLE_TYPES}
@@ -88,6 +88,9 @@ class ProductViewSet(viewsets.ModelViewSet):
         if self.action == 'retrieve':
             qs = qs.prefetch_related(
                 'subcategories',
+                # grouped_attributes() walks option.attribute for every option,
+                # so the attribute comes along or the editor pays a query each.
+                'attribute_options__attribute',
                 'variations__size_set', 'variations__size_breakdown',
                 'variations__color_palette',
             )
@@ -369,6 +372,45 @@ class CategoryViewSet(viewsets.ModelViewSet):
             f'A {label} can only be deleted once it is completely empty — '
             f'{" and ".join(todo)} first.'
         )
+
+
+class AttributeViewSet(viewsets.ModelViewSet):
+    """
+    Fit, Fabric, Length and friends, with their options.
+
+    Writable so a new fabric is a row the admin adds mid-upload rather than a
+    deploy — the same reason SizeSetViewSet is writable.
+    """
+    permission_classes = [IsSuperUser]
+    serializer_class   = AttributeSerializer
+
+    def get_queryset(self):
+        qs = Attribute.objects.prefetch_related('options').order_by('order', 'name')
+        # Active-only by default — that is what the product editor wants. The
+        # management page passes ?include_inactive=true so a retired attribute
+        # stays visible and can be switched back on.
+        if self.request.query_params.get('include_inactive') != 'true':
+            qs = qs.filter(is_active=True)
+        return qs
+
+    def destroy(self, request, *args, **kwargs):
+        """
+        Deleting an attribute in use would strip that spec line off every
+        product carrying it, with nothing on the product page saying it went.
+        Deactivating hides it from the editor and leaves the products intact,
+        so that is what the message points at.
+        """
+        attribute = self.get_object()
+        used = Product.objects.filter(attribute_options__attribute=attribute).distinct().count()
+        if used:
+            return Response(
+                {'error': f'"{attribute.name}" is used by {used} product(s). '
+                          f'Deactivate it instead — that hides it from the product '
+                          f'editor without changing those products.',
+                 'product_count': used},
+                status=409,
+            )
+        return super().destroy(request, *args, **kwargs)
 
 
 class ColorViewSet(viewsets.ModelViewSet):

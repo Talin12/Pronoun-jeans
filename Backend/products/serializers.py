@@ -178,6 +178,10 @@ class ProductSerializer(serializers.ModelSerializer):
     # Phase 5 migration runs, so existing clients keep working off `image` /
     # `gallery_images`. The view batches these into context to avoid N+1.
     library_media  = serializers.SerializerMethodField()
+    # Fit, fabric, length and so on, grouped and ordered — the spec list above
+    # the description on the product page. Empty for a product nobody has
+    # tagged yet, which is every product until an admin opens it.
+    attributes     = serializers.SerializerMethodField()
 
     class Meta:
         model  = Product
@@ -185,10 +189,14 @@ class ProductSerializer(serializers.ModelSerializer):
             'id', 'name', 'slug', 'description', 'fabric_details',
             'category', 'category_name', 'subcategories', 'is_active', 'moq',
             'image', 'created_at', 'variations', 'gallery_images', 'library_media',
+            'attributes',
             # SEO overrides — blank means the storefront generates its own.
             # updated_at feeds <lastmod> in the build-time sitemap.
             'updated_at', 'meta_title', 'meta_description', 'og_image',
         ]
+
+    def get_attributes(self, obj):
+        return obj.grouped_attributes()
 
     def get_library_media(self, obj):
         from medialib.presenters import serialize_attachment

@@ -18,7 +18,8 @@ from rest_framework import serializers
 
 from accounts.models import Address, AgentProfile
 from products.models import (
-    Category, Color, Product, ProductVariation, SizeSet, SizeSetBreakdown,
+    Attribute, AttributeOption, Category, Color, Product, ProductVariation,
+    SizeSet, SizeSetBreakdown,
 )
 
 from .skus import build_sku
@@ -306,6 +307,111 @@ class ProductVariationSerializer(serializers.ModelSerializer):
         return attrs
 
 
+# ── Attributes (Fit, Fabric, Length, …) ───────────────────────────────────────
+
+class AttributeOptionNestedSerializer(serializers.ModelSerializer):
+    """
+    An option as written inside an attribute create/update.
+
+    `id` is writable on purpose: an update matches rows by it so renaming an
+    option edits it in place. Recreating them would hand out new ids, and every
+    product pointing at the old one would silently lose that spec line.
+    """
+    id = serializers.IntegerField(required=False)
+
+    class Meta:
+        model  = AttributeOption
+        fields = ['id', 'value', 'order']
+
+
+class AttributeSerializer(serializers.ModelSerializer):
+    options       = AttributeOptionNestedSerializer(many=True, required=False)
+    product_count = serializers.SerializerMethodField()
+
+    class Meta:
+        model  = Attribute
+        fields = ['id', 'name', 'slug', 'multi_select', 'is_active', 'order',
+                  'options', 'product_count']
+        extra_kwargs = {'slug': {'required': False}}
+
+    def get_product_count(self, obj):
+        """How many products use any option of this attribute — the panel warns
+        before removing one."""
+        return Product.objects.filter(attribute_options__attribute=obj).distinct().count()
+
+    def validate_name(self, value):
+        name = (value or '').strip()
+        if not name:
+            raise serializers.ValidationError('Give the attribute a name.')
+        return name
+
+    def validate(self, attrs):
+        if not attrs.get('slug'):
+            base = slugify(attrs.get('name') or getattr(self.instance, 'name', ''))
+            slug = base or 'attribute'
+            n = 2
+            qs = Attribute.objects.exclude(pk=getattr(self.instance, 'pk', None))
+            while qs.filter(slug=slug).exists():
+                slug = f'{base}-{n}'; n += 1
+            attrs['slug'] = slug
+        return attrs
+
+    def create(self, validated):
+        options = validated.pop('options', [])
+        attribute = Attribute.objects.create(**validated)
+        for index, option in enumerate(options):
+            option.pop('id', None)                 # ids are ours to assign
+            option.setdefault('order', index)
+            AttributeOption.objects.create(attribute=attribute, **option)
+        return attribute
+
+    def update(self, instance, validated):
+        options = validated.pop('options', None)
+        for key, value in validated.items():
+            setattr(instance, key, value)
+        instance.save()
+        if options is not None:
+            self._sync_options(instance, options)
+        return instance
+
+    def _sync_options(self, instance, rows):
+        """
+        Reconcile options by id: update the ones sent, create the new ones,
+        remove the ones left out. A removal that products still carry is
+        refused rather than silently stripping the value off them — take it off
+        those products first, or leave the option alone.
+        """
+        existing = {o.id: o for o in instance.options.all()}
+        seen = set()
+
+        for index, row in enumerate(rows):
+            row = dict(row)
+            oid = row.pop('id', None)
+            row.setdefault('order', index)
+            current = existing.get(oid) if oid is not None else None
+            if current is not None:
+                for key, value in row.items():
+                    setattr(current, key, value)
+                current.save()
+                seen.add(current.id)
+            else:
+                AttributeOption.objects.get_or_create(
+                    attribute=instance, value=row.get('value', ''),
+                    defaults={'order': row.get('order', index)},
+                )
+
+        dropped = [o for oid, o in existing.items() if oid not in seen]
+        in_use  = [o for o in dropped if o.products.exists()]
+        if in_use:
+            raise serializers.ValidationError({'options': [
+                f'"{o.value}" is used by {o.products.count()} product(s) and '
+                f'cannot be removed. Take it off those products first.'
+                for o in in_use
+            ]})
+        for option in dropped:
+            option.delete()
+
+
 # ── Products ───────────────────────────────────────────────────────────────────
 
 class ProductListSerializer(serializers.ModelSerializer):
@@ -327,12 +433,17 @@ class ProductDetailSerializer(serializers.ModelSerializer):
     variations    = ProductVariationSerializer(many=True, read_only=True)
     image_url     = serializers.SerializerMethodField()
     og_image_url  = serializers.SerializerMethodField()
+    # attribute_options is what the editor writes — a flat list of option ids.
+    # `attributes` is the same data grouped for display, so the panel's review
+    # step and the storefront read one shape and neither regroups it by hand.
+    attributes    = serializers.SerializerMethodField()
 
     class Meta:
         model  = Product
         fields = [
             'id', 'name', 'code', 'slug', 'category', 'category_name', 'subcategories',
             'description', 'fabric_details', 'is_active', 'moq',
+            'attribute_options', 'attributes',
             'image', 'image_url', 'variations', 'created_at', 'updated_at',
             'meta_title', 'meta_description', 'og_image', 'og_image_url',
         ]
@@ -351,6 +462,34 @@ class ProductDetailSerializer(serializers.ModelSerializer):
 
     def get_og_image_url(self, obj):
         return _image_url(obj.og_image)
+
+    def get_attributes(self, obj):
+        return obj.grouped_attributes()
+
+    def validate_attribute_options(self, options):
+        """
+        One value per attribute, unless that attribute says otherwise.
+
+        Nothing in the schema can express this — it is an M2M, and the rule
+        lives on the attribute rather than on the link. Without the check a
+        product could carry "Slim Fit" and "Baggy Fit" at once, and the product
+        page would print both, which is worse than printing neither.
+        """
+        picked = {}
+        for option in options:
+            picked.setdefault(option.attribute, []).append(option.value)
+
+        clashes = [
+            f'{attribute.name}: {", ".join(sorted(values))}'
+            for attribute, values in picked.items()
+            if not attribute.multi_select and len(values) > 1
+        ]
+        if clashes:
+            raise serializers.ValidationError(
+                'Only one value is allowed for these — ' + '; '.join(sorted(clashes))
+                + '. Pick one, or allow multiple on the attribute itself.'
+            )
+        return options
 
     def validate_code(self, value):
         """

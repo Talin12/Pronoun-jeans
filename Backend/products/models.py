@@ -114,6 +114,63 @@ class HeroSlide(models.Model):
         return self.caption or f"Slide #{self.pk}"
 
 
+class Attribute(models.Model):
+    """
+    A spec line that most products fill in — Fit, Fabric, Length, Wash, Style.
+
+    These used to be typed into the description as prose ("Fabric: Oxford
+    Lycra"), which meant retyping them on every product and no two spellings
+    agreeing. As rows they are picked from a list instead, so the same fabric is
+    the same string everywhere — and, unlike prose, they can later be filtered
+    on and published as structured data.
+
+    The set is admin-managed rather than hardcoded: a new attribute is a row
+    here, not a deploy.
+    """
+
+    name         = models.CharField(max_length=50, unique=True,
+                                    help_text='e.g. "Fit", "Fabric", "Length"')
+    slug         = models.SlugField(max_length=60, unique=True)
+
+    # Fit is one value; Length is often several (a style cut in 38, 39 and 40).
+    # Enforced at the write boundary, where a helpful message can be attached —
+    # see adminapi.serializers.ProductDetailSerializer.
+    multi_select = models.BooleanField(
+        default=False,
+        help_text='Allow more than one option on a product (e.g. Length).',
+    )
+
+    is_active    = models.BooleanField(
+        default=True,
+        help_text='Inactive attributes are hidden from the product editor. '
+                  'Deactivate rather than delete — deleting takes the values '
+                  'off every product that used them.',
+    )
+    order        = models.PositiveSmallIntegerField(
+        default=0, help_text='Display order, in the editor and on the product page.')
+
+    class Meta:
+        ordering = ['order', 'name']
+
+    def __str__(self):
+        return self.name
+
+
+class AttributeOption(models.Model):
+    """One pickable value: "Slim Fit", "Cotton Lycra", "40"."""
+
+    attribute = models.ForeignKey(Attribute, on_delete=models.CASCADE, related_name='options')
+    value     = models.CharField(max_length=100)
+    order     = models.PositiveSmallIntegerField(default=0)
+
+    class Meta:
+        unique_together = ('attribute', 'value')
+        ordering        = ['order', 'value']
+
+    def __str__(self):
+        return f'{self.attribute.name}: {self.value}'
+
+
 class Product(models.Model):
     category       = models.ForeignKey(Category, on_delete=models.SET_NULL, null=True, related_name="products")
     subcategories  = models.ManyToManyField(
@@ -135,6 +192,14 @@ class Product(models.Model):
     description    = models.TextField(blank=True)
     fabric_details = models.TextField(blank=True, null=True)
     is_active      = models.BooleanField(default=True)
+
+    # The spec lines shown above the description on the product page. Options
+    # rather than free text so "Cotton Lycra" is one value everywhere instead of
+    # a spelling per product — see Attribute.
+    attribute_options = models.ManyToManyField(
+        AttributeOption, blank=True, related_name='products',
+        help_text='Fit, fabric, length and so on. Picked, not typed.',
+    )
     # 1, not 10: most products are sold by the set, so a "minimum" of ten sets
     # was a floor nobody had chosen — it came from the field's original default
     # rather than from any product's actual terms. A product that really does
@@ -169,6 +234,31 @@ class Product(models.Model):
 
     def __str__(self):
         return self.name
+
+    def grouped_attributes(self):
+        """
+        The spec lines for this product, grouped by attribute and in display
+        order: [{'name': 'Fit', 'slug': 'fit', 'values': ['Slim Fit']}, ...].
+
+        Grouped here rather than in each serializer so the storefront, the admin
+        API and the structured data cannot disagree about the order or the
+        shape. Reads whatever is already loaded, so a caller that prefetched
+        `attribute_options__attribute` pays one query for a whole page.
+        """
+        grouped = {}
+        for option in self.attribute_options.all():
+            attribute = option.attribute
+            row = grouped.setdefault(attribute.id, {
+                'name': attribute.name, 'slug': attribute.slug,
+                'order': attribute.order, 'values': [],
+            })
+            row['values'].append(option.value)
+
+        rows = sorted(grouped.values(), key=lambda r: (r['order'], r['name']))
+        for row in rows:
+            row.pop('order')
+            row['values'].sort()
+        return rows
 
 
 class ProductImage(models.Model):

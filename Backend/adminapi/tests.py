@@ -14,8 +14,11 @@ from django.test import TestCase
 from rest_framework.test import APIClient
 
 from medialib.models import MediaAsset, MediaAttachment
+from django.core.cache import cache
+
 from products.models import (
-    Category, Color, Product, ProductVariation, SizeSet, SizeSetBreakdown,
+    Attribute, AttributeOption, Category, Color, Product, ProductVariation,
+    SizeSet, SizeSetBreakdown,
 )
 
 
@@ -1201,3 +1204,295 @@ class ProductListFilterTests(TestCase):
         body = self._list(category=self.shorts.id, is_active='false')
         self.assertEqual(body['count'], 0)
         self.assertEqual(body['results'], [])
+
+
+class AttributeSeedTests(TestCase):
+    """Migration 0027 ships a starting set so the editor is not empty on day one."""
+
+    def test_the_starting_attributes_exist(self):
+        self.assertEqual(
+            list(Attribute.objects.order_by('order').values_list('name', flat=True)),
+            ['Fit', 'Fabric', 'Length', 'Wash', 'Style'])
+
+    def test_length_is_the_multi_select_one(self):
+        """A style is routinely cut in several lengths, where it has exactly one
+        fit and one fabric."""
+        multi = Attribute.objects.filter(multi_select=True).values_list('name', flat=True)
+        self.assertEqual(list(multi), ['Length'])
+
+    def test_the_options_named_in_the_brief_are_there(self):
+        fabric = Attribute.objects.get(slug='fabric')
+        values = set(fabric.options.values_list('value', flat=True))
+        self.assertTrue({'Pure Cotton', 'Cotton Lycra', 'Linen', 'Linen Lycra'} <= values)
+
+
+class AttributeAdminApiTests(TestCase):
+    """
+    Fit, Fabric, Length — managed from the panel so a new fabric is a row
+    rather than a deploy.
+    """
+
+    def setUp(self):
+        self.client, self.user = _superuser_client()
+        self.url = '/api/admin/attributes/'
+        self.fit = Attribute.objects.get(slug='fit')
+        self.slim = self.fit.options.get(value='Slim Fit')
+        self.baggy = self.fit.options.get(value='Baggy Fit')
+
+    # ── creating ─────────────────────────────────────────────────────────────
+
+    def test_create_with_options(self):
+        r = self.client.post(self.url, {
+            'name': 'Pocket Style',
+            'options': [{'value': 'Side Zip'}, {'value': 'Patch'}],
+        }, format='json')
+
+        self.assertEqual(r.status_code, 201, r.content)
+        created = Attribute.objects.get(name='Pocket Style')
+        self.assertEqual(created.slug, 'pocket-style')
+        self.assertEqual(sorted(created.options.values_list('value', flat=True)),
+                         ['Patch', 'Side Zip'])
+
+    def test_slug_is_generated_and_kept_unique(self):
+        """"Fit" is already seeded, so a second one has to land somewhere else
+        rather than collide."""
+        r = self.client.post(self.url, {'name': 'fit'}, format='json')
+        self.assertEqual(r.status_code, 201, r.content)
+        self.assertEqual(r.json()['slug'], 'fit-2')
+
+    def test_a_nameless_attribute_is_refused(self):
+        r = self.client.post(self.url, {'name': '   '}, format='json')
+        self.assertEqual(r.status_code, 400, r.content)
+
+    # ── editing options ──────────────────────────────────────────────────────
+
+    def _all_options(self):
+        return [{'id': o.id, 'value': o.value, 'order': o.order}
+                for o in self.fit.options.all()]
+
+    def test_renaming_an_option_keeps_its_id(self):
+        """Products point at the option row. Recreating it would hand out a new
+        id and every product using it would silently lose that spec line."""
+        rows = self._all_options()
+        for row in rows:
+            if row['id'] == self.slim.id:
+                row['value'] = 'Slim / Skinny'
+
+        r = self.client.patch(f'{self.url}{self.fit.id}/', {'options': rows}, format='json')
+        self.assertEqual(r.status_code, 200, r.content)
+        self.slim.refresh_from_db()
+        self.assertEqual(self.slim.value, 'Slim / Skinny')
+
+    def test_an_option_left_out_is_removed(self):
+        rows = [o for o in self._all_options() if o['id'] != self.baggy.id]
+        r = self.client.patch(f'{self.url}{self.fit.id}/', {'options': rows}, format='json')
+
+        self.assertEqual(r.status_code, 200, r.content)
+        self.assertFalse(AttributeOption.objects.filter(pk=self.baggy.pk).exists())
+
+    def test_removing_an_option_in_use_is_refused(self):
+        product = Product.objects.create(name='Jean', slug='jean')
+        product.attribute_options.add(self.baggy)
+
+        rows = [o for o in self._all_options() if o['id'] != self.baggy.id]
+        r = self.client.patch(f'{self.url}{self.fit.id}/', {'options': rows}, format='json')
+
+        self.assertEqual(r.status_code, 400, r.content)
+        self.assertTrue(AttributeOption.objects.filter(pk=self.baggy.pk).exists())
+
+    def test_adding_an_option_keeps_the_existing_ones(self):
+        rows = self._all_options() + [{'value': 'Bootcut Fit'}]
+        r = self.client.patch(f'{self.url}{self.fit.id}/', {'options': rows}, format='json')
+
+        self.assertEqual(r.status_code, 200, r.content)
+        values = set(self.fit.options.values_list('value', flat=True))
+        self.assertIn('Bootcut Fit', values)
+        self.assertIn('Slim Fit', values)
+
+    # ── listing ──────────────────────────────────────────────────────────────
+
+    def test_inactive_attributes_are_hidden_by_default(self):
+        self.fit.is_active = False
+        self.fit.save(update_fields=['is_active'])
+        names = [a['name'] for a in self.client.get(self.url).json()]
+        self.assertNotIn('Fit', names)
+
+    def test_include_inactive_shows_everything(self):
+        self.fit.is_active = False
+        self.fit.save(update_fields=['is_active'])
+        names = [a['name'] for a in
+                 self.client.get(self.url, {'include_inactive': 'true'}).json()]
+        self.assertIn('Fit', names)
+
+    def test_product_count_is_reported(self):
+        product = Product.objects.create(name='Jean', slug='jean')
+        product.attribute_options.add(self.slim)
+        row = next(a for a in self.client.get(self.url).json() if a['name'] == 'Fit')
+        self.assertEqual(row['product_count'], 1)
+
+    # ── deleting ─────────────────────────────────────────────────────────────
+
+    def test_deleting_an_attribute_in_use_is_refused(self):
+        """Deleting would strip the spec line off every product carrying it,
+        with nothing on the product page saying it went."""
+        product = Product.objects.create(name='Jean', slug='jean')
+        product.attribute_options.add(self.slim)
+
+        r = self.client.delete(f'{self.url}{self.fit.id}/')
+        self.assertEqual(r.status_code, 409, r.content)
+        self.assertEqual(r.json()['product_count'], 1)
+        self.assertTrue(Attribute.objects.filter(pk=self.fit.pk).exists())
+
+    def test_deleting_an_unused_attribute_works(self):
+        r = self.client.delete(f'{self.url}{self.fit.id}/')
+        self.assertEqual(r.status_code, 204, r.content)
+
+    def test_requires_superuser(self):
+        client = APIClient()
+        self.assertIn(client.get(self.url).status_code, (401, 403))
+
+
+class ProductAttributeTaggingTests(TestCase):
+    """Tagging a product, and the one-value-per-attribute rule."""
+
+    def setUp(self):
+        self.client, self.user = _superuser_client()
+        self.product = Product.objects.create(name='Cargo', slug='cargo')
+        self.url = f'/api/admin/products/{self.product.id}/'
+
+        self.fit = Attribute.objects.get(slug='fit')
+        self.slim = self.fit.options.get(value='Slim Fit')
+        self.baggy = self.fit.options.get(value='Baggy Fit')
+
+        self.length = Attribute.objects.get(slug='length')
+        self.l38 = self.length.options.get(value='38')
+        self.l40 = self.length.options.get(value='40')
+
+    def test_tags_are_saved(self):
+        r = self.client.patch(self.url, {'attribute_options': [self.slim.id]}, format='json')
+        self.assertEqual(r.status_code, 200, r.content)
+        self.assertEqual([o.value for o in self.product.attribute_options.all()], ['Slim Fit'])
+
+    def test_two_values_on_a_single_select_attribute_are_refused(self):
+        """A product page printing "Fit: Slim Fit, Baggy Fit" is worse than one
+        printing no fit at all."""
+        r = self.client.patch(
+            self.url, {'attribute_options': [self.slim.id, self.baggy.id]}, format='json')
+
+        self.assertEqual(r.status_code, 400, r.content)
+        self.assertFalse(self.product.attribute_options.exists())
+
+    def test_the_refusal_names_the_attribute(self):
+        r = self.client.patch(
+            self.url, {'attribute_options': [self.slim.id, self.baggy.id]}, format='json')
+        self.assertIn('Fit', str(r.json()))
+
+    def test_two_values_are_allowed_where_the_attribute_says_so(self):
+        r = self.client.patch(
+            self.url, {'attribute_options': [self.l38.id, self.l40.id]}, format='json')
+        self.assertEqual(r.status_code, 200, r.content)
+        self.assertEqual(self.product.attribute_options.count(), 2)
+
+    def test_one_from_each_attribute_is_fine(self):
+        r = self.client.patch(
+            self.url, {'attribute_options': [self.slim.id, self.l38.id]}, format='json')
+        self.assertEqual(r.status_code, 200, r.content)
+
+    def test_the_response_groups_them_for_display(self):
+        self.client.patch(
+            self.url,
+            {'attribute_options': [self.slim.id, self.l40.id, self.l38.id]},
+            format='json')
+        attributes = self.client.get(self.url).json()['attributes']
+
+        # Attribute order first (Fit is 0, Length is 2), values sorted within.
+        self.assertEqual(attributes, [
+            {'name': 'Fit',    'slug': 'fit',    'values': ['Slim Fit']},
+            {'name': 'Length', 'slug': 'length', 'values': ['38', '40']},
+        ])
+
+    def test_an_untagged_product_reports_no_attributes(self):
+        self.assertEqual(self.client.get(self.url).json()['attributes'], [])
+
+    def test_tags_reach_the_storefront(self):
+        self.product.image = 'products/x.jpg'
+        self.product.save(update_fields=['image'])
+        self.product.attribute_options.add(self.slim)
+
+        cache.clear()
+        r = self.client.get(f'/api/products/catalog/{self.product.slug}/')
+        self.assertEqual(r.status_code, 200, r.content)
+        self.assertEqual(r.json()['attributes'],
+                         [{'name': 'Fit', 'slug': 'fit', 'values': ['Slim Fit']}])
+
+
+class TagAttributesCommandTests(TestCase):
+    """
+    The best-effort backfill for products whose spec lines are still prose.
+
+    It is guessing, so the defaults matter more than the matching: it previews
+    unless told to write, only ever adds, and never touches an attribute the
+    admin has already answered.
+    """
+
+    def setUp(self):
+        self.product = Product.objects.create(
+            name='Cargo', slug='cargo',
+            description='Fabric: Oxford Lycra (Stretchable)\nWash: Bio Washed\nFit: Slim Fit')
+
+    def _run(self, **kwargs):
+        from io import StringIO
+        from django.core.management import call_command
+        out = StringIO()
+        call_command('tag_attributes', stdout=out, **kwargs)
+        return out.getvalue()
+
+    def test_a_dry_run_writes_nothing(self):
+        output = self._run()
+        self.assertIn('Would tag', output)
+        self.assertFalse(self.product.attribute_options.exists())
+
+    def test_apply_writes_the_tags(self):
+        self._run(apply=True)
+        values = set(self.product.attribute_options.values_list('value', flat=True))
+        self.assertIn('Oxford Lycra', values)
+        self.assertIn('Bio Washed', values)
+        self.assertIn('Slim Fit', values)
+
+    def test_the_longest_match_wins(self):
+        """"Cotton Lycra" must not be tagged as "Pure Cotton" — matching the
+        shorter value first would mislabel every lycra blend."""
+        product = Product.objects.create(
+            name='Blend', slug='blend', description='Fabric: Cotton Lycra')
+        self._run(apply=True, product=product.id)
+        self.assertEqual(
+            list(product.attribute_options.values_list('value', flat=True)), ['Cotton Lycra'])
+
+    def test_an_answered_attribute_is_left_alone(self):
+        """The admin's choice beats the guess, always."""
+        fabric = Attribute.objects.get(slug='fabric')
+        linen = fabric.options.get(value='Linen')
+        self.product.attribute_options.add(linen)
+
+        self._run(apply=True)
+        fabrics = self.product.attribute_options.filter(attribute=fabric)
+        self.assertEqual([o.value for o in fabrics], ['Linen'])
+
+    def test_it_is_idempotent(self):
+        self._run(apply=True)
+        before = set(self.product.attribute_options.values_list('id', flat=True))
+        self._run(apply=True)
+        self.assertEqual(set(self.product.attribute_options.values_list('id', flat=True)), before)
+
+    def test_a_product_with_no_description_is_skipped(self):
+        blank = Product.objects.create(name='Blank', slug='blank')
+        self._run(apply=True)
+        self.assertFalse(blank.attribute_options.exists())
+
+    def test_the_description_is_never_edited(self):
+        """The prose stays put, so a wrong guess costs a tag to remove and
+        nothing more."""
+        original = self.product.description
+        self._run(apply=True)
+        self.product.refresh_from_db()
+        self.assertEqual(self.product.description, original)

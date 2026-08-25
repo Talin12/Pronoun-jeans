@@ -107,6 +107,9 @@ class ProductViewSet(viewsets.ReadOnlyModelViewSet):
             .select_related('category')
             .prefetch_related(
                 'subcategories',
+                # grouped_attributes() reads option.attribute for every option;
+                # without the join a catalogue page costs a query per tag.
+                'attribute_options__attribute',
                 'gallery_images',
                 # Shared per product+color gallery, used by
                 # ProductVariationSerializer.get_gallery_images. Prefetching

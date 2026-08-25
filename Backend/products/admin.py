@@ -8,6 +8,7 @@ from django.utils.text import slugify
 
 from core.utils.images import thumbnail_url
 from .models import (
+    Attribute, AttributeOption,
     Category, Product, ProductImage, ProductVariation, VariationImage,
     Color, HeroSlide, SizeSet, SizeSetBreakdown, ProductColorImage,
 )
@@ -339,6 +340,31 @@ class SubcategoryInline(admin.TabularInline):
     extra               = 1
     fields              = ['name', 'slug', 'image']
     prepopulated_fields = {'slug': ('name',)}
+
+
+class AttributeOptionInline(admin.TabularInline):
+    model = AttributeOption
+    extra = 1
+
+
+@admin.register(Attribute)
+class AttributeAdmin(admin.ModelAdmin):
+    """
+    Fit, Fabric, Length — the spec lines products are tagged with.
+
+    Normally managed from the custom panel; this page exists so the values are
+    inspectable and fixable without one.
+    """
+    list_display        = ['name', 'multi_select', 'is_active', 'order', 'option_count']
+    list_filter         = ['is_active', 'multi_select']
+    search_fields       = ['name', 'options__value']
+    prepopulated_fields = {'slug': ('name',)}
+    inlines             = [AttributeOptionInline]
+    ordering            = ['order', 'name']
+
+    def option_count(self, obj):
+        return obj.options.count()
+    option_count.short_description = 'Options'
 
 
 @admin.register(Category)

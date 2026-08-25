@@ -12,6 +12,7 @@ router.register(r'variations', views.ProductVariationViewSet, basename='admin-va
 router.register(r'categories', views.CategoryViewSet,         basename='admin-category')
 router.register(r'colors',     views.ColorViewSet,            basename='admin-color')
 router.register(r'size-sets',  views.SizeSetViewSet,          basename='admin-sizeset')
+router.register(r'attributes', views.AttributeViewSet,        basename='admin-attribute')
 
 urlpatterns = [
     path('', include(router.urls)),
