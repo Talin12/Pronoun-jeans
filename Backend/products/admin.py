@@ -356,6 +356,33 @@ class CategoryAdmin(admin.ModelAdmin):
             return []
         return super().get_inline_instances(request, obj)
 
+    # ── Deletion guard ────────────────────────────────────────────────────
+    #
+    # Same rule the admin API enforces: a category with products filed under it
+    # cannot be deleted, because Product.category is SET_NULL and
+    # Product.subcategories is a plain M2M — the delete would succeed and
+    # silently unfile them. Guarding only the API would leave this page as a
+    # way around it.
+
+    def has_delete_permission(self, request, obj=None):
+        if obj is not None and obj.linked_products().exists():
+            return False
+        return super().has_delete_permission(request, obj)
+
+    def get_actions(self, request):
+        """
+        Drop the bulk delete.
+
+        `delete_selected` checks has_delete_permission(request) once, without an
+        object, so the per-object guard above cannot see what it is about to
+        remove. Removing the action leaves the single-category delete — which is
+        guarded — as the only route, rather than a hole the guard silently does
+        not cover.
+        """
+        actions = super().get_actions(request)
+        actions.pop('delete_selected', None)
+        return actions
+
 
 @admin.register(ProductImage)
 class ProductImageAdmin(admin.ModelAdmin):

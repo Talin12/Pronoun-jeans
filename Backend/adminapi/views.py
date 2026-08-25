@@ -294,6 +294,38 @@ class CategoryViewSet(viewsets.ModelViewSet):
     def get_queryset(self):
         return Category.objects.select_related('parent').order_by('parent__name', 'name')
 
+    def destroy(self, request, *args, **kwargs):
+        """
+        Refuse to delete a category that still has products filed under it.
+
+        Nothing in the schema prevents this: Product.category is SET_NULL and
+        Product.subcategories is a plain M2M, so the delete would succeed and
+        quietly unfile every product instead — they would vanish from the
+        storefront listing with nothing anywhere saying why. The products have
+        to be moved first, which is a decision only a person can make.
+
+        The count covers sub-categories too, because `parent` cascades:
+        deleting "Men" also deletes "Men → Boxers" and unfiles everything
+        under it.
+        """
+        category = self.get_object()
+        products = category.linked_products()
+        count = products.count()
+        if count:
+            return Response(
+                {'error': f'{count} product(s) are still filed under '
+                          f'"{category}". Edit them and remove this category '
+                          f'first, then delete it.',
+                 'product_count': count,
+                 # Named so the panel can show which products are in the way
+                 # rather than only how many. Capped: the message is a prompt to
+                 # go and fix them, not a listing screen.
+                 'product_names': list(products.values_list('name', flat=True)[:10]),
+                 'category_id': category.pk},
+                status=409,
+            )
+        return super().destroy(request, *args, **kwargs)
+
 
 class ColorViewSet(viewsets.ModelViewSet):
     permission_classes = [IsSuperUser]

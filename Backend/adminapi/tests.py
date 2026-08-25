@@ -15,7 +15,7 @@ from rest_framework.test import APIClient
 
 from medialib.models import MediaAsset, MediaAttachment
 from products.models import (
-    Color, Product, ProductVariation, SizeSet, SizeSetBreakdown,
+    Category, Color, Product, ProductVariation, SizeSet, SizeSetBreakdown,
 )
 
 
@@ -908,3 +908,143 @@ class CategoryDescriptionTests(TestCase):
         r = self.client.post('/api/admin/categories/', {'name': 'Shorts'}, format='json')
         self.assertEqual(r.status_code, 201, r.content)
         self.assertEqual(r.json()['description'], '')
+
+
+class CategoryDeleteGuardTests(TestCase):
+    """
+    A category with products filed under it cannot be deleted.
+
+    Nothing in the schema prevented it: Product.category is SET_NULL and
+    Product.subcategories is a plain M2M, so the delete succeeded and quietly
+    unfiled every product — they disappeared from the storefront listing with
+    nothing saying why. The API refuses with a count so the panel can say how
+    much work clearing it is.
+    """
+
+    def setUp(self):
+        self.client, self.user = _superuser_client()
+        self.men = Category.objects.create(name='Men', slug='men')
+        self.boxers = Category.objects.create(name='Boxers', slug='boxers', parent=self.men)
+        self.empty = Category.objects.create(name='Empty', slug='empty')
+
+    def _delete(self, category):
+        return self.client.delete(f'/api/admin/categories/{category.id}/')
+
+    # ── refusals ─────────────────────────────────────────────────────────────
+
+    def test_a_category_holding_products_is_refused(self):
+        Product.objects.create(name='Jean', slug='jean', category=self.men)
+        r = self._delete(self.men)
+
+        self.assertEqual(r.status_code, 409, r.content)
+        self.assertEqual(r.json()['product_count'], 1)
+        self.assertTrue(Category.objects.filter(pk=self.men.pk).exists())
+
+    def test_a_sub_category_holding_products_is_refused(self):
+        product = Product.objects.create(name='Boxer', slug='boxer', category=self.men)
+        product.subcategories.add(self.boxers)
+
+        r = self._delete(self.boxers)
+        self.assertEqual(r.status_code, 409, r.content)
+        self.assertEqual(r.json()['product_count'], 1)
+
+    def test_a_parent_is_refused_for_products_held_by_its_child(self):
+        """`parent` cascades: deleting Men would delete Men → Boxers too, and
+        unfile everything under it. The count has to see down the branch."""
+        product = Product.objects.create(name='Boxer', slug='boxer', category=None)
+        product.subcategories.add(self.boxers)
+
+        r = self._delete(self.men)
+        self.assertEqual(r.status_code, 409, r.content)
+        self.assertEqual(r.json()['product_count'], 1)
+        self.assertTrue(Category.objects.filter(pk=self.boxers.pk).exists())
+
+    def test_a_product_filed_twice_is_counted_once(self):
+        """Main category and sub-category both point at the branch — the admin
+        should be told there is one product to fix, not two."""
+        product = Product.objects.create(name='Jean', slug='jean', category=self.men)
+        product.subcategories.add(self.boxers)
+
+        r = self._delete(self.men)
+        self.assertEqual(r.json()['product_count'], 1)
+
+    def test_the_refusal_names_the_products(self):
+        Product.objects.create(name='Slim Fit Jean', slug='slim', category=self.men)
+        r = self._delete(self.men)
+        self.assertIn('Slim Fit Jean', r.json()['product_names'])
+
+    def test_the_message_says_how_many_and_what_to_do(self):
+        Product.objects.create(name='Jean', slug='jean', category=self.men)
+        message = self._delete(self.men).json()['error']
+        self.assertIn('1 product', message)
+        self.assertIn('Men', message)
+        self.assertIn('remove this category', message)
+
+    def test_an_inactive_product_still_blocks(self):
+        """Deactivated is not deleted — it is still filed here and would still
+        be unfiled."""
+        Product.objects.create(name='Old', slug='old', category=self.men, is_active=False)
+        self.assertEqual(self._delete(self.men).status_code, 409)
+
+    # ── what still deletes ───────────────────────────────────────────────────
+
+    def test_an_empty_category_deletes(self):
+        r = self._delete(self.empty)
+        self.assertEqual(r.status_code, 204, r.content)
+        self.assertFalse(Category.objects.filter(pk=self.empty.pk).exists())
+
+    def test_an_empty_parent_with_an_empty_child_deletes(self):
+        r = self._delete(self.men)
+        self.assertEqual(r.status_code, 204, r.content)
+        self.assertFalse(Category.objects.filter(pk=self.boxers.pk).exists())
+
+    def test_it_deletes_once_the_products_move_away(self):
+        """The path the message tells the admin to take has to actually work."""
+        product = Product.objects.create(name='Jean', slug='jean', category=self.men)
+        self.assertEqual(self._delete(self.men).status_code, 409)
+
+        product.category = self.empty
+        product.save(update_fields=['category'])
+
+        self.assertEqual(self._delete(self.men).status_code, 204)
+
+    def test_a_product_elsewhere_does_not_block(self):
+        Product.objects.create(name='Jean', slug='jean', category=self.empty)
+        self.assertEqual(self._delete(self.men).status_code, 204)
+
+    def test_requires_superuser(self):
+        client = APIClient()
+        self.assertIn(client.delete(f'/api/admin/categories/{self.empty.id}/').status_code,
+                      (401, 403))
+
+
+class CategoryDjangoAdminDeleteGuardTests(TestCase):
+    """
+    The same rule on the Django admin, which would otherwise be a way around it.
+    """
+
+    def setUp(self):
+        from django.contrib.admin.sites import AdminSite
+        from django.test import RequestFactory
+        from products.admin import CategoryAdmin
+
+        self.admin = CategoryAdmin(Category, AdminSite())
+        # A real request with a real superuser: has_delete_permission falls
+        # through to Django's own permission check, which reads request.user.
+        _, self.user = _superuser_client()
+        self.request = RequestFactory().get('/admin/products/category/')
+        self.request.user = self.user
+        self.men = Category.objects.create(name='Men', slug='men')
+
+    def test_delete_is_refused_for_a_category_in_use(self):
+        Product.objects.create(name='Jean', slug='jean', category=self.men)
+        self.assertFalse(self.admin.has_delete_permission(self.request, self.men))
+
+    def test_delete_is_allowed_for_an_empty_category(self):
+        self.assertTrue(self.admin.has_delete_permission(self.request, self.men))
+
+    def test_the_bulk_delete_action_is_removed(self):
+        """delete_selected checks the permission once with no object, so the
+        per-object guard cannot see what it is about to remove — the action has
+        to go rather than silently bypass the rule."""
+        self.assertNotIn('delete_selected', self.admin.get_actions(self.request))

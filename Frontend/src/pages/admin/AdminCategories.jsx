@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
-  Plus, Loader, Trash2, FolderTree, AlertCircle, ChevronRight, Check,
+  Plus, Loader, Trash2, FolderTree, AlertCircle, ChevronRight, Check, X, PackageOpen,
 } from 'lucide-react';
 import { listCategories, createCategory, deleteCategory, updateCategory } from '../../api/adminApi';
 import { SeoSection, FieldHeader, GooglePreview } from '../../components/admin/SeoFields';
@@ -18,6 +18,9 @@ export default function AdminCategories() {
   const [parent, setParent] = useState('');
   const [saving, setSaving] = useState(false);
   const [error, setError]   = useState('');
+  // The category a delete was refused for, with the products standing in the
+  // way: { category, count, names }.
+  const [blocked, setBlocked] = useState(null);
   const navigate = useNavigate();
 
   const load = () => {
@@ -38,9 +41,21 @@ export default function AdminCategories() {
       .finally(() => setSaving(false));
   };
 
-  const remove = (id) => {
-    if (!window.confirm('Delete this category?')) return;
-    deleteCategory(id).then(load).catch(() => alert('Could not delete — it may be in use by products.'));
+  const remove = (cat) => {
+    if (!window.confirm(`Delete "${cat.name}"?`)) return;
+    deleteCategory(cat.id)
+      .then(load)
+      .catch(err => {
+        // 409 is the server refusing because products are still filed here —
+        // it comes back with the count, so say which category and how many
+        // rather than the old blanket "it may be in use".
+        const data = err.response?.data;
+        if (err.response?.status === 409 && data?.product_count) {
+          setBlocked({ category: cat, count: data.product_count, names: data.product_names || [] });
+        } else {
+          setError(data?.error || `Could not delete "${cat.name}".`);
+        }
+      });
   };
 
   const mains = cats.filter(c => !c.parent);
@@ -91,7 +106,7 @@ export default function AdminCategories() {
                     <span className="truncate">{main.name}</span>
                     <ChevronRight size={15} className="text-gray-400 shrink-0" />
                   </button>
-                  <button onClick={() => remove(main.id)} aria-label={`Delete ${main.name}`}
+                  <button onClick={() => remove(main)} aria-label={`Delete ${main.name}`}
                     className="p-2.5 -mr-1 text-gray-400 hover:text-red-500 shrink-0"><Trash2 size={15} /></button>
                 </div>
 
@@ -107,7 +122,7 @@ export default function AdminCategories() {
                           {s.name}
                           <ChevronRight size={13} className="text-gray-400" />
                         </button>
-                        <button onClick={() => remove(s.id)} aria-label={`Delete ${s.name}`}
+                        <button onClick={() => remove(s)} aria-label={`Delete ${s.name}`}
                           className="w-7 h-7 rounded-full hover:bg-red-100 dark:hover:bg-red-500/20 text-gray-400 hover:text-red-500 flex items-center justify-center shrink-0">×</button>
                       </span>
                     ))}
@@ -118,6 +133,75 @@ export default function AdminCategories() {
           })}
         </div>
       )}
+
+      {blocked && (
+        <BlockedByProducts
+          {...blocked}
+          onView={() => navigate(`/admin/categories/${blocked.category.id}`)}
+          onClose={() => setBlocked(null)}
+        />
+      )}
+    </div>
+  );
+}
+
+/**
+ * Why a category could not be deleted.
+ *
+ * The count is the point: "in use" tells an admin nothing about how much work
+ * clearing it is, and they cannot tell whether they are looking at one stray
+ * product or the whole catalogue. Naming the first few turns it into something
+ * actionable, and "View products" lands on the list already filtered to them.
+ */
+function BlockedByProducts({ category, count, names, onView, onClose }) {
+  return (
+    <div className="fixed inset-0 z-[70] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm" onClick={onClose}>
+      <div className="bg-white dark:bg-zinc-900 rounded-2xl shadow-2xl w-full max-w-md p-5 max-h-[85vh] overflow-y-auto"
+           onClick={e => e.stopPropagation()}>
+        <div className="flex items-start justify-between gap-3 mb-3">
+          <h3 className="text-base font-black text-gray-900 dark:text-zinc-100">
+            Can&apos;t delete &ldquo;{category.name}&rdquo;
+          </h3>
+          <button onClick={onClose} className="p-1.5 -mt-1 text-gray-400 hover:text-gray-700 dark:hover:text-zinc-200 shrink-0">
+            <X size={18} />
+          </button>
+        </div>
+
+        <div className="flex items-start gap-2.5 bg-amber-50 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-500/20 rounded-xl px-4 py-3 text-sm text-amber-800 dark:text-amber-300">
+          <PackageOpen size={16} className="mt-0.5 shrink-0" />
+          <p>
+            <span className="font-bold">{count} product{count === 1 ? '' : 's'}</span>{' '}
+            {count === 1 ? 'is' : 'are'} still filed under this
+            {category.parent ? ' sub-category' : ' category'}. Edit{' '}
+            {count === 1 ? 'it' : 'them'} and remove this
+            {category.parent ? ' sub-category' : ' category'} first, then delete it.
+          </p>
+        </div>
+
+        {names.length > 0 && (
+          <ul className="mt-3 space-y-1 text-sm text-gray-600 dark:text-zinc-400">
+            {names.map(n => (
+              <li key={n} className="truncate">• {n}</li>
+            ))}
+            {count > names.length && (
+              <li className="text-gray-400 dark:text-zinc-500">
+                …and {count - names.length} more
+              </li>
+            )}
+          </ul>
+        )}
+
+        <div className="flex justify-end gap-2 mt-5">
+          <button onClick={onClose}
+            className="px-4 py-2 rounded-xl border border-gray-200 dark:border-white/10 text-sm font-bold text-gray-600 dark:text-zinc-300 hover:bg-gray-50 dark:hover:bg-white/5">
+            Close
+          </button>
+          <button onClick={onView}
+            className="px-4 py-2 rounded-xl bg-accent text-white text-sm font-bold hover:brightness-110 transition">
+            View products
+          </button>
+        </div>
+      </div>
     </div>
   );
 }

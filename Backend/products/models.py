@@ -54,6 +54,37 @@ class Category(models.Model):
             if self.parent.parent_id:
                 raise ValidationError({'parent': 'Only one level of sub-categories is supported.'})
 
+    # ── Deletion safety ───────────────────────────────────────────────────
+    #
+    # Nothing in the schema stops a category from being deleted out from under
+    # its products: Product.category is SET_NULL and Product.subcategories is a
+    # plain M2M, so a delete silently unfiles everything instead of failing.
+    # These let the API refuse it and say how many products are in the way.
+
+    def branch_ids(self):
+        """
+        This category plus its sub-categories.
+
+        The children belong in the count because `parent` cascades — deleting
+        "Men" takes "Men → Boxers" with it, and every product filed under
+        Boxers loses that filing without the delete ever mentioning it.
+        """
+        if self.parent_id:
+            return [self.pk]                     # a sub-category has no children
+        return [self.pk, *self.subcategories.values_list('pk', flat=True)]
+
+    def linked_products(self):
+        """
+        Products this category cannot be deleted out from under — filed here as
+        their main category or listed among their sub-categories, anywhere in
+        this branch. Distinct, since a product can be both.
+        """
+        from django.db.models import Q
+        ids = self.branch_ids()
+        return Product.objects.filter(
+            Q(category_id__in=ids) | Q(subcategories__id__in=ids)
+        ).distinct()
+
 
 class HeroSlide(models.Model):
     image     = CompressedImageField(upload_to='hero_slides/')
