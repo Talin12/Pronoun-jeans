@@ -222,3 +222,88 @@ class VariantVideoTests(TestCase):
             f'Variant-video N+1: 1 video took {one_video} queries, '
             f'3 took {three_videos}. They must be equal.',
         )
+
+
+class MoqDefaultTests(TestCase):
+    """
+    A product's minimum order quantity defaults to 1.
+
+    It used to default to 10, which was never a per-product decision — it was
+    the field's initial value, inherited by every product nobody thought to
+    change. Migration 0025 puts the existing catalogue on 1 as well, so the
+    same catalogue does not advertise two different minimums depending on when
+    a product was added.
+    """
+
+    def test_a_new_product_has_a_moq_of_one(self):
+        product = Product.objects.create(name='Cargo Pant', slug='cargo-pant')
+        self.assertEqual(product.moq, 1)
+
+    def test_a_real_minimum_is_still_honoured(self):
+        """The default is a floor, not a ceiling — a product that genuinely
+        ships in tens still says so."""
+        product = Product.objects.create(name='Bulk Only', slug='bulk-only', moq=25)
+        self.assertEqual(product.moq, 25)
+
+    def test_the_moq_reaches_the_storefront_api(self):
+        product = Product.objects.create(name='Jogger', slug='jogger')
+        product.image = 'products/x.jpg'
+        product.save(update_fields=['image'])
+
+        cache.clear()
+        response = self.client.get(f'/api/products/catalog/{product.slug}/')
+        self.assertEqual(response.status_code, 200, response.content)
+        self.assertEqual(response.json()['moq'], 1)
+
+
+class _FakeApps:
+    """Stands in for the migration's `apps` registry, using the real models."""
+
+    def get_model(self, app_label, model_name):
+        from django.apps import apps as django_apps
+        return django_apps.get_model(app_label, model_name)
+
+
+class MoqBackfillMigrationTests(TestCase):
+    """
+    Migration 0025's data pass, which is the half a changed field default
+    cannot do: it is what puts the products already in the catalogue on 1.
+    """
+
+    def setUp(self):
+        from importlib import import_module
+        self.mod = import_module('products.migrations.0025_alter_product_moq')
+
+    def test_products_on_the_old_default_are_moved_to_one(self):
+        old = Product.objects.create(name='Old', slug='old', moq=10)
+        self.mod.set_all_moq_to_one(_FakeApps(), None)
+
+        old.refresh_from_db()
+        self.assertEqual(old.moq, 1)
+
+    def test_a_hand_set_minimum_is_moved_too(self):
+        """The instruction was every current product, not just the ones still
+        carrying the old default — so a deliberate 25 is flattened as well, and
+        has to be set again afterwards if it was real."""
+        bulk = Product.objects.create(name='Bulk', slug='bulk', moq=25)
+        self.mod.set_all_moq_to_one(_FakeApps(), None)
+
+        bulk.refresh_from_db()
+        self.assertEqual(bulk.moq, 1)
+
+    def test_running_it_twice_changes_nothing_further(self):
+        Product.objects.create(name='Old', slug='old', moq=10)
+        self.mod.set_all_moq_to_one(_FakeApps(), None)
+        self.mod.set_all_moq_to_one(_FakeApps(), None)
+
+        self.assertEqual(list(Product.objects.values_list('moq', flat=True)), [1])
+
+    def test_the_reverse_is_a_no_op(self):
+        """It cannot restore what it did not record — reversing must not
+        silently invent a previous value."""
+        product = Product.objects.create(name='Old', slug='old', moq=10)
+        self.mod.set_all_moq_to_one(_FakeApps(), None)
+        self.mod.unset(_FakeApps(), None)
+
+        product.refresh_from_db()
+        self.assertEqual(product.moq, 1)

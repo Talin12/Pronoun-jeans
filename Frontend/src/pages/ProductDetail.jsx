@@ -22,6 +22,10 @@ const decodeHtml = (text) => {
   return (doc.body.textContent ?? '').replace(/\\n/g, '\n');
 };
 
+// "1 units" is what every one of these strings said the moment the default MOQ
+// became 1, which is now the common case rather than the rare one.
+const units = (n) => `${n} unit${Number(n) === 1 ? '' : 's'}`;
+
 // Alt text for images whose own alt_text is blank. Rows saved before the
 // server started defaulting alt_text still have '', and "Main" describes
 // nothing to a screen reader or to Google Images.
@@ -293,7 +297,7 @@ const ProductDetail = () => {
       .filter(([, qty]) => qty > 0)
       .map(([id, qty]) => ({ variation_id: parseInt(id), quantity: qty }));
     if (!itemsToAdd.length) { setError('Please enter a quantity for at least one variation.'); return; }
-    if (totalSelected < product.moq) { setError(`Minimum order quantity is ${product.moq} units. You selected ${totalSelected}.`); return; }
+    if (totalSelected < product.moq) { setError(`Minimum order quantity is ${units(product.moq)}. You selected ${totalSelected}.`); return; }
     setSubmitting(true);
     try {
       await api.post('orders/cart/update/', { product_id: product.id, items: itemsToAdd, ...(impersonatedBuyer ? { buyer_id: impersonatedBuyer.id } : {}) });
@@ -503,7 +507,7 @@ const ProductDetail = () => {
               {isAuthenticated ? (
                 <div className="flex flex-wrap gap-2">
                   <div className="inline-flex items-center gap-1.5 bg-accent/10 border border-accent/30 text-accent text-xs font-semibold px-3 py-1.5 rounded-full">
-                    <BadgeCheck className="w-3.5 h-3.5" /> MOQ: {product.moq} units
+                    <BadgeCheck className="w-3.5 h-3.5" /> MOQ: {units(product.moq)}
                   </div>
                   {(() => {
                     const total = product.variations.reduce((s, v) => s + (v.stock_quantity ?? 0), 0);
@@ -526,7 +530,7 @@ const ProductDetail = () => {
                   <h2 className="text-gray-900 dark:text-zinc-100 text-sm font-bold">Bulk Order Table</h2>
                   {totalSelected > 0 && (
                     <span className={`text-sm font-bold ${totalSelected >= product.moq ? 'text-green-600 dark:text-green-400' : 'text-yellow-600 dark:text-yellow-400'}`}>
-                      {totalSelected} / {product.moq} units
+                      {totalSelected} / {units(product.moq)}
                     </span>
                   )}
                 </div>
@@ -624,7 +628,7 @@ const ProductDetail = () => {
                         </div>
                       )}
                       {!error && totalSelected === 0 && (
-                        <p className="text-gray-400 dark:text-zinc-500 text-xs">Enter quantities above. Min. order: {product.moq} units.</p>
+                        <p className="text-gray-400 dark:text-zinc-500 text-xs">Enter quantities above. Min. order: {units(product.moq)}.</p>
                       )}
                     </div>
                     <button onClick={handleBulkAdd} disabled={submitting}

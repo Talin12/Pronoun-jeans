@@ -91,7 +91,11 @@ class Product(models.Model):
     description    = models.TextField(blank=True)
     fabric_details = models.TextField(blank=True, null=True)
     is_active      = models.BooleanField(default=True)
-    moq            = models.PositiveIntegerField(default=10)
+    # 1, not 10: most products are sold by the set, so a "minimum" of ten sets
+    # was a floor nobody had chosen — it came from the field's original default
+    # rather than from any product's actual terms. A product that really does
+    # have a minimum sets it explicitly.
+    moq            = models.PositiveIntegerField(default=1)
     image          = CompressedImageField(upload_to='products/', blank=True, null=True)
     created_at     = models.DateTimeField(auto_now_add=True)
     # Drives <lastmod> in the sitemap. auto_now, so it cannot drift from

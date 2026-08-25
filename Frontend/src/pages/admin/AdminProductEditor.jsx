@@ -109,7 +109,7 @@ export default function AdminProductEditor() {
 
   const [form, setForm] = useState({
     name: '', code: '', category: '', subcategories: [], description: '',
-    fabric_details: '', moq: 10, is_active: false,
+    fabric_details: '', moq: 1, is_active: false,
     // Part of the base payload on purpose: every save path sends the whole
     // form, so these persist through Save & Next, Save as Draft and Publish
     // alike, and the "Unsaved changes" marker covers them for free.
@@ -153,7 +153,7 @@ export default function AdminProductEditor() {
         const loaded = {
           name: p.name || '', code: p.code || '', category: p.category || '',
           subcategories: p.subcategories || [], description: p.description || '',
-          fabric_details: p.fabric_details || '', moq: p.moq ?? 10, is_active: p.is_active,
+          fabric_details: p.fabric_details || '', moq: p.moq ?? 1, is_active: p.is_active,
           meta_title: p.meta_title || '', meta_description: p.meta_description || '',
         };
         setForm(loaded);
