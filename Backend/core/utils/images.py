@@ -7,6 +7,8 @@ use CompressedImageField so that:
   1. Oversized / non-image uploads fail with a friendly form error.
   2. Valid images are downscaled and re-encoded before they reach
      Cloudinary, so they never hit the 10 MB limit.
+  3. Phone/camera formats the web can't display (HEIC/HEIF) are decoded
+     and re-encoded to JPEG here, so an iPhone photo uploads like any other.
 """
 
 import io
@@ -17,6 +19,26 @@ from django.core.exceptions import ValidationError
 from django.db import models
 from django.template.defaultfilters import filesizeformat
 from PIL import Image, ImageOps
+
+# iPhones and iPads shoot HEIC by default, and Chrome/Android/Firefox can't
+# re-encode it in the browser — so those uploads reach us as raw HEIC and are
+# often the largest files an admin picks (a 40 MP HEIC can top 30–40 MB).
+# Registering the opener lets Pillow decode HEIC/HEIF here and re-encode it to
+# JPEG, instead of the upload being bounced as an unreadable file. Guarded so a
+# missing/broken plugin degrades to "HEIC unsupported" rather than taking down
+# every other format.
+try:
+    import pillow_heif
+
+    pillow_heif.register_heif_opener()
+except Exception:  # pragma: no cover - optional dependency
+    pass
+
+# Formats a browser can display directly AND that are already web-efficient, so
+# a small one is safe to store byte-for-byte. Anything outside this set (HEIC,
+# TIFF, BMP) is always re-encoded to JPEG/WebP even when it is small, because
+# the storefront and Cloudinary delivery can't rely on serving it as-is.
+WEB_NATIVE_FORMATS = {'JPEG', 'PNG', 'WEBP', 'GIF', 'AVIF'}
 
 # Reject anything above this outright — even compression shouldn't have to
 # chew through a file this big. Set well above real camera output (48 MP RAW-to-
@@ -112,8 +134,11 @@ def compress_image(file, name):
             or (img.mode == 'P' and 'transparency' in img.info)
         )
 
+        fmt = (img.format or '').upper()
         size = getattr(file, 'size', None) or 0
-        if size <= PASSTHROUGH_BYTES and max(img.size) <= MAX_DIMENSION:
+        if (size <= PASSTHROUGH_BYTES
+                and max(img.size) <= MAX_DIMENSION
+                and fmt in WEB_NATIVE_FORMATS):
             file.seek(0)
             return None
 
@@ -121,9 +146,11 @@ def compress_image(file, name):
         # scale by 1/2, 1/4 or 1/8 during decode, so a 48 MP photo costs ~36 MB
         # of RAM instead of ~144 MB. It only kicks in past 2x the target — a
         # 12 MP photo still decodes in full — but the biggest camera uploads are
-        # exactly the ones that threaten a 512 MB worker. No-op for other
-        # formats, and it never decodes below the requested size.
-        img.draft('RGB', (MAX_DIMENSION, MAX_DIMENSION))
+        # exactly the ones that threaten a 512 MB worker. Restricted to JPEG:
+        # draft() is a libjpeg feature, and calling it on the HEIF plugin can
+        # corrupt its decode state so the subsequent load() fails outright.
+        if fmt == 'JPEG':
+            img.draft('RGB', (MAX_DIMENSION, MAX_DIMENSION))
         img.load()
     except Exception:
         return None

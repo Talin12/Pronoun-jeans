@@ -41,14 +41,21 @@ from . import storage
 from .models import MediaAsset, MediaAttachment
 
 # Real image formats we accept (checked against the decoded signature, not the
-# client-supplied extension or Content-Type).
-ALLOWED_FORMATS = {'JPEG', 'PNG', 'WEBP', 'AVIF'}
+# client-supplied extension or Content-Type). HEIF/HEIC (Pillow reports both as
+# "HEIF") is accepted on the way in but never stored as-is — compress_image
+# re-encodes it to JPEG, so what lands in Cloudinary is always web-deliverable.
+# Requires pillow-heif for the HEIC signature to decode.
+ALLOWED_FORMATS = {'JPEG', 'PNG', 'WEBP', 'AVIF', 'HEIF', 'HEIC'}
 
 _FORMAT_TO_MIME = {
     'JPEG': 'image/jpeg',
     'PNG':  'image/png',
     'WEBP': 'image/webp',
     'AVIF': 'image/avif',
+    # HEIF is re-encoded to JPEG before storage, so this only applies to the rare
+    # file compress_image couldn't process and stored raw.
+    'HEIF': 'image/heif',
+    'HEIC': 'image/heic',
 }
 
 # Single source of truth: the same outright-reject ceiling CompressedImageField
@@ -95,6 +102,18 @@ def hash_file(file, chunk_size=1024 * 1024):
     return digest.hexdigest()
 
 
+# ISO-BMFF major brands that are STILL IMAGES, not video. HEIC and AVIF use the
+# very same 'ftyp' container as MP4/MOV and differ only by this brand, so without
+# this check an iPhone HEIC (or an AVIF) is misrouted to the video path and fails
+# deep inside a Cloudinary video upload instead of being decoded as an image.
+_ISO_IMAGE_BRANDS = {
+    b'heic', b'heix', b'heim', b'heis',   # HEIF still image (HEVC)
+    b'hevc', b'hevm', b'hevs',            # HEVC image sequence
+    b'mif1', b'msf1',                     # generic HEIF / sequence
+    b'avif', b'avis',                     # AVIF still / sequence
+}
+
+
 def sniff_video_container(head):
     """
     Identify a video container from its first bytes, or None if it is not one.
@@ -108,8 +127,12 @@ def sniff_video_container(head):
         # EBML — Matroska/WebM. Cloudinary transcodes either.
         return 'webm'
     if head[4:8] == b'ftyp':
-        # ISO base media: MP4 and QuickTime share a header and differ by brand.
-        return 'mov' if head[8:12] == b'qt  ' else 'mp4'
+        # ISO base media: MP4, QuickTime, HEIC and AVIF all share this header and
+        # differ only by the major brand that follows it.
+        brand = head[8:12]
+        if brand in _ISO_IMAGE_BRANDS:
+            return None  # a HEIC/AVIF image, handled by the image path
+        return 'mov' if brand == b'qt  ' else 'mp4'
     return None
 
 
@@ -157,7 +180,7 @@ def _validate(file):
     if fmt not in ALLOWED_FORMATS:
         raise MediaValidationError(
             f'Unsupported image type "{fmt or "unknown"}". '
-            f'Allowed: JPEG, PNG, WebP, AVIF.'
+            f'Allowed: JPEG, PNG, WebP, AVIF, HEIC.'
         )
     return fmt
 

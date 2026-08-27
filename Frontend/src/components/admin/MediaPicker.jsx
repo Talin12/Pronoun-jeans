@@ -391,7 +391,7 @@ export function LibraryModal({ folder, single, allowVideo = true, categoryId, on
                   </p>
                 )}
                 <input ref={fileRef} type="file" multiple
-                       accept={allowVideo ? 'image/*,video/*' : 'image/*'} className="hidden"
+                       accept={allowVideo ? 'image/*,.heic,.heif,video/*' : 'image/*,.heic,.heif'} className="hidden"
                        onChange={(e) => { doUpload(e.target.files); e.target.value = ''; }} />
               </div>
               {uploads.length > 0 && (

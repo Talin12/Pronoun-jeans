@@ -449,7 +449,7 @@ export default function AdminProductEditor() {
                         <label className={`${btnGhost} cursor-pointer`}>
                           {ogBusy ? <Loader size={16} className="animate-spin" /> : <ImageIcon size={16} />}
                           {ogImageUrl ? 'Replace' : 'Upload'}
-                          <input type="file" accept="image/*" className="hidden" disabled={ogBusy}
+                          <input type="file" accept="image/*,.heic,.heif" className="hidden" disabled={ogBusy}
                                  onChange={e => { pickOgImage(e.target.files?.[0]); e.target.value = ''; }} />
                         </label>
                         {ogImageUrl && (

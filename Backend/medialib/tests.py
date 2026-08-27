@@ -160,6 +160,26 @@ class IngestUploadTests(TestCase):
             services.ingest_upload(bmp)
         store_mock.assert_not_called()
 
+    def test_heic_is_accepted_and_reencoded_to_jpeg(self, store_mock, variants_mock):
+        """
+        iPhone photos arrive as HEIC, which browsers can't re-encode. They must
+        be accepted and stored as JPEG so Cloudinary and the storefront can serve
+        them — the exact upload that previously errored out in the editor.
+        """
+        buf = io.BytesIO()
+        try:
+            Image.new('RGB', (24, 24), (10, 120, 200)).save(buf, 'HEIF', quality=90)
+        except (OSError, KeyError, ValueError):  # pragma: no cover
+            self.skipTest('pillow-heif not available to encode a HEIC fixture')
+        heic = SimpleUploadedFile('phone.heic', buf.getvalue(), content_type='image/heic')
+
+        asset, deduped = services.ingest_upload(heic)
+
+        store_mock.assert_called_once()
+        self.assertFalse(deduped)
+        self.assertEqual(asset.mime_type, 'image/jpeg')
+        self.assertEqual(asset.original_filename, 'phone.heic')
+
 
 # ── Video ─────────────────────────────────────────────────────────────────
 

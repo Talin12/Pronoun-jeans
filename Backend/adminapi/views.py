@@ -7,6 +7,7 @@ the custom panel behave identically to the Django-admin picker (dedup + the
 Phase 7 legacy-column bridge), and therefore render on the storefront at once.
 """
 
+import logging
 from decimal import Decimal, InvalidOperation
 
 from django.contrib.auth import get_user_model
@@ -33,6 +34,8 @@ from .serializers import (
     ProductDetailSerializer, ProductListSerializer, ProductVariationSerializer,
     SizeSetSerializer, UserDetailSerializer, UserListSerializer,
 )
+
+logger = logging.getLogger(__name__)
 
 _VALID_TYPES = {t for t, _ in ATTACHABLE_TYPES}
 _VALID_ROLES = {r for r, _ in ROLE_CHOICES}
@@ -576,8 +579,13 @@ class MediaUploadView(APIView):
                 )
             except services.MediaValidationError as e:
                 errors.append({'filename': f.name, 'error': str(e)})
-            except Exception:
-                errors.append({'filename': f.name, 'error': 'Upload failed, please try again.'})
+            except Exception as e:
+                # Superuser-only endpoint, so surface the real reason (Cloudinary
+                # rejection, decode error, timeout) rather than a blanket message
+                # that hid what actually went wrong. Logged too, for the server side.
+                logger.exception('Media upload failed for %s', f.name)
+                detail = str(e).strip() or e.__class__.__name__
+                errors.append({'filename': f.name, 'error': f'Upload failed: {detail}'})
             else:
                 results.append({
                     'asset':        presenters.serialize_asset(asset),
