@@ -34,6 +34,7 @@ import os
 
 from django.apps import apps
 from django.db.models import Q
+from django.utils import timezone
 from PIL import Image
 
 from core.utils.images import MAX_UPLOAD_BYTES, compress_image
@@ -483,6 +484,55 @@ def detach_assets(attachable_type, attachable_id, *, attachment_id=None, media_i
     for r in affected_roles:
         sync_legacy(attachable_type, attachable_id, r)  # PHASE 7 BRIDGE
     return deleted
+
+
+
+# ── Deleting an asset ────────────────────────────────────────────────────────
+
+class AssetInUse(Exception):
+    """Raised when a delete would pull a file out from under something using it."""
+
+    def __init__(self, usage_count):
+        self.usage_count = usage_count
+        super().__init__(f'Asset is used in {usage_count} place(s).')
+
+
+def soft_delete_asset(asset, *, force=False):
+    """
+    Retire one asset from the library. Returns the number of places it was
+    detached from (0 unless forced).
+
+    Soft delete only: `deleted_at` is stamped and the Cloudinary file is left
+    alone. That is deliberate and it is what makes this safe to offer in the
+    panel — the row stops appearing in the library and in every storefront
+    query, but nothing is destroyed, and re-uploading the same file revives the
+    very same asset because dedup matches on content hash (see _existing_asset).
+
+    An asset that is still attached somewhere raises AssetInUse rather than
+    disappearing from a live product page. `force=True` accepts that and
+    detaches it everywhere first — through detach_assets, so each affected
+    (entity, role) has its legacy column reconciled on the way out. Deleting the
+    attachment rows directly would leave Product.image and friends still
+    pointing at a file the library no longer lists, which renders on the
+    storefront as a broken image.
+    """
+    attachments = list(asset.attachments.all())
+    usage = len(attachments)
+
+    if usage and not force:
+        raise AssetInUse(usage)
+
+    if usage:
+        # Grouped so one entity with three of this asset's images costs one
+        # reconcile per role rather than one per attachment.
+        for attachable_type, attachable_id in {
+            (a.attachable_type, a.attachable_id) for a in attachments
+        }:
+            detach_assets(attachable_type, attachable_id, media_id=asset.id)
+
+    asset.deleted_at = timezone.now()
+    asset.save(update_fields=['deleted_at', 'updated_at'])
+    return usage
 
 
 def reorder_assets(attachable_type, attachable_id, order):

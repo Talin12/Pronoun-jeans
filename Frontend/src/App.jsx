@@ -44,6 +44,11 @@ const AdminSizeSets        = lazy(() => import('./pages/admin/AdminSizeSets'));
 const AdminAttributes      = lazy(() => import('./pages/admin/AdminAttributes'));
 const AdminMedia           = lazy(() => import('./pages/admin/AdminMedia'));
 const AdminUsers           = lazy(() => import('./pages/admin/AdminUsers'));
+const AdminHeroSlides      = lazy(() => import('./pages/admin/AdminHeroSlides'));
+const AdminOrders          = lazy(() => import('./pages/admin/AdminOrders'));
+const AdminOrderDetail     = lazy(() => import('./pages/admin/AdminOrderDetail'));
+const AdminCarts           = lazy(() => import('./pages/admin/AdminCarts'));
+const AdminCoupons         = lazy(() => import('./pages/admin/AdminCoupons'));
 const AdminUserProfile     = lazy(() => import('./pages/admin/AdminUserProfile'));
 
 // Same spinner the catalogue uses while its own data loads.
@@ -104,6 +109,11 @@ function App() {
           <Route path="size-sets"       element={<AdminSizeSets />} />
           <Route path="attributes"      element={<AdminAttributes />} />
           <Route path="media"           element={<AdminMedia />} />
+          <Route path="orders"          element={<AdminOrders />} />
+          <Route path="orders/:id"      element={<AdminOrderDetail />} />
+          <Route path="carts"           element={<AdminCarts />} />
+          <Route path="coupons"         element={<AdminCoupons />} />
+          <Route path="hero-slides"     element={<AdminHeroSlides />} />
           <Route path="users"           element={<AdminUsers />} />
           <Route path="users/new"       element={<AdminUserProfile />} />
           <Route path="users/:id"       element={<AdminUserProfile />} />

@@ -142,6 +142,78 @@ export const updateSizeSet = (id, data) =>
 export const deleteSizeSet = (id) =>
   api.delete(`admin/size-sets/${id}/`).then(r => r.data);
 
+// ── Hero slides ────────────────────────────────────────────────────────────
+//
+// The carousel is short, so these are unpaginated — the page holds the whole
+// list. Slide images are not posted here: a slide is created caption-first and
+// its picture attached through the media endpoints as type "banner", role
+// "primary", which is the same slot the Django-admin picker writes.
+
+export const listHeroSlides = () =>
+  api.get('admin/hero-slides/').then(r => r.data);
+
+export const createHeroSlide = (data) =>
+  api.post('admin/hero-slides/', data).then(r => r.data);
+
+export const updateHeroSlide = (id, data) =>
+  api.patch(`admin/hero-slides/${id}/`, data).then(r => r.data);
+
+export const deleteHeroSlide = (id) =>
+  api.delete(`admin/hero-slides/${id}/`).then(r => r.data);
+
+/** Persist a drag. `ids` is the new top-to-bottom order; returns the new list. */
+export const reorderHeroSlides = (ids) =>
+  api.post('admin/hero-slides/reorder/', { order: ids }).then(r => r.data);
+
+// ── Orders ─────────────────────────────────────────────────────────────────
+//
+// No create or delete: orders come from checkout, and a placed order is a
+// record of what someone paid. The panel reads them and moves them along.
+
+export const listOrders = (params = {}) =>
+  api.get('admin/orders/', { params }).then(r => r.data);
+
+export const getOrder = (id) =>
+  api.get(`admin/orders/${id}/`).then(r => r.data);
+
+/**
+ * Only status, payment_status, payment_verified and the three tracking fields
+ * are writable — the server treats every money field as read-only, so a stray
+ * key here cannot rewrite what was charged.
+ */
+export const updateOrder = (id, data) =>
+  api.patch(`admin/orders/${id}/`, data).then(r => r.data);
+
+/** Counts behind the dashboard tiles and the "needs attention" badge. */
+export const getOrderStats = () =>
+  api.get('admin/orders/stats/').then(r => r.data);
+
+// ── Carts ──────────────────────────────────────────────────────────────────
+//
+// Read-only. Every account that has opened the storefront has a cart, so empty
+// ones are hidden unless asked for — otherwise the few carts worth a call are
+// buried in zeroes.
+
+export const listCarts = (params = {}) =>
+  api.get('admin/carts/', { params }).then(r => r.data);
+
+export const getCart = (id) =>
+  api.get(`admin/carts/${id}/`).then(r => r.data);
+
+// ── Coupons ────────────────────────────────────────────────────────────────
+export const listCoupons = (params = {}) =>
+  api.get('admin/coupons/', { params }).then(r => r.data);
+
+export const createCoupon = (data) =>
+  api.post('admin/coupons/', data).then(r => r.data);
+
+export const updateCoupon = (id, data) =>
+  api.patch(`admin/coupons/${id}/`, data).then(r => r.data);
+
+/** 409 with {error} once the coupon has been redeemed — switch it off instead. */
+export const deleteCoupon = (id) =>
+  api.delete(`admin/coupons/${id}/`).then(r => r.data);
+
 // ── Media library ──────────────────────────────────────────────────────────
 export const listAssets = (params = {}) =>
   api.get('admin/media/assets/', { params }).then(r => r.data);
@@ -262,6 +334,28 @@ export const uploadAssetsInBatches = async (
   }
   return { results, errors };
 };
+
+/**
+ * Where an asset is currently used, with human labels — so a delete confirm can
+ * name the products a picture is on rather than only counting them.
+ */
+export const getAssetUsage = (id) =>
+  api.get(`admin/media/assets/${id}/usage/`).then(r => r.data);
+
+/**
+ * Retire one asset from the library.
+ *
+ * Soft delete: the file itself is left on Cloudinary, so this clears clutter
+ * without destroying anything — and re-uploading the same file brings the very
+ * same asset back, because dedup matches on content hash.
+ *
+ * An asset still attached somewhere rejects with 409 and a body carrying
+ * `usage_count` and `usage` (the labelled list). Retry with force once the
+ * admin has seen what is in the way; that detaches it everywhere first.
+ */
+export const deleteAsset = (id, { force = false } = {}) =>
+  api.post(`admin/media/assets/${id}/delete/${force ? '?force=true' : ''}`)
+     .then(r => r.data);
 
 /** File images already in the library into (or out of) a section. */
 export const categorizeAssets = (mediaIds, { add = [], remove = [] } = {}) =>

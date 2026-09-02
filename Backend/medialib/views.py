@@ -13,7 +13,6 @@ from django.contrib.admin.views.decorators import staff_member_required
 from django.core.paginator import Paginator
 from django.db.models import Q
 from django.http import JsonResponse
-from django.utils import timezone
 from django.views.decorators.http import require_GET, require_POST
 
 from . import presenters, services
@@ -165,21 +164,13 @@ def asset_delete(request, asset_id):
         return JsonResponse({'error': 'Not found'}, status=404)
 
     force = request.GET.get('force', '').lower() in ('1', 'true', 'yes')
-    usage = asset.attachments.count()
-    if usage > 0 and not force:
+    try:
+        detached = services.soft_delete_asset(asset, force=force)
+    except services.AssetInUse as exc:
         return JsonResponse(
-            {'error': f'Asset is used in {usage} place(s).', 'usage_count': usage},
-            status=409,
+            {'error': str(exc), 'usage_count': exc.usage_count}, status=409,
         )
-
-    # Soft delete only — the Cloudinary file is never touched here (a physical
-    # purge is a separate, manual step). Detach references only when forced.
-    if force and usage > 0:
-        asset.attachments.all().delete()
-
-    asset.deleted_at = timezone.now()
-    asset.save(update_fields=['deleted_at', 'updated_at'])
-    return JsonResponse({'ok': True, 'detached': usage if force else 0})
+    return JsonResponse({'ok': True, 'detached': detached})
 
 
 # ── Attachment endpoints ──────────────────────────────────────────────────────

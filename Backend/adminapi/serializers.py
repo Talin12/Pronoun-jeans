@@ -9,6 +9,7 @@ these serializers treat images as read-only convenience data.
 """
 
 import re
+from decimal import Decimal
 
 from django.contrib.auth import get_user_model
 from django.contrib.auth.password_validation import validate_password
@@ -17,9 +18,10 @@ from django.utils.text import slugify
 from rest_framework import serializers
 
 from accounts.models import Address, AgentProfile
+from orders.models import Cart, CartItem, Coupon, Order, OrderItem
 from products.models import (
-    Attribute, AttributeOption, Category, Color, Product, ProductVariation,
-    SizeSet, SizeSetBreakdown,
+    Attribute, AttributeOption, Category, Color, HeroSlide, Product,
+    ProductVariation, SizeSet, SizeSetBreakdown,
 )
 
 from .skus import build_sku
@@ -657,3 +659,287 @@ class UserDetailSerializer(serializers.ModelSerializer):
         instance.save()
         self._save_agent_profile(instance, profile)
         return instance
+
+
+# ── Hero slides ────────────────────────────────────────────────────────────────
+#
+# The image is not written here. HeroSlide is registered with medialib as the
+# ('banner', 'primary') single-image slot, so the panel attaches it through the
+# media endpoints exactly as it does a category tile — one upload, reusable
+# everywhere, and the legacy `image` column stays in sync for the storefront.
+#
+# `image` therefore has to be optional on write: a slide is created caption-first
+# and only then has an id for the picker to attach to. Django stores an unset
+# ImageField as '', so a slide with no picture yet is a valid row — and one the
+# panel flags rather than publishes.
+
+class HeroSlideSerializer(serializers.ModelSerializer):
+    image_url = serializers.SerializerMethodField()
+    thumb_url = serializers.SerializerMethodField()
+
+    class Meta:
+        model  = HeroSlide
+        fields = ['id', 'caption', 'order', 'is_active', 'image', 'image_url', 'thumb_url']
+        extra_kwargs = {
+            'image':   {'write_only': True, 'required': False},
+            'caption': {'required': False},
+        }
+
+    def get_image_url(self, obj):
+        return _image_url(obj.image)
+
+    def get_thumb_url(self, obj):
+        return _thumb_url(obj.image, 480)
+
+
+# ── Coupons ────────────────────────────────────────────────────────────────────
+
+class CouponSerializer(serializers.ModelSerializer):
+    # Whether the code would be accepted at checkout right now. `is_active` alone
+    # does not answer that — a coupon can be switched on and still sit outside
+    # its window — and that gap is exactly what a "why is my code rejected?"
+    # call is about.
+    is_currently_valid = serializers.SerializerMethodField()
+    # Annotated in the viewset. Redemptions are the one number that decides
+    # whether a coupon is safe to retire.
+    order_count        = serializers.IntegerField(read_only=True, default=0)
+
+    class Meta:
+        model  = Coupon
+        fields = ['id', 'code', 'discount_type', 'discount_value', 'min_order_value',
+                  'is_active', 'valid_from', 'valid_to', 'created_at',
+                  'is_currently_valid', 'order_count']
+        read_only_fields = ['created_at']
+
+    def get_is_currently_valid(self, obj):
+        return obj.is_valid()
+
+    def validate_code(self, value):
+        # Buyers type these by hand, in whatever case they like; checkout matches
+        # exactly. Normalising on the way in is what keeps SUMMER10 and summer10
+        # from becoming two coupons that shadow each other.
+        return value.strip().upper()
+
+    def validate(self, attrs):
+        start = attrs.get('valid_from', getattr(self.instance, 'valid_from', None))
+        end   = attrs.get('valid_to',   getattr(self.instance, 'valid_to',   None))
+        if start and end and end <= start:
+            raise serializers.ValidationError(
+                {'valid_to': 'The end of the window must come after its start.'})
+
+        d_type  = attrs.get('discount_type',
+                            getattr(self.instance, 'discount_type', None))
+        d_value = attrs.get('discount_value',
+                            getattr(self.instance, 'discount_value', None))
+        if d_value is not None and Decimal(str(d_value)) <= 0:
+            raise serializers.ValidationError(
+                {'discount_value': 'The discount must be greater than zero.'})
+        if (d_type == Coupon.DiscountType.PERCENTAGE
+                and d_value is not None and Decimal(str(d_value)) > 100):
+            raise serializers.ValidationError(
+                {'discount_value': 'A percentage discount cannot exceed 100%.'})
+        return attrs
+
+
+# ── Line items (orders and carts share one shape) ──────────────────────────────
+#
+# Both are read-only in the panel, and both describe the same thing: which
+# variation, how many, what it comes to. A single presenter keeps an order line
+# and a cart line looking alike wherever they are shown.
+#
+# Every field tolerates a missing variation. OrderItem.variation is SET_NULL, so
+# a line whose product was later deleted still has to render — it is part of an
+# order someone paid for.
+
+class _LineItemSerializer(serializers.Serializer):
+    id           = serializers.IntegerField(read_only=True)
+    variation    = serializers.IntegerField(source='variation_id', read_only=True)
+    sku          = serializers.SerializerMethodField()
+    product_id   = serializers.SerializerMethodField()
+    product_name = serializers.SerializerMethodField()
+    size         = serializers.SerializerMethodField()
+    color_name   = serializers.SerializerMethodField()
+    quantity     = serializers.IntegerField(read_only=True)
+    thumb_url    = serializers.SerializerMethodField()
+
+    def get_sku(self, obj):
+        return obj.variation.sku if obj.variation_id else '[deleted]'
+
+    def get_product_id(self, obj):
+        return obj.variation.product_id if obj.variation_id else None
+
+    def get_product_name(self, obj):
+        if not obj.variation_id or not obj.variation.product_id:
+            return 'Removed product'
+        return obj.variation.product.name
+
+    def get_size(self, obj):
+        v = obj.variation if obj.variation_id else None
+        return v.size_set.name if v and v.size_set_id else ''
+
+    def get_color_name(self, obj):
+        v = obj.variation if obj.variation_id else None
+        if not v:
+            return ''
+        return v.color_palette.name if v.color_palette_id else (v.color or '')
+
+    def get_thumb_url(self, obj):
+        v = obj.variation if obj.variation_id else None
+        if not v:
+            return None
+        image = v.image or (v.product.image if v.product_id else None)
+        return _thumb_url(image, 160)
+
+
+class AdminOrderItemSerializer(_LineItemSerializer):
+    """Order lines carry the price the buyer was charged, not today's price."""
+    price      = serializers.DecimalField(max_digits=10, decimal_places=2, read_only=True)
+    line_total = serializers.SerializerMethodField()
+
+    def get_line_total(self, obj):
+        return str((obj.price or Decimal('0')) * obj.quantity)
+
+
+class AdminCartItemSerializer(_LineItemSerializer):
+    """
+    Cart lines have no stored price — nothing has been charged yet — so they are
+    quoted at the variation's current b2b_price, and flagged when the variation
+    has since gone away or run short. Those two flags are the point of the page:
+    an admin ringing a buyer about a full cart needs to know what is still
+    orderable.
+    """
+    unit_price   = serializers.SerializerMethodField()
+    line_total   = serializers.SerializerMethodField()
+    unavailable  = serializers.SerializerMethodField()
+    out_of_stock = serializers.SerializerMethodField()
+
+    def get_unit_price(self, obj):
+        return str(obj.variation.b2b_price) if obj.variation_id else None
+
+    def get_line_total(self, obj):
+        if not obj.variation_id:
+            return None
+        return str((obj.variation.b2b_price or Decimal('0')) * obj.quantity)
+
+    def get_unavailable(self, obj):
+        return not obj.variation_id
+
+    def get_out_of_stock(self, obj):
+        return bool(obj.variation_id and obj.variation.stock_quantity < obj.quantity)
+
+
+# ── Orders ─────────────────────────────────────────────────────────────────────
+#
+# Orders are never created or deleted here. They come from checkout, and a paid
+# order is a record — the panel's job is to move it along (verify the payment,
+# set a status, add tracking), not to invent or erase one. The viewset allows
+# only list/retrieve/partial_update, and every field outside that job is
+# read-only below.
+
+class OrderListSerializer(serializers.ModelSerializer):
+    user_email     = serializers.CharField(source='user.email', read_only=True, default=None)
+    company_name   = serializers.CharField(source='user.company_name', read_only=True, default=None)
+    agent_email    = serializers.CharField(source='placed_by_agent.email', read_only=True, default=None)
+    coupon_code    = serializers.CharField(source='coupon.code', read_only=True, default=None)
+    status_display = serializers.CharField(source='get_status_display', read_only=True)
+    grand_total    = serializers.SerializerMethodField()
+    item_count     = serializers.IntegerField(read_only=True, default=0)
+
+    class Meta:
+        model  = Order
+        fields = ['id', 'user', 'user_email', 'company_name', 'agent_email',
+                  'status', 'status_display', 'payment_method', 'payment_status',
+                  'payment_verified', 'payment_proof_type',
+                  'total_amount', 'discount_amount', 'grand_total', 'amount_paid',
+                  'balance_due', 'coupon_code', 'courier_name', 'tracking_number',
+                  'item_count', 'created_at', 'updated_at']
+
+    def get_grand_total(self, obj):
+        return str(obj.grand_total)
+
+
+class OrderDetailSerializer(serializers.ModelSerializer):
+    items          = AdminOrderItemSerializer(many=True, read_only=True)
+    user_email     = serializers.CharField(source='user.email', read_only=True, default=None)
+    company_name   = serializers.CharField(source='user.company_name', read_only=True, default=None)
+    user_phone     = serializers.CharField(source='user.phone_number', read_only=True, default=None)
+    gst_number     = serializers.CharField(source='user.gst_number', read_only=True, default=None)
+    agent_email    = serializers.CharField(source='placed_by_agent.email', read_only=True, default=None)
+    coupon_code    = serializers.CharField(source='coupon.code', read_only=True, default=None)
+    shipping       = AddressSerializer(source='shipping_address', read_only=True)
+    billing        = AddressSerializer(source='billing_address', read_only=True)
+    status_display = serializers.CharField(source='get_status_display', read_only=True)
+    grand_total    = serializers.SerializerMethodField()
+    payment_screenshot_url = serializers.SerializerMethodField()
+
+    class Meta:
+        model  = Order
+        fields = [
+            'id', 'user', 'user_email', 'company_name', 'user_phone', 'gst_number',
+            'agent_email', 'items',
+            # Editable — the four things the panel exists to do.
+            'status', 'status_display', 'payment_status', 'payment_verified',
+            'courier_name', 'tracking_number', 'tracking_url',
+            # Money, all read-only: it was settled at checkout.
+            'total_amount', 'discount_amount', 'upi_discount', 'amount_paid',
+            'balance_due', 'grand_total', 'coupon_code',
+            'payment_method', 'payment_plan', 'payment_proof_type', 'utr_number',
+            'payment_screenshot_url', 'razorpay_order_id', 'razorpay_payment_id',
+            'shipping', 'billing', 'created_at', 'updated_at',
+        ]
+        # Anything not in the short writable list above is a fact about a placed
+        # order. Naming the read-only side explicitly — rather than trusting the
+        # panel to send only four fields — is what stops a stray PATCH from
+        # rewriting what a buyer was charged.
+        read_only_fields = [
+            'user', 'total_amount', 'discount_amount', 'upi_discount',
+            'amount_paid', 'balance_due', 'payment_method', 'payment_plan',
+            'payment_proof_type', 'utr_number', 'razorpay_order_id',
+            'razorpay_payment_id', 'created_at', 'updated_at',
+        ]
+
+    def get_grand_total(self, obj):
+        return str(obj.grand_total)
+
+    def get_payment_screenshot_url(self, obj):
+        return _image_url(obj.payment_screenshot)
+
+
+# ── Carts ──────────────────────────────────────────────────────────────────────
+#
+# Read-only, and deliberately so: a cart belongs to the buyer who is filling it,
+# and an admin editing one under them is how a customer ends up paying for
+# something they never chose. What the panel offers is visibility — who is close
+# to ordering, and whether what they picked can still be shipped.
+
+class CartListSerializer(serializers.ModelSerializer):
+    user_email      = serializers.CharField(source='user.email', read_only=True)
+    company_name    = serializers.CharField(source='user.company_name', read_only=True, default=None)
+    user_phone      = serializers.CharField(source='user.phone_number', read_only=True, default=None)
+    is_verified_b2b = serializers.BooleanField(source='user.is_verified_b2b', read_only=True)
+    item_count      = serializers.IntegerField(read_only=True, default=0)
+    total_quantity  = serializers.SerializerMethodField()
+    estimated_value = serializers.SerializerMethodField()
+
+    class Meta:
+        model  = Cart
+        fields = ['id', 'user', 'user_email', 'company_name', 'user_phone',
+                  'is_verified_b2b', 'item_count', 'total_quantity',
+                  'estimated_value', 'created_at', 'updated_at']
+
+    def get_total_quantity(self, obj):
+        return sum(i.quantity for i in obj.items.all())
+
+    def get_estimated_value(self, obj):
+        # At today's prices, and skipping lines whose variation has gone — a
+        # cart is a quote, not a bill.
+        total = sum(((i.variation.b2b_price or Decimal('0')) * i.quantity)
+                    for i in obj.items.all() if i.variation_id)
+        return str(total)
+
+
+class CartDetailSerializer(CartListSerializer):
+    items = AdminCartItemSerializer(many=True, read_only=True)
+
+    class Meta(CartListSerializer.Meta):
+        fields = CartListSerializer.Meta.fields + ['items']

@@ -12,8 +12,8 @@ from decimal import Decimal, InvalidOperation
 
 from django.contrib.auth import get_user_model
 from django.db import transaction
-from django.db.models import Count, Q
-from rest_framework import filters, viewsets
+from django.db.models import Count, Q, Sum
+from rest_framework import filters, mixins, viewsets
 from rest_framework.decorators import action
 from rest_framework.exceptions import ValidationError as DRFValidationError
 from rest_framework.pagination import PageNumberPagination
@@ -22,17 +22,20 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from medialib import presenters, services
-from medialib.models import ATTACHABLE_TYPES, ROLE_CHOICES
+from medialib.models import ATTACHABLE_TYPES, ROLE_CHOICES, MediaAsset
+from orders.models import Cart, Coupon, Order
 from products.models import (
-    Attribute, Category, Color, Product, ProductVariation, SizeSet,
+    Attribute, Category, Color, HeroSlide, Product, ProductVariation, SizeSet,
 )
 
 from .permissions import IsSuperUser
 from .skus import build_sku
 from .serializers import (
-    AttributeSerializer, CategorySerializer, ColorSerializer,
-    ProductDetailSerializer, ProductListSerializer, ProductVariationSerializer,
-    SizeSetSerializer, UserDetailSerializer, UserListSerializer,
+    AttributeSerializer, CartDetailSerializer, CartListSerializer,
+    CategorySerializer, ColorSerializer, CouponSerializer, HeroSlideSerializer,
+    OrderDetailSerializer, OrderListSerializer, ProductDetailSerializer,
+    ProductListSerializer, ProductVariationSerializer, SizeSetSerializer,
+    UserDetailSerializer, UserListSerializer,
 )
 
 logger = logging.getLogger(__name__)
@@ -460,6 +463,218 @@ class SizeSetViewSet(viewsets.ModelViewSet):
         return super().destroy(request, *args, **kwargs)
 
 
+
+# ── Hero slides ────────────────────────────────────────────────────────────────
+
+class HeroSlideViewSet(viewsets.ModelViewSet):
+    """
+    The storefront carousel. Small enough that the panel edits the whole list on
+    one screen, so this is unpaginated and ordered the way the storefront reads
+    it.
+
+    Pictures are not posted here — the panel attaches them through
+    /api/admin/media/banner/<id>/attach/, which is the same path the Django-admin
+    picker uses and keeps the legacy `image` column in step.
+    """
+    permission_classes = [IsSuperUser]
+    serializer_class   = HeroSlideSerializer
+    pagination_class   = None
+
+    def get_queryset(self):
+        # Model ordering already, but stated here so a reorder is stable even
+        # while several slides share an `order` mid-drag.
+        return HeroSlide.objects.all().order_by('order', 'id')
+
+    def perform_create(self, serializer):
+        # New slides land at the end rather than silently tying with whatever
+        # already holds order=0 — the carousel would then reorder itself on
+        # every fetch, and the admin would never know why.
+        if serializer.validated_data.get('order') is None:
+            last = HeroSlide.objects.order_by('-order').first()
+            serializer.validated_data['order'] = (last.order + 1) if last else 0
+        serializer.save()
+
+    @action(detail=False, methods=['post'])
+    def reorder(self, request):
+        """
+        Persist a drag. Takes {"order": [id, id, …]} — the ids in their new
+        top-to-bottom sequence — and rewrites `order` to match.
+
+        Positions are assigned from the list rather than sent per-slide so the
+        result cannot end up half-applied: one request, one transaction, and
+        the carousel either moves or it does not.
+        """
+        ids = request.data.get('order') or []
+        if not isinstance(ids, list):
+            return Response({'error': 'Send "order" as a list of slide ids.'}, status=400)
+
+        slides = {s.id: s for s in HeroSlide.objects.filter(id__in=ids)}
+        missing = [i for i in ids if i not in slides]
+        if missing:
+            return Response({'error': f'Unknown slide id(s): {missing}'}, status=400)
+
+        with transaction.atomic():
+            for position, slide_id in enumerate(ids):
+                slide = slides[slide_id]
+                if slide.order != position:
+                    slide.order = position
+                    slide.save(update_fields=['order'])
+
+        return Response(self.get_serializer(self.get_queryset(), many=True).data)
+
+
+# ── Coupons ────────────────────────────────────────────────────────────────────
+
+class CouponViewSet(viewsets.ModelViewSet):
+    permission_classes = [IsSuperUser]
+    serializer_class   = CouponSerializer
+    pagination_class   = None
+    filter_backends    = [filters.SearchFilter]
+    search_fields      = ['code']
+
+    def get_queryset(self):
+        return (Coupon.objects
+                .annotate(order_count=Count('orders', distinct=True))
+                .order_by('-is_active', '-valid_to'))
+
+    def destroy(self, request, *args, **kwargs):
+        """
+        A coupon that has been redeemed is part of those orders' history —
+        Order.coupon is SET_NULL, so deleting it would quietly erase which code
+        each discount came from. Unused coupons delete normally.
+        """
+        coupon = self.get_object()
+        used = coupon.orders.count()
+        if used:
+            return Response(
+                {'error': f'"{coupon.code}" was used on {used} order(s). Switch it '
+                          f'off instead — that stops new checkouts from accepting '
+                          f'it without erasing it from orders already placed.',
+                 'order_count': used},
+                status=409,
+            )
+        return super().destroy(request, *args, **kwargs)
+
+
+# ── Orders ─────────────────────────────────────────────────────────────────────
+
+class OrderViewSet(mixins.ListModelMixin,
+                   mixins.RetrieveModelMixin,
+                   mixins.UpdateModelMixin,
+                   viewsets.GenericViewSet):
+    """
+    Read and progress orders. No create, no destroy: orders come from checkout,
+    and a placed order is a record of what someone paid — the panel moves it
+    along rather than authoring it.
+
+    `?status=`, `?payment_status=` and `?unverified=true` back the filter chips;
+    the last one is the queue that actually needs an admin, since a direct-UPI
+    order sits at PENDING_VERIFICATION until someone confirms the money landed.
+    """
+    permission_classes = [IsSuperUser]
+    pagination_class   = AdminPagination
+    filter_backends    = [filters.SearchFilter, filters.OrderingFilter]
+    search_fields      = ['id', 'user__email', 'user__company_name',
+                          'tracking_number', 'utr_number']
+    ordering_fields    = ['created_at', 'total_amount', 'status']
+    ordering           = ['-created_at']
+
+    def get_serializer_class(self):
+        return OrderListSerializer if self.action == 'list' else OrderDetailSerializer
+
+    def get_queryset(self):
+        qs = (Order.objects
+              .select_related('user', 'placed_by_agent', 'coupon',
+                              'shipping_address', 'billing_address')
+              .annotate(item_count=Count('items', distinct=True)))
+
+        if self.action != 'list':
+            # The detail page renders every line with its product and colour;
+            # without this each line costs three more queries.
+            qs = qs.prefetch_related(
+                'items__variation__product', 'items__variation__size_set',
+                'items__variation__color_palette',
+            )
+
+        params = self.request.query_params
+        status_param = params.get('status')
+        if status_param:
+            qs = qs.filter(status=status_param)
+        if params.get('payment_status'):
+            qs = qs.filter(payment_status=params['payment_status'])
+        if params.get('unverified') == 'true':
+            qs = qs.filter(payment_verified=False,
+                           status=Order.Status.PENDING_VERIFICATION)
+        if params.get('user'):
+            qs = qs.filter(user_id=params['user'])
+        return qs
+
+    def perform_update(self, serializer):
+        """
+        Save through the model, not the queryset.
+
+        Order.save() promotes a PENDING_VERIFICATION order to APPROVED (and sets
+        payment_status) the moment payment_verified turns true. That rule lives
+        in the model so the panel, the Django admin and checkout cannot drift —
+        a .update() here would skip it and leave an order verified but stuck.
+        """
+        serializer.save()
+
+    @action(detail=False)
+    def stats(self, request):
+        """Counts for the dashboard tiles and the sidebar's needs-attention badge."""
+        qs = Order.objects.all()
+        by_status = {row['status']: row['n'] for row in
+                     qs.values('status').annotate(n=Count('id'))}
+        return Response({
+            'total':      qs.count(),
+            'by_status':  by_status,
+            'awaiting_verification': qs.filter(
+                payment_verified=False,
+                status=Order.Status.PENDING_VERIFICATION).count(),
+            'revenue_settled': str(
+                qs.filter(payment_status=Order.PaymentStatus.PAID)
+                  .aggregate(total=Sum('total_amount'))['total'] or Decimal('0')),
+        })
+
+
+# ── Carts ──────────────────────────────────────────────────────────────────────
+
+class CartViewSet(mixins.ListModelMixin,
+                  mixins.RetrieveModelMixin,
+                  viewsets.GenericViewSet):
+    """
+    Live carts, read-only. Editing someone's cart under them is how a buyer ends
+    up paying for something they never picked, so the panel only looks.
+
+    Empty carts are hidden by default: one is created for every account that
+    ever opened the storefront, and a list that is mostly zeroes buries the few
+    carts worth a phone call. `?include_empty=true` shows them all.
+    """
+    permission_classes = [IsSuperUser]
+    pagination_class   = AdminPagination
+    filter_backends    = [filters.SearchFilter]
+    search_fields      = ['user__email', 'user__company_name']
+
+    def get_serializer_class(self):
+        return CartListSerializer if self.action == 'list' else CartDetailSerializer
+
+    def get_queryset(self):
+        # Items are prefetched for the list too — estimated_value sums them per
+        # row, so without this a page of 24 carts is 24 extra queries.
+        qs = (Cart.objects
+              .select_related('user')
+              .prefetch_related('items__variation__product',
+                                'items__variation__size_set',
+                                'items__variation__color_palette')
+              .annotate(item_count=Count('items', distinct=True))
+              .order_by('-updated_at'))
+
+        if self.request.query_params.get('include_empty') != 'true':
+            qs = qs.filter(item_count__gt=0)
+        return qs
+
+
 # ── Media (JWT) ────────────────────────────────────────────────────────────────
 #
 # Mirror of the medialib session endpoints, but JWT+superuser gated so the React
@@ -543,6 +758,61 @@ class MediaSectionsView(APIView):
                 'count':       rollup.get(c.id, 0),
             } for c in cats],
         })
+
+
+
+class MediaAssetUsageView(APIView):
+    """
+    Where one asset is currently used, with human labels.
+
+    The panel asks before offering to delete, so the confirm can name the
+    products a picture is on rather than only counting them — "used on 3 things"
+    is not enough to decide with.
+    """
+    permission_classes = [IsSuperUser]
+
+    def get(self, request, asset_id):
+        try:
+            asset = MediaAsset.objects.get(pk=asset_id)
+        except MediaAsset.DoesNotExist:
+            return Response({'error': 'Not found'}, status=404)
+        rows = presenters.usage_for(asset)
+        return Response({'usage': rows, 'count': len(rows)})
+
+
+class MediaAssetDeleteView(APIView):
+    """
+    Retire one asset from the library. JWT mirror of medialib's session view —
+    both call services.soft_delete_asset, so the panel and the Django-admin
+    picker cannot drift on what deleting means.
+
+    Soft delete: the Cloudinary file is untouched, so this frees up the library
+    without destroying anything, and re-uploading the same file brings the asset
+    back by content hash. An asset still in use returns 409 with its usage
+    count; ?force=true detaches it everywhere first.
+    """
+    permission_classes = [IsSuperUser]
+
+    def post(self, request, asset_id):
+        try:
+            asset = MediaAsset.objects.get(pk=asset_id, deleted_at__isnull=True)
+        except MediaAsset.DoesNotExist:
+            return Response({'error': 'Not found'}, status=404)
+
+        force = str(request.query_params.get('force', '')).lower() in ('1', 'true', 'yes')
+        try:
+            detached = services.soft_delete_asset(asset, force=force)
+        except services.AssetInUse as exc:
+            # The panel turns this into a confirm naming what is in the way,
+            # then retries with force — so the usage list travels with the
+            # refusal rather than costing a second round trip.
+            return Response(
+                {'error': str(exc),
+                 'usage_count': exc.usage_count,
+                 'usage': presenters.usage_for(asset)},
+                status=409,
+            )
+        return Response({'ok': True, 'detached': detached})
 
 
 class MediaUploadView(APIView):

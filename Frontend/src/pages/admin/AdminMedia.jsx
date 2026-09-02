@@ -1,9 +1,11 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   Images, Loader, Play, Search, UploadCloud, FolderTree, X, Check, FolderInput,
+  Trash2, AlertTriangle,
 } from 'lucide-react';
 import {
   listAssets, listMediaSections, uploadAssetsInBatches, categorizeAssets,
+  deleteAsset, getAssetUsage,
 } from '../../api/adminApi';
 
 const PAGE_TITLE = 'Media Library';
@@ -30,6 +32,10 @@ export default function AdminMedia() {
   const [busy, setBusy]         = useState(false);
   const [error, setError]       = useState('');
   const [progress, setProgress] = useState('');
+  // The asset the delete confirm is open for, plus where it turns out to be
+  // used. `usage: null` means that lookup is still in flight.
+  const [pending, setPending]   = useState(null);   // { asset, usage }
+  const [deleting, setDeleting] = useState(false);
   const fileRef = useRef(null);
 
   const loadSections = useCallback(() => {
@@ -104,6 +110,38 @@ export default function AdminMedia() {
       .then(() => { setSel(new Set()); fetchAssets(true); loadSections(); })
       .catch(() => setError('Could not update sections. Please try again.'))
       .finally(() => setBusy(false));
+  };
+
+  const askDelete = (asset) => {
+    setPending({ asset, usage: null });
+    setError('');
+    // Fetched up front so the confirm can say what the picture is on, rather
+    // than making the admin discover it by being refused.
+    getAssetUsage(asset.id)
+      .then(d => setPending(p => (p && p.asset.id === asset.id ? { ...p, usage: d } : p)))
+      .catch(() => setPending(p => (p && p.asset.id === asset.id
+        ? { ...p, usage: { usage: [], count: 0, failed: true } } : p)));
+  };
+
+  const confirmDelete = () => {
+    const { asset, usage } = pending;
+    setDeleting(true); setError('');
+    // force only when the confirm actually showed what would be detached — an
+    // admin should never detach a live product photo without having seen it.
+    deleteAsset(asset.id, { force: (usage?.count || 0) > 0 })
+      .then(() => {
+        setAssets(list => list.filter(a => a.id !== asset.id));
+        setTotal(t => Math.max(0, t - 1));
+        setSel(prev => { const next = new Set(prev); next.delete(asset.id); return next; });
+        setPending(null);
+        loadSections();
+      })
+      .catch(err => {
+        const body = err.response?.data;
+        setError(body?.error || 'Could not delete that file.');
+        setPending(null);
+      })
+      .finally(() => setDeleting(false));
   };
 
   const mains       = sections.filter(s => !s.parent);
@@ -267,33 +305,47 @@ export default function AdminMedia() {
           ) : (
             <div className="grid grid-cols-3 sm:grid-cols-4 lg:grid-cols-5 gap-3">
               {assets.map(a => (
-                <button key={a.id} type="button" onClick={() => toggleSel(a.id)}
-                  title={a.original_filename}
+                /* A div, not a button: the tile carries its own delete control,
+                   and a button inside a button is invalid markup. */
+                <div key={a.id}
                   className={`relative aspect-square rounded-xl overflow-hidden border-2 transition-all ${
                     selected.has(a.id) ? 'border-accent ring-2 ring-accent/30' : 'border-transparent hover:border-gray-300 dark:hover:border-white/20'
                   }`}>
-                  {/* thumb_url is a poster frame for a video, so the tile is an
-                      <img> either way — the badge is what tells them apart. */}
-                  <img src={a.thumb_url} alt={a.alt_text || a.original_filename} loading="lazy"
-                    className="w-full h-full object-cover bg-gray-100 dark:bg-zinc-800" />
-                  {a.media_type === 'video' && !selected.has(a.id) && (
-                    <span className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                      <span className="w-8 h-8 rounded-full bg-black/60 flex items-center justify-center">
-                        <Play size={16} className="text-white fill-white ml-0.5" />
+                  <button type="button" onClick={() => toggleSel(a.id)}
+                    title={a.original_filename}
+                    className="absolute inset-0 w-full h-full">
+                    {/* thumb_url is a poster frame for a video, so the tile is an
+                        <img> either way — the badge is what tells them apart. */}
+                    <img src={a.thumb_url} alt={a.alt_text || a.original_filename} loading="lazy"
+                      className="w-full h-full object-cover bg-gray-100 dark:bg-zinc-800" />
+                    {a.media_type === 'video' && !selected.has(a.id) && (
+                      <span className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                        <span className="w-8 h-8 rounded-full bg-black/60 flex items-center justify-center">
+                          <Play size={16} className="text-white fill-white ml-0.5" />
+                        </span>
                       </span>
-                    </span>
-                  )}
-                  {selected.has(a.id) && (
-                    <span className="absolute inset-0 bg-accent/10 flex items-center justify-center">
-                      <span className="w-6 h-6 rounded-full bg-accent text-white flex items-center justify-center"><Check size={14} /></span>
-                    </span>
-                  )}
-                  {!active && a.categories?.length > 0 && (
-                    <span className="absolute bottom-1 left-1 right-1 truncate text-[10px] font-bold px-1.5 py-0.5 rounded bg-black/60 text-white">
-                      {a.categories.map(c => c.name).join(', ')}
-                    </span>
-                  )}
-                </button>
+                    )}
+                    {selected.has(a.id) && (
+                      <span className="absolute inset-0 bg-accent/10 flex items-center justify-center">
+                        <span className="w-6 h-6 rounded-full bg-accent text-white flex items-center justify-center"><Check size={14} /></span>
+                      </span>
+                    )}
+                    {!active && a.categories?.length > 0 && (
+                      <span className="absolute bottom-1 left-1 right-1 truncate text-[10px] font-bold px-1.5 py-0.5 rounded bg-black/60 text-white">
+                        {a.categories.map(c => c.name).join(', ')}
+                      </span>
+                    )}
+                  </button>
+
+                  {/* Always visible rather than hover-only: there is no hover on
+                      a phone, and this is the panel's only way to delete a file. */}
+                  <button type="button" onClick={() => askDelete(a)}
+                    aria-label={`Delete ${a.original_filename}`}
+                    title="Delete from library"
+                    className="absolute top-1 right-1 w-7 h-7 rounded-lg bg-black/55 hover:bg-red-600 text-white flex items-center justify-center transition-colors">
+                    <Trash2 size={13} />
+                  </button>
+                </div>
               ))}
             </div>
           )}
@@ -305,6 +357,91 @@ export default function AdminMedia() {
           )}
         </div>
       </div>
+
+      {/* ── Delete confirm ────────────────────────────────────────────────
+          Deleting is soft, so the wording promises exactly that and no more.
+          Where the file is used is fetched before the choice is offered: an
+          admin should be able to see they are about to pull a photo off three
+          live products, not find out by being refused. */}
+      {pending && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50"
+          onClick={() => !deleting && setPending(null)}>
+          <div onClick={e => e.stopPropagation()}
+            className="w-full max-w-md bg-white dark:bg-zinc-900 rounded-2xl shadow-xl overflow-hidden">
+            <div className="flex items-start gap-3 p-5">
+              <img src={pending.asset.thumb_url} alt=""
+                className="w-16 h-16 rounded-xl object-cover bg-gray-100 dark:bg-zinc-800 shrink-0" />
+              <div className="min-w-0 flex-1">
+                <h3 className="font-black text-gray-900 dark:text-zinc-100">
+                  Delete this {pending.asset.media_type === 'video' ? 'video' : 'image'}?
+                </h3>
+                <p className="text-sm text-gray-500 dark:text-zinc-400 truncate">
+                  {pending.asset.original_filename}
+                </p>
+              </div>
+              <button onClick={() => !deleting && setPending(null)}
+                className="p-1.5 -mt-1 -mr-1 text-gray-400 hover:text-gray-700 dark:hover:text-zinc-200 shrink-0">
+                <X size={18} />
+              </button>
+            </div>
+
+            <div className="px-5 pb-2">
+              {pending.usage === null ? (
+                <p className="flex items-center gap-2 text-sm text-gray-400 py-2">
+                  <Loader size={14} className="animate-spin" /> checking where it is used…
+                </p>
+              ) : pending.usage.failed ? (
+                <p className="text-sm font-semibold text-amber-600 dark:text-amber-400 py-2">
+                  Could not check where this is used. Deleting anyway may pull it off a live page.
+                </p>
+              ) : pending.usage.count === 0 ? (
+                <p className="text-sm text-gray-600 dark:text-zinc-300 py-2">
+                  It is not used anywhere, so nothing on the storefront changes.
+                </p>
+              ) : (
+                <div className="py-2">
+                  <p className="flex items-start gap-2 text-sm font-bold text-amber-700 dark:text-amber-400">
+                    <AlertTriangle size={15} className="shrink-0 mt-0.5" />
+                    In use in {pending.usage.count} place{pending.usage.count !== 1 ? 's' : ''} —
+                    deleting removes it from {pending.usage.count !== 1 ? 'them' : 'it'}:
+                  </p>
+                  <ul className="mt-2 max-h-32 overflow-y-auto space-y-1">
+                    {pending.usage.usage.slice(0, 12).map(u => (
+                      <li key={u.attachment_id}
+                        className="text-sm text-gray-600 dark:text-zinc-300 truncate">
+                        · {u.label} <span className="text-gray-400">({u.role})</span>
+                      </li>
+                    ))}
+                    {pending.usage.usage.length > 12 && (
+                      <li className="text-xs text-gray-400">
+                        +{pending.usage.usage.length - 12} more
+                      </li>
+                    )}
+                  </ul>
+                </div>
+              )}
+
+              <p className="text-xs text-gray-400 dark:text-zinc-500 mt-2">
+                The file itself is kept — uploading it again restores this same item.
+              </p>
+            </div>
+
+            <div className="flex justify-end gap-2 px-5 py-4">
+              <button onClick={() => setPending(null)} disabled={deleting}
+                className="px-4 py-2.5 rounded-xl border border-gray-200 dark:border-white/10 text-sm font-semibold text-gray-700 dark:text-zinc-200 hover:bg-gray-50 dark:hover:bg-white/5 disabled:opacity-50">
+                Cancel
+              </button>
+              <button onClick={confirmDelete} disabled={deleting || pending.usage === null}
+                className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-red-600 text-white text-sm font-bold hover:brightness-110 transition disabled:opacity-50 disabled:cursor-not-allowed">
+                {deleting ? <Loader size={15} className="animate-spin" /> : <Trash2 size={15} />}
+                {pending.usage?.count
+                  ? `Remove from ${pending.usage.count} and delete`
+                  : 'Delete'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

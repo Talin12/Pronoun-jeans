@@ -39,6 +39,10 @@ const isVideo = (asset) => asset?.media_type === 'video';
  * `categoryId` preselects that library section, so adding images to a boxer
  * product starts from the Boxers photos and "All images" is one click away.
  *
+ * `onChange` is optional and fires with the current attachments whenever they
+ * are (re)loaded — for parents that render something of their own off whether
+ * the slot is filled.
+ *
  * Videos are offered for gallery roles only. The single-image slots — the
  * cover, the category tile, the hero banner — are rendered as <img> across the
  * storefront and the share card, so the server refuses a video there; hiding
@@ -46,12 +50,18 @@ const isVideo = (asset) => asset?.media_type === 'video';
  */
 export default function MediaPicker({
   type, id, role = 'gallery', single = false, folder = '', label = 'Images',
-  categoryId = null,
+  categoryId = null, onChange,
 }) {
   const [items, setItems]   = useState([]);
   const [open, setOpen]     = useState(false);
   const [loading, setLoad]  = useState(false);
   const dragId = useRef(null);
+
+  // Held in a ref, not in load()'s deps: callers pass an inline arrow, which
+  // would be a new function every render and would re-fetch the attachments on
+  // each one.
+  const onChangeRef = useRef(onChange);
+  onChangeRef.current = onChange;
 
   // Scoped to this picker's role: the cover and the gallery are independent
   // slots, so each picker shows and removes only its own attachments.
@@ -59,7 +69,14 @@ export default function MediaPicker({
     if (!id) return;
     setLoad(true);
     getAttachments(type, id, role)
-      .then(d => setItems(d.attachments || []))
+      .then(d => {
+        const attachments = d.attachments || [];
+        setItems(attachments);
+        // Lets a parent react to the slot filling or emptying — the hero slide
+        // rows use it to drop their "no image yet" warning the moment one is
+        // picked, without refetching the list.
+        onChangeRef.current?.(attachments);
+      })
       .finally(() => setLoad(false));
   }, [type, id, role]);
 

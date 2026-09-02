@@ -6,19 +6,22 @@ different URL surfaces with different auth — a fix verified only against
 /admin/medialib/api/* says nothing about what the React panel actually calls.
 """
 
+from datetime import timedelta
 from decimal import Decimal
 from unittest import mock
 
 from django.contrib.auth import get_user_model
 from django.test import TestCase
+from django.utils import timezone
 from rest_framework.test import APIClient
 
 from medialib.models import MediaAsset, MediaAttachment
 from django.core.cache import cache
 
+from orders.models import Cart, CartItem, Coupon, Order
 from products.models import (
-    Attribute, AttributeOption, Category, Color, Product, ProductVariation,
-    SizeSet, SizeSetBreakdown,
+    Attribute, AttributeOption, Category, Color, HeroSlide, Product,
+    ProductVariation, SizeSet, SizeSetBreakdown,
 )
 
 
@@ -1496,3 +1499,417 @@ class TagAttributesCommandTests(TestCase):
         self._run(apply=True)
         self.product.refresh_from_db()
         self.assertEqual(self.product.description, original)
+
+
+# ── Hero slides, orders, carts and coupons ────────────────────────────────────
+#
+# The four surfaces the React panel gained after products and users. What is
+# worth testing here is not the CRUD — DRF does that — but the rules each one
+# adds on top: what the panel is allowed to change, and what it must not.
+
+class AdminHeroSlideTests(TestCase):
+    """The carousel: created image-less, ordered by drag."""
+
+    def setUp(self):
+        self.client, _ = _superuser_client()
+
+    def test_slide_is_created_without_an_image(self):
+        # The picker needs an id to attach to, so a slide has to exist before it
+        # can have a picture. If `image` were required this flow is impossible.
+        r = self.client.post('/api/admin/hero-slides/',
+                             {'caption': 'Winter drop'}, format='json')
+        self.assertEqual(r.status_code, 201, r.content)
+        self.assertIsNone(r.json()['image_url'])
+
+    def test_new_slides_go_to_the_end(self):
+        HeroSlide.objects.create(caption='first', order=0)
+        HeroSlide.objects.create(caption='second', order=1)
+        r = self.client.post('/api/admin/hero-slides/', {'caption': 'third'}, format='json')
+        self.assertEqual(r.json()['order'], 2)
+
+    def test_reorder_rewrites_positions_from_the_list(self):
+        a = HeroSlide.objects.create(caption='a', order=0)
+        b = HeroSlide.objects.create(caption='b', order=1)
+        c = HeroSlide.objects.create(caption='c', order=2)
+
+        r = self.client.post('/api/admin/hero-slides/reorder/',
+                             {'order': [c.id, a.id, b.id]}, format='json')
+        self.assertEqual(r.status_code, 200, r.content)
+        self.assertEqual([s['id'] for s in r.json()], [c.id, a.id, b.id])
+
+        for slide, expected in ((c, 0), (a, 1), (b, 2)):
+            slide.refresh_from_db()
+            self.assertEqual(slide.order, expected)
+
+    def test_reorder_rejects_an_unknown_id(self):
+        a = HeroSlide.objects.create(caption='a', order=0)
+        r = self.client.post('/api/admin/hero-slides/reorder/',
+                             {'order': [a.id, 9999]}, format='json')
+        self.assertEqual(r.status_code, 400)
+        a.refresh_from_db()
+        self.assertEqual(a.order, 0)   # nothing half-applied
+
+
+class AdminCouponTests(TestCase):
+
+    def setUp(self):
+        self.client, _ = _superuser_client()
+        self.now   = timezone.now()
+        self.later = self.now + timedelta(days=30)
+
+    def _payload(self, **over):
+        data = {'code': 'summer10', 'discount_type': 'percentage',
+                'discount_value': '10', 'min_order_value': '0',
+                'is_active': True,
+                'valid_from': self.now.isoformat(), 'valid_to': self.later.isoformat()}
+        data.update(over)
+        return data
+
+    def test_code_is_upper_cased(self):
+        # Checkout matches the code exactly, so SUMMER10 and summer10 must not
+        # be able to become two coupons.
+        r = self.client.post('/api/admin/coupons/', self._payload(), format='json')
+        self.assertEqual(r.status_code, 201, r.content)
+        self.assertEqual(r.json()['code'], 'SUMMER10')
+
+    def test_percentage_over_100_is_rejected(self):
+        r = self.client.post('/api/admin/coupons/',
+                             self._payload(discount_value='150'), format='json')
+        self.assertEqual(r.status_code, 400)
+        self.assertIn('discount_value', r.json())
+
+    def test_a_fixed_amount_over_100_is_fine(self):
+        r = self.client.post('/api/admin/coupons/',
+                             self._payload(discount_type='fixed_amount',
+                                           discount_value='150'), format='json')
+        self.assertEqual(r.status_code, 201, r.content)
+
+    def test_window_must_run_forwards(self):
+        r = self.client.post('/api/admin/coupons/',
+                             self._payload(valid_from=self.later.isoformat(),
+                                           valid_to=self.now.isoformat()), format='json')
+        self.assertEqual(r.status_code, 400)
+        self.assertIn('valid_to', r.json())
+
+    def test_an_active_coupon_outside_its_window_is_not_currently_valid(self):
+        # is_active alone does not say whether checkout accepts it — the panel
+        # distinguishes "switched off" from "outside its dates" on this field.
+        past = self.now - timedelta(days=10)
+        coupon = Coupon.objects.create(
+            code='OLD', discount_type='percentage', discount_value=10,
+            is_active=True, valid_from=past, valid_to=past + timedelta(days=1))
+        r = self.client.get('/api/admin/coupons/')
+        row = next(c for c in r.json() if c['id'] == coupon.id)
+        self.assertTrue(row['is_active'])
+        self.assertFalse(row['is_currently_valid'])
+
+    def test_a_redeemed_coupon_cannot_be_deleted(self):
+        # Order.coupon is SET_NULL — deleting would quietly erase which code
+        # each discount came from.
+        coupon = Coupon.objects.create(
+            code='USED', discount_type='percentage', discount_value=10,
+            valid_from=self.now, valid_to=self.later)
+        buyer = get_user_model().objects.create(email='b@test.com', username='b')
+        Order.objects.create(user=buyer, total_amount=Decimal('100'), coupon=coupon)
+
+        r = self.client.delete(f'/api/admin/coupons/{coupon.id}/')
+        self.assertEqual(r.status_code, 409)
+        self.assertEqual(r.json()['order_count'], 1)
+        self.assertTrue(Coupon.objects.filter(id=coupon.id).exists())
+
+    def test_an_unused_coupon_deletes(self):
+        coupon = Coupon.objects.create(
+            code='UNUSED', discount_type='percentage', discount_value=10,
+            valid_from=self.now, valid_to=self.later)
+        r = self.client.delete(f'/api/admin/coupons/{coupon.id}/')
+        self.assertEqual(r.status_code, 204)
+        self.assertFalse(Coupon.objects.filter(id=coupon.id).exists())
+
+
+class AdminOrderTests(TestCase):
+    """
+    Orders arrive from checkout. The panel moves them along — it never authors
+    one, and it must never be able to restate what a buyer was charged.
+    """
+
+    def setUp(self):
+        self.client, _ = _superuser_client()
+        self.buyer = get_user_model().objects.create(
+            email='buyer@test.com', username='buyer', company_name='Acme')
+        self.order = Order.objects.create(
+            user=self.buyer, total_amount=Decimal('5000'),
+            status=Order.Status.PENDING_VERIFICATION,
+            payment_method=Order.PaymentMethod.DIRECT_UPI,
+            utr_number='UTR123', balance_due=Decimal('0'))
+
+    def test_orders_cannot_be_created_through_the_panel(self):
+        r = self.client.post('/api/admin/orders/',
+                             {'user': self.buyer.id, 'total_amount': '1'}, format='json')
+        self.assertEqual(r.status_code, 405)
+
+    def test_orders_cannot_be_deleted_through_the_panel(self):
+        r = self.client.delete(f'/api/admin/orders/{self.order.id}/')
+        self.assertEqual(r.status_code, 405)
+        self.assertTrue(Order.objects.filter(id=self.order.id).exists())
+
+    def test_tracking_and_status_are_writable(self):
+        r = self.client.patch(f'/api/admin/orders/{self.order.id}/',
+                              {'status': 'SHIPPED', 'courier_name': 'Delhivery',
+                               'tracking_number': 'DL1'}, format='json')
+        self.assertEqual(r.status_code, 200, r.content)
+        self.order.refresh_from_db()
+        self.assertEqual(self.order.status, 'SHIPPED')
+        self.assertEqual(self.order.tracking_number, 'DL1')
+
+    def test_money_fields_are_ignored_on_write(self):
+        r = self.client.patch(f'/api/admin/orders/{self.order.id}/',
+                              {'total_amount': '1.00', 'discount_amount': '4999.00',
+                               'amount_paid': '1.00', 'utr_number': 'TAMPERED'},
+                              format='json')
+        self.assertEqual(r.status_code, 200, r.content)
+        self.order.refresh_from_db()
+        self.assertEqual(self.order.total_amount, Decimal('5000'))
+        self.assertEqual(self.order.discount_amount, Decimal('0'))
+        self.assertEqual(self.order.utr_number, 'UTR123')
+
+    def test_verifying_the_payment_approves_the_order(self):
+        # The promotion lives in Order.save(). Saving through the serializer —
+        # rather than a queryset .update() — is what keeps the panel, the Django
+        # admin and checkout agreeing on this rule.
+        r = self.client.patch(f'/api/admin/orders/{self.order.id}/',
+                              {'payment_verified': True}, format='json')
+        self.assertEqual(r.status_code, 200, r.content)
+        self.order.refresh_from_db()
+        self.assertEqual(self.order.status, Order.Status.APPROVED)
+        self.assertEqual(self.order.payment_status, Order.PaymentStatus.PAID)
+
+    def test_unverified_filter_returns_only_what_waits_on_an_admin(self):
+        Order.objects.create(user=self.buyer, total_amount=Decimal('10'),
+                             status=Order.Status.DELIVERED, payment_verified=True)
+        r = self.client.get('/api/admin/orders/?unverified=true')
+        self.assertEqual([o['id'] for o in r.json()['results']], [self.order.id])
+
+    def test_stats_counts_what_the_dashboard_shows(self):
+        r = self.client.get('/api/admin/orders/stats/')
+        self.assertEqual(r.status_code, 200, r.content)
+        body = r.json()
+        self.assertEqual(body['total'], 1)
+        self.assertEqual(body['awaiting_verification'], 1)
+
+
+class AdminCartTests(TestCase):
+    """Carts are somebody else's. The panel looks and does not touch."""
+
+    def setUp(self):
+        self.client, _ = _superuser_client()
+        self.buyer = get_user_model().objects.create(
+            email='cartbuyer@test.com', username='cartbuyer')
+        self.cart = Cart.objects.create(user=self.buyer)
+
+        product = Product.objects.create(name='Jeans', slug='jeans')
+        self.variation = ProductVariation.objects.create(
+            product=product, sku='SKU-1', b2b_price=Decimal('500'), stock_quantity=2)
+        CartItem.objects.create(cart=self.cart, variation=self.variation, quantity=3)
+
+    def test_carts_are_read_only(self):
+        for method, url in (
+            ('post',   '/api/admin/carts/'),
+            ('patch',  f'/api/admin/carts/{self.cart.id}/'),
+            ('delete', f'/api/admin/carts/{self.cart.id}/'),
+        ):
+            r = getattr(self.client, method)(url, {}, format='json')
+            self.assertEqual(r.status_code, 405, f'{method} {url} → {r.status_code}')
+
+    def test_empty_carts_are_hidden_unless_asked_for(self):
+        # Every account that opened the storefront has one; a list that is
+        # mostly zeroes buries the carts worth a phone call.
+        other = get_user_model().objects.create(email='empty@test.com', username='empty')
+        empty = Cart.objects.create(user=other)
+
+        ids = [c['id'] for c in self.client.get('/api/admin/carts/').json()['results']]
+        self.assertEqual(ids, [self.cart.id])
+
+        ids = [c['id'] for c in
+               self.client.get('/api/admin/carts/?include_empty=true').json()['results']]
+        self.assertIn(empty.id, ids)
+
+    def test_value_is_quoted_at_current_prices(self):
+        r = self.client.get(f'/api/admin/carts/{self.cart.id}/')
+        body = r.json()
+        self.assertEqual(body['estimated_value'], '1500.00')   # 3 × 500
+        self.assertEqual(body['total_quantity'], 3)
+
+    def test_a_line_over_stock_is_flagged(self):
+        # 3 wanted, 2 held — the reason this cart will not convert as it stands.
+        line = self.client.get(f'/api/admin/carts/{self.cart.id}/').json()['items'][0]
+        self.assertTrue(line['out_of_stock'])
+        self.assertFalse(line['unavailable'])
+
+    def test_a_line_whose_variation_vanished_still_renders(self):
+        self.variation.delete()   # CartItem.variation is SET_NULL
+        line = self.client.get(f'/api/admin/carts/{self.cart.id}/').json()['items'][0]
+        self.assertTrue(line['unavailable'])
+        self.assertEqual(line['sku'], '[deleted]')
+        self.assertIsNone(line['line_total'])
+
+
+class AdminNewSurfacesRequireSuperuserTests(TestCase):
+    """The panel is superuser-only, and a new route is the easy place to forget."""
+
+    def test_a_signed_in_non_superuser_is_refused(self):
+        User = get_user_model()
+        staff = User(email='staff@test.com', username='staff', is_staff=True)
+        staff.set_password('x')
+        staff.save()
+        client = APIClient()
+        client.force_authenticate(user=staff)
+
+        for url in ('/api/admin/hero-slides/', '/api/admin/coupons/',
+                    '/api/admin/orders/', '/api/admin/carts/'):
+            self.assertEqual(client.get(url).status_code, 403, url)
+
+    def test_anonymous_is_refused(self):
+        client = APIClient()
+        for url in ('/api/admin/hero-slides/', '/api/admin/coupons/',
+                    '/api/admin/orders/', '/api/admin/carts/'):
+            self.assertIn(client.get(url).status_code, (401, 403), url)
+
+
+class AdminMediaDeleteTests(TestCase):
+    """
+    Deleting one file from the library, from the React panel.
+
+    Soft delete throughout: the point is to clear clutter, not to destroy
+    anything, so what is checked here is that the row leaves every listing while
+    the file and its hash stay put.
+    """
+
+    def setUp(self):
+        self.client, _ = _superuser_client()
+
+    def _asset(self, key='dupe'):
+        return MediaAsset.objects.create(
+            storage_key=key, file_hash=key.ljust(64, 'x')[:64],
+            original_filename=f'{key}.jpg', mime_type='image/jpeg')
+
+    def _delete(self, asset, force=False):
+        url = f'/api/admin/media/assets/{asset.id}/delete/'
+        return self.client.post(url + ('?force=true' if force else ''))
+
+    def test_an_unused_asset_deletes(self):
+        asset = self._asset()
+        r = self._delete(asset)
+        self.assertEqual(r.status_code, 200, r.content)
+        self.assertEqual(r.json()['detached'], 0)
+
+        asset.refresh_from_db()
+        self.assertIsNotNone(asset.deleted_at)
+        # Soft only — the row and its bytes-identity survive, which is what
+        # lets a re-upload of the same file bring it back.
+        self.assertTrue(MediaAsset.objects.filter(id=asset.id).exists())
+
+    def test_a_deleted_asset_leaves_the_library_listing(self):
+        asset = self._asset()
+        ids = [a['id'] for a in self.client.get('/api/admin/media/assets/').json()['results']]
+        self.assertIn(asset.id, ids)
+
+        self._delete(asset)
+        ids = [a['id'] for a in self.client.get('/api/admin/media/assets/').json()['results']]
+        self.assertNotIn(asset.id, ids)
+
+    def test_an_asset_in_use_is_refused_and_says_where(self):
+        # The refusal carries the labelled usage list so the panel's confirm can
+        # name what is in the way without a second round trip.
+        asset = self._asset()
+        product = Product.objects.create(name='Blue Jeans', slug='blue-jeans')
+        self.client.post(f'/api/admin/media/product/{product.id}/attach/',
+                         {'media_ids': [asset.id], 'role': 'gallery'}, format='json')
+
+        r = self._delete(asset)
+        self.assertEqual(r.status_code, 409)
+        body = r.json()
+        self.assertEqual(body['usage_count'], 1)
+        self.assertEqual(body['usage'][0]['label'], 'Blue Jeans')
+
+        asset.refresh_from_db()
+        self.assertIsNone(asset.deleted_at)   # refused means untouched
+
+    def test_force_detaches_everywhere_then_deletes(self):
+        asset = self._asset()
+        product = Product.objects.create(name='P', slug='p')
+        self.client.post(f'/api/admin/media/product/{product.id}/attach/',
+                         {'media_ids': [asset.id], 'role': 'gallery'}, format='json')
+
+        r = self._delete(asset, force=True)
+        self.assertEqual(r.status_code, 200, r.content)
+        self.assertEqual(r.json()['detached'], 1)
+
+        asset.refresh_from_db()
+        self.assertIsNotNone(asset.deleted_at)
+        self.assertEqual(asset.attachments.count(), 0)
+
+    def test_force_delete_clears_the_legacy_column(self):
+        """
+        The legacy image columns are what the storefront actually renders, so a
+        forced delete has to reconcile them. Detaching the attachment rows
+        directly would leave HeroSlide.image still naming a file the library no
+        longer lists — a broken <img> on the home page.
+        """
+        asset = self._asset(key='banner-shot')
+        slide = HeroSlide.objects.create(caption='Home banner')
+        self.client.post(f'/api/admin/media/banner/{slide.id}/attach/',
+                         {'media_ids': [asset.id], 'role': 'primary'}, format='json')
+
+        slide.refresh_from_db()
+        self.assertTrue(slide.image)          # the bridge filled it on attach
+
+        r = self._delete(asset, force=True)
+        self.assertEqual(r.status_code, 200, r.content)
+
+        slide.refresh_from_db()
+        self.assertFalse(slide.image)         # …and emptied it on the way out
+
+    def test_deleting_the_same_asset_twice_is_a_404(self):
+        asset = self._asset()
+        self.assertEqual(self._delete(asset).status_code, 200)
+        self.assertEqual(self._delete(asset).status_code, 404)
+
+    def test_usage_endpoint_labels_each_place(self):
+        asset = self._asset()
+        product = Product.objects.create(name='Slim Fit', slug='slim-fit')
+        self.client.post(f'/api/admin/media/product/{product.id}/attach/',
+                         {'media_ids': [asset.id], 'role': 'gallery'}, format='json')
+
+        r = self.client.get(f'/api/admin/media/assets/{asset.id}/usage/')
+        self.assertEqual(r.status_code, 200, r.content)
+        body = r.json()
+        self.assertEqual(body['count'], 1)
+        self.assertEqual(body['usage'][0]['type'], 'product')
+        self.assertEqual(body['usage'][0]['label'], 'Slim Fit')
+
+    def test_delete_requires_a_superuser(self):
+        asset = self._asset()
+        User = get_user_model()
+        staff = User(email='mediastaff@test.com', username='mediastaff', is_staff=True)
+        staff.set_password('x')
+        staff.save()
+        client = APIClient()
+        client.force_authenticate(user=staff)
+
+        r = client.post(f'/api/admin/media/assets/{asset.id}/delete/')
+        self.assertEqual(r.status_code, 403)
+        asset.refresh_from_db()
+        self.assertIsNone(asset.deleted_at)
+
+    def test_re_uploading_a_deleted_file_revives_it(self):
+        # Dedup matches on content hash, so deleting is never a one-way door —
+        # worth pinning, because it is what the confirm dialog promises.
+        from medialib import services
+        asset = self._asset()
+        self._delete(asset)
+        asset.refresh_from_db()
+        self.assertIsNotNone(asset.deleted_at)
+
+        revived = services._existing_asset(asset.file_hash, [])
+        self.assertEqual(revived.id, asset.id)
+        self.assertIsNone(revived.deleted_at)
