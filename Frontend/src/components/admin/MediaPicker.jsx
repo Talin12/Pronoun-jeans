@@ -1,11 +1,11 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
-  ChevronLeft, ChevronRight, FolderTree, ImagePlus, Loader, Play, Search,
+  ChevronLeft, ChevronRight, FolderTree, ImagePlus, Loader, Pin, Play, Search,
   UploadCloud, X, Star,
 } from 'lucide-react';
 import {
   attachMedia, detachMedia, getAttachments, listAssets, listMediaSections,
-  reorderMedia, uploadAssetsInBatches,
+  pinMedia, reorderMedia, uploadAssetsInBatches,
 } from '../../api/adminApi';
 
 /**
@@ -47,10 +47,14 @@ const isVideo = (asset) => asset?.media_type === 'video';
  * cover, the category tile, the hero banner — are rendered as <img> across the
  * storefront and the share card, so the server refuses a video there; hiding
  * them from the picker means the admin never meets that refusal.
+ *
+ * `pinnable` adds a pin toggle to each tile. A pinned product gallery item stays
+ * in the storefront strip, in the same slot, whichever colour is selected — so
+ * one clip or photo for every colourway is added once, not per variant.
  */
 export default function MediaPicker({
   type, id, role = 'gallery', single = false, folder = '', label = 'Images',
-  categoryId = null, onChange,
+  categoryId = null, pinnable = false, onChange,
 }) {
   const [items, setItems]   = useState([]);
   const [open, setOpen]     = useState(false);
@@ -84,6 +88,12 @@ export default function MediaPicker({
 
   const handleDetach = (attId) =>
     detachMedia(type, id, attId).then(load);
+
+  const togglePin = (att) => {
+    const pinned = !att.pinned;
+    setItems(prev => prev.map(a => a.id === att.id ? { ...a, pinned } : a));  // optimistic
+    pinMedia(type, id, att.id, pinned).catch(load);
+  };
 
   const handleAttach = (mediaIds) => {
     const ids = single ? mediaIds.slice(0, 1) : mediaIds;
@@ -150,6 +160,25 @@ export default function MediaPicker({
             >
               <X size={14} />
             </button>
+
+            {/* Always visible when on, so the admin can see at a glance which
+                items follow every colour. */}
+            {pinnable && (
+              <button
+                type="button"
+                onClick={() => togglePin(att)}
+                aria-pressed={!!att.pinned}
+                title={att.pinned ? 'Shown for every colour — click to show only under All colours'
+                                  : 'Show for every colour, in this position'}
+                className={`absolute top-1 left-1 w-7 h-7 rounded-full flex items-center justify-center transition-opacity ${
+                  att.pinned
+                    ? 'bg-accent text-white opacity-100'
+                    : 'bg-black/60 hover:bg-accent text-white opacity-100 sm:opacity-0 sm:group-hover:opacity-100'
+                }`}
+              >
+                <Pin size={13} className={att.pinned ? 'fill-white' : ''} />
+              </button>
+            )}
 
             {/* Touch reordering — hidden once hover-drag is available. */}
             {!single && items.length > 1 && (

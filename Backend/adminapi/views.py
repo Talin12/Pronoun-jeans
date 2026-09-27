@@ -941,6 +941,23 @@ class EntityDetachView(APIView):
         return Response({'ok': True, 'detached': deleted})
 
 
+class EntityPinView(APIView):
+    """Keep a product gallery item in the storefront strip for every colour."""
+    permission_classes = [IsSuperUser]
+
+    def post(self, request, attachable_type, attachable_id):
+        if not _valid_entity(attachable_type):
+            return Response({'error': 'Unknown type'}, status=400)
+        try:
+            att = services.set_pinned(
+                attachable_type, attachable_id,
+                request.data.get('attachment_id'), bool(request.data.get('pinned')),
+            )
+        except ValueError as e:
+            return Response({'error': str(e)}, status=400)
+        return Response({'attachment': presenters.serialize_attachment(att)})
+
+
 class EntityReorderView(APIView):
     permission_classes = [IsSuperUser]
 

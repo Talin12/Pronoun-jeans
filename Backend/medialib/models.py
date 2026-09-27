@@ -141,6 +141,11 @@ class MediaAttachment(models.Model):
     attachable_id   = models.BigIntegerField()
     role            = models.CharField(max_length=16, choices=ROLE_CHOICES, default='gallery')
     sort_order      = models.PositiveIntegerField(default=0)
+    # Product gallery only: keep this photo or clip in the storefront strip, in
+    # the same slot, whichever colour the buyer picks. Without it a product
+    # gallery item shows only in the "All colours" view, so a clip that suits
+    # every colourway would have to be attached to each variant separately.
+    pinned          = models.BooleanField(default=False)
     created_at      = models.DateTimeField(auto_now_add=True)
 
     class Meta:

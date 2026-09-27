@@ -451,17 +451,44 @@ def attach_assets(attachable_type, attachable_id, media_ids, role='gallery'):
             .filter(attachable_type=attachable_type, attachable_id=attachable_id, role=role)
             .order_by('-sort_order').values_list('sort_order', flat=True).first()) or 0
 
+    pinnable = is_pinnable(attachable_type, role)
     created = []
     for offset, mid in enumerate(media_ids, start=1):
         att, _ = MediaAttachment.objects.get_or_create(
             media_id=mid, attachable_type=attachable_type,
             attachable_id=attachable_id, role=role,
-            defaults={'sort_order': base + offset},
+            # A product clip starts pinned, which is how product videos have
+            # always behaved; a photo starts in the "All colours" view only.
+            defaults={'sort_order': base + offset,
+                      'pinned': pinnable and live[mid].media_type == 'video'},
         )
         created.append(att)
 
     sync_legacy(attachable_type, attachable_id, role)  # PHASE 7 BRIDGE
     return created
+
+
+def is_pinnable(attachable_type, role):
+    """Only the product gallery has colours to stay put across."""
+    return attachable_type == 'product' and role == 'gallery'
+
+
+def set_pinned(attachable_type, attachable_id, attachment_id, pinned):
+    """
+    Pin or unpin one product gallery item. Returns the attachment. Raises
+    ValueError for an attachment that is not in this entity's pinnable gallery.
+    """
+    att = (MediaAttachment.objects.select_related('media')
+           .filter(id=attachment_id, attachable_type=attachable_type,
+                   attachable_id=attachable_id).first())
+    if att is None:
+        raise ValueError('Unknown attachment')
+    if not is_pinnable(att.attachable_type, att.role):
+        raise ValueError('Only product gallery items can be pinned')
+    if att.pinned != pinned:
+        att.pinned = pinned
+        att.save(update_fields=['pinned'])
+    return att
 
 
 def detach_assets(attachable_type, attachable_id, *, attachment_id=None, media_id=None, role=None):

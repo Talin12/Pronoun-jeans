@@ -36,6 +36,8 @@ urlpatterns = [
          views.EntityAttachView.as_view(),      name='admin-media-attach'),
     path('media/<str:attachable_type>/<int:attachable_id>/detach/',
          views.EntityDetachView.as_view(),      name='admin-media-detach'),
+    path('media/<str:attachable_type>/<int:attachable_id>/pin/',
+         views.EntityPinView.as_view(),         name='admin-media-pin'),
     path('media/<str:attachable_type>/<int:attachable_id>/reorder/',
          views.EntityReorderView.as_view(),     name='admin-media-reorder'),
 ]

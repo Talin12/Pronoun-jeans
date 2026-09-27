@@ -107,6 +107,7 @@ def serialize_attachment(att):
         'media':       serialize_asset(att.media),
         'role':        att.role,
         'sort_order':  att.sort_order,
+        'pinned':      att.pinned,
     }
 
 

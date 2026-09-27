@@ -133,6 +133,40 @@ class AdminMediaRoleScopingTests(TestCase):
         rows = self.client.get(f'{self.base}/attachments/').json()['attachments']
         self.assertEqual(rows[0]['role'], 'primary')
 
+    def test_gallery_photo_can_be_pinned_and_unpinned(self, _u):
+        g1 = self._asset('media/products/gallery/one')
+        att = self._attach([g1.id], 'gallery').json()['attachments'][0]
+        self.assertFalse(att['pinned'])     # photos start in "All colours" only
+
+        r = self.client.post(f'{self.base}/pin/', {'attachment_id': att['id'], 'pinned': True}, format='json')
+        self.assertEqual(r.status_code, 200, r.content)
+        self.assertTrue(MediaAttachment.objects.get(id=att['id']).pinned)
+
+        self.client.post(f'{self.base}/pin/', {'attachment_id': att['id'], 'pinned': False}, format='json')
+        self.assertFalse(MediaAttachment.objects.get(id=att['id']).pinned)
+
+    def test_product_gallery_video_starts_pinned(self, _u):
+        clip = self._asset('media/products/gallery/clip')
+        clip.media_type = 'video'
+        clip.save()
+        att = self._attach([clip.id], 'gallery').json()['attachments'][0]
+        self.assertTrue(att['pinned'])
+
+    def test_cover_cannot_be_pinned(self, _u):
+        cover = self._asset('media/products/cover')
+        att = self._attach([cover.id], 'primary').json()['attachments'][0]
+        r = self.client.post(f'{self.base}/pin/', {'attachment_id': att['id'], 'pinned': True}, format='json')
+        self.assertEqual(r.status_code, 400)
+
+    def test_pin_is_scoped_to_its_entity(self, _u):
+        other = Product.objects.create(name='Q', slug='q')
+        g1 = self._asset('media/products/gallery/one')
+        att = self._attach([g1.id], 'gallery').json()['attachments'][0]
+        r = self.client.post(f'/api/admin/media/product/{other.id}/pin/',
+                             {'attachment_id': att['id'], 'pinned': True}, format='json')
+        self.assertEqual(r.status_code, 400)
+        self.assertFalse(MediaAttachment.objects.get(id=att['id']).pinned)
+
 
 class SizeSetAdminTests(TestCase):
     """

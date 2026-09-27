@@ -374,5 +374,8 @@ export const attachMedia = (type, id, mediaIds, role = 'gallery') =>
 export const detachMedia = (type, id, attachmentId) =>
   api.post(`admin/media/${type}/${id}/detach/`, { attachment_id: attachmentId }).then(r => r.data);
 
+export const pinMedia = (type, id, attachmentId, pinned) =>
+  api.post(`admin/media/${type}/${id}/pin/`, { attachment_id: attachmentId, pinned }).then(r => r.data);
+
 export const reorderMedia = (type, id, order) =>
   api.post(`admin/media/${type}/${id}/reorder/`, { order }).then(r => r.data);

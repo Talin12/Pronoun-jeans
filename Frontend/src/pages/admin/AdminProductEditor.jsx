@@ -3,7 +3,7 @@ import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import {
   ArrowLeft, ArrowRight, Loader, Save, Trash2, Plus, Check, Lock,
   Image as ImageIcon, Layers, FileText, ClipboardCheck, AlertCircle, X, ChevronDown, ChevronUp,
-  Pencil,
+  Pencil, Pin,
 } from 'lucide-react';
 import {
   createProduct, getProduct, updateProduct,
@@ -506,7 +506,11 @@ export default function AdminProductEditor() {
                 <div>
                   <label className={labelCls}>Gallery (drag, or use the arrows on a phone, to reorder)</label>
                   <MediaPicker type="product" id={Number(id)} role="gallery" folder="products/gallery" label="gallery images"
-                    categoryId={Number(form.category) || null} />
+                    categoryId={Number(form.category) || null} pinnable />
+                  <p className="text-xs text-gray-400 dark:text-zinc-500 mt-1 flex items-center gap-1">
+                    <Pin size={12} className="shrink-0" />
+                    Pin a photo or video to keep it in this position for every colour — add it once instead of to each variant.
+                  </p>
                 </div>
               </div>
               <div className="mt-6 flex justify-between">

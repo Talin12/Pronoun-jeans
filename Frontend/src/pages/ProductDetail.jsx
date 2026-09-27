@@ -238,36 +238,77 @@ const ProductDetail = () => {
     return [...seen.values()];
   }, [product]);
 
-  // Videos come from the media library rather than from gallery_images: the
-  // legacy columns are ImageFields and can only ever hold photos.
+  // The thumbnail strip, as one ordered list of { kind: 'image', src, alt } and
+  // { kind: 'video', video } items.
   //
-  // Product-level clips (a fabric or fit video describing the garment, not one
-  // colourway) stay in the strip whichever colour is selected. Per-variation
-  // clips follow their colour the same way variant photos do: they appear only
-  // when that swatch is active, so a colour's video isn't stranded behind the
-  // default view nor shown against the wrong colour.
-  const productVideos = useMemo(() => (
-    (product?.library_media ?? [])
-      .filter(att => att.media?.media_type === 'video')
-      .map(att => ({ ...att.media, key: `pvid-${att.id}` }))
-  ), [product]);
-
-  const videos = useMemo(() => {
+  // "All colours" shows the product's own media: cover, gallery photos, then
+  // clips. Videos come from the media library rather than from gallery_images:
+  // the legacy columns are ImageFields and can only ever hold photos.
+  //
+  // A colour shows that colour's photos and clips, plus every product gallery
+  // item the admin pinned — placed at the slot it holds under "All colours", so
+  // a clip that suits every colourway is added once and never moves when the
+  // buyer switches swatch. Unpinned product media stays in "All colours" only.
+  const productStrip = useMemo(() => {
     if (!product) return [];
-    const list = [...productVideos];
-    if (activeColor) {
-      // The same clip may be attached to several variations of one colour.
-      const seen = new Set(list.map(m => m.id));
-      product.variations
-        .filter(v => (v.color_name || v.color) === activeColor)
-        .forEach(v => (v.videos || []).forEach(att => {
-          if (seen.has(att.media?.id)) return;
-          seen.add(att.media?.id);
-          list.push({ ...att.media, key: `vvid-${att.id}` });
-        }));
-    }
+    const list = [];
+    if (product.image) list.push({ kind: 'image', key: 'main', src: product.image, alt: imageAlt(product) });
+    (product.gallery_images || []).forEach(img =>
+      list.push({ kind: 'image', key: `pg-${img.id}`, src: img.image, alt: img.alt_text || imageAlt(product) }));
+    (product.library_media || [])
+      .filter(att => att.media?.media_type === 'video')
+      .forEach(att => list.push({ kind: 'video', key: `pvid-${att.id}`, video: { ...att.media, key: `pvid-${att.id}` } }));
     return list;
-  }, [product, productVideos, activeColor]);
+  }, [product]);
+
+  // Pinned product gallery items with their slot under "All colours". Photos are
+  // matched to their strip entry by storage key, since the strip reads the
+  // legacy gallery columns that the library mirrors into.
+  const pinnedItems = useMemo(() => (
+    (product?.library_media || [])
+      .filter(att => att.role === 'gallery' && att.pinned)
+      .map(att => {
+        const isClip = att.media?.media_type === 'video';
+        const slot = productStrip.findIndex(t => isClip
+          ? t.key === `pvid-${att.id}`
+          : t.kind === 'image' && t.src?.includes(att.media.storage_key));
+        const item = slot >= 0 ? productStrip[slot]
+          : { kind: 'image', key: `pin-${att.id}`, src: att.media.url, alt: att.media.alt_text || imageAlt(product) };
+        return { item, slot: slot >= 0 ? slot : Infinity };
+      })
+      .sort((a, b) => a.slot - b.slot)
+  ), [product, productStrip]);
+
+  const strip = useMemo(() => {
+    if (!product) return [];
+    if (!activeColor) return productStrip;
+
+    // Photos are shared per product+colour, and a clip may be attached to
+    // several variations of one colour, so every item is kept only once.
+    const list = [];
+    const seen = new Set();
+    const idOf = (t) => t.kind === 'video' ? `v${t.video.id}` : t.src;
+    const add = (t) => { if (!seen.has(idOf(t))) { seen.add(idOf(t)); list.push(t); } };
+    const colourVariations = product.variations.filter(v => (v.color_name || v.color) === activeColor);
+    colourVariations.forEach(v => {
+      if (v.gallery_images?.length) {
+        v.gallery_images.forEach(gi => add({ kind: 'image', key: `gi-${gi.id}`, src: gi.image, alt: gi.alt_text || imageAlt(product, v.color_name) }));
+      } else if (v.image) {
+        add({ kind: 'image', key: `v-${v.id}`, src: v.image, alt: imageAlt(product, v.color_name) });
+      }
+    });
+    colourVariations.forEach(v => (v.videos || []).forEach(att =>
+      add({ kind: 'video', key: `vvid-${att.id}`, video: { ...att.media, key: `vvid-${att.id}` } })));
+
+    // Ascending slots, so each insert lands where "All colours" has it; a
+    // colour with fewer items than that puts it at the end.
+    pinnedItems.forEach(({ item, slot }) => {
+      if (seen.has(idOf(item))) return;
+      seen.add(idOf(item));
+      list.splice(Math.min(slot, list.length), 0, item);
+    });
+    return list;
+  }, [product, productStrip, pinnedItems, activeColor]);
 
   // Picking a photo leaves the video stage; picking a video does not disturb
   // which photo is behind it, so returning to the strip lands where it was.
@@ -378,68 +419,39 @@ const ProductDetail = () => {
               <ZoomableImage src={mainImage} alt={imageAlt(product)} />
             )}
 
-            {(() => {
-              // When a color is active, collect all images for that color's variations.
-              // Photos are shared per product+colour, so every variation of one
-              // colour returns the same set: keep each photo only once.
-              let thumbs = [];
-              if (activeColor) {
-                const seen = new Set();
-                const add = (t) => { if (!seen.has(t.src)) { seen.add(t.src); thumbs.push(t); } };
-                product.variations
-                  .filter(v => (v.color_name || v.color) === activeColor)
-                  .forEach(v => {
-                    if (v.gallery_images?.length) {
-                      v.gallery_images.forEach(gi => add({ key: `gi-${gi.id}`, src: gi.image, alt: gi.alt_text || imageAlt(product, v.color_name) }));
-                    } else if (v.image) {
-                      add({ key: `v-${v.id}`, src: v.image, alt: imageAlt(product, v.color_name) });
-                    }
-                  });
-              } else {
-                // Default: show product main image + product gallery images
-                if (product.image) thumbs.push({ key: 'main', src: product.image, alt: imageAlt(product) });
-                (product.gallery_images || []).forEach(img =>
-                  thumbs.push({ key: `pg-${img.id}`, src: img.image, alt: img.alt_text || imageAlt(product) })
-                );
-              }
-
-              if (thumbs.length === 0 && videos.length === 0) return null;
-              return (
-                <div className="flex gap-3 mt-4 overflow-x-auto pb-2">
-                  {thumbs.map(t => (
-                    <button key={t.key} onClick={() => showImage(t.src)}
-                      className={`w-20 h-20 shrink-0 rounded-xl overflow-hidden border-2 transition-all ${!activeVideo && mainImage === t.src ? 'border-accent' : 'border-transparent hover:border-gray-300 dark:hover:border-zinc-600'}`}>
-                      {/* 80px on screen — a 200px derivative, not the original. */}
-                      <ResponsiveImage src={t.src} alt={t.alt} widths={[200, 400]} sizes="80px"
-                        className="w-full h-full object-cover"
-                        onError={(e) => { e.target.style.display = 'none'; }} />
-                    </button>
-                  ))}
-
-                  {/* Videos sit after the photos, marked as videos. thumb_url is
-                      a poster frame, so this is still an <img> — the play badge
-                      and the length are what say it is not another photo. */}
-                  {videos.map(v => (
-                    <button key={v.key} onClick={() => setActiveVideo(v)}
-                      aria-label={`Play video: ${v.alt_text || imageAlt(product)}`}
-                      className={`relative w-20 h-20 shrink-0 rounded-xl overflow-hidden border-2 transition-all bg-black ${activeVideo?.key === v.key ? 'border-accent' : 'border-transparent hover:border-gray-300 dark:hover:border-zinc-600'}`}>
-                      <img src={v.thumb_url} alt="" loading="lazy"
-                        className="w-full h-full object-cover opacity-80" />
-                      <span className="absolute inset-0 flex items-center justify-center">
-                        <span className="w-7 h-7 rounded-full bg-white/85 flex items-center justify-center">
-                          <Play className="w-3.5 h-3.5 text-gray-900 fill-gray-900 ml-0.5" />
-                        </span>
+            {strip.length > 0 && (
+              <div className="flex gap-3 mt-4 overflow-x-auto pb-2">
+                {strip.map(t => t.kind === 'video' ? (
+                  // Marked as a video: thumb_url is a poster frame, so this is
+                  // still an <img> — the play badge and the length are what say
+                  // it is not another photo.
+                  <button key={t.key} onClick={() => setActiveVideo(t.video)}
+                    aria-label={`Play video: ${t.video.alt_text || imageAlt(product)}`}
+                    className={`relative w-20 h-20 shrink-0 rounded-xl overflow-hidden border-2 transition-all bg-black ${activeVideo?.key === t.video.key ? 'border-accent' : 'border-transparent hover:border-gray-300 dark:hover:border-zinc-600'}`}>
+                    <img src={t.video.thumb_url} alt="" loading="lazy"
+                      className="w-full h-full object-cover opacity-80" />
+                    <span className="absolute inset-0 flex items-center justify-center">
+                      <span className="w-7 h-7 rounded-full bg-white/85 flex items-center justify-center">
+                        <Play className="w-3.5 h-3.5 text-gray-900 fill-gray-900 ml-0.5" />
                       </span>
-                      {formatDuration(v.duration) && (
-                        <span className="absolute bottom-1 right-1 text-[10px] font-bold text-white bg-black/70 px-1 rounded">
-                          {formatDuration(v.duration)}
-                        </span>
-                      )}
-                    </button>
-                  ))}
-                </div>
-              );
-            })()}
+                    </span>
+                    {formatDuration(t.video.duration) && (
+                      <span className="absolute bottom-1 right-1 text-[10px] font-bold text-white bg-black/70 px-1 rounded">
+                        {formatDuration(t.video.duration)}
+                      </span>
+                    )}
+                  </button>
+                ) : (
+                  <button key={t.key} onClick={() => showImage(t.src)}
+                    className={`w-20 h-20 shrink-0 rounded-xl overflow-hidden border-2 transition-all ${!activeVideo && mainImage === t.src ? 'border-accent' : 'border-transparent hover:border-gray-300 dark:hover:border-zinc-600'}`}>
+                    {/* 80px on screen — a 200px derivative, not the original. */}
+                    <ResponsiveImage src={t.src} alt={t.alt} widths={[200, 400]} sizes="80px"
+                      className="w-full h-full object-cover"
+                      onError={(e) => { e.target.style.display = 'none'; }} />
+                  </button>
+                ))}
+              </div>
+            )}
 
             <div className="mt-4 space-y-3">
               <div>
