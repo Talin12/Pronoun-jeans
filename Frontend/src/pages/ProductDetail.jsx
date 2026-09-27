@@ -256,10 +256,15 @@ const ProductDetail = () => {
     if (!product) return [];
     const list = [...productVideos];
     if (activeColor) {
+      // The same clip may be attached to several variations of one colour.
+      const seen = new Set(list.map(m => m.id));
       product.variations
         .filter(v => (v.color_name || v.color) === activeColor)
-        .forEach(v => (v.videos || []).forEach(att =>
-          list.push({ ...att.media, key: `vvid-${att.id}` })));
+        .forEach(v => (v.videos || []).forEach(att => {
+          if (seen.has(att.media?.id)) return;
+          seen.add(att.media?.id);
+          list.push({ ...att.media, key: `vvid-${att.id}` });
+        }));
     }
     return list;
   }, [product, productVideos, activeColor]);
@@ -374,16 +379,20 @@ const ProductDetail = () => {
             )}
 
             {(() => {
-              // When a color is active, collect all images for that color's variations
+              // When a color is active, collect all images for that color's variations.
+              // Photos are shared per product+colour, so every variation of one
+              // colour returns the same set: keep each photo only once.
               let thumbs = [];
               if (activeColor) {
+                const seen = new Set();
+                const add = (t) => { if (!seen.has(t.src)) { seen.add(t.src); thumbs.push(t); } };
                 product.variations
                   .filter(v => (v.color_name || v.color) === activeColor)
                   .forEach(v => {
                     if (v.gallery_images?.length) {
-                      v.gallery_images.forEach(gi => thumbs.push({ key: `gi-${gi.id}`, src: gi.image, alt: gi.alt_text || imageAlt(product, v.color_name) }));
+                      v.gallery_images.forEach(gi => add({ key: `gi-${gi.id}`, src: gi.image, alt: gi.alt_text || imageAlt(product, v.color_name) }));
                     } else if (v.image) {
-                      thumbs.push({ key: `v-${v.id}`, src: v.image, alt: imageAlt(product, v.color_name) });
+                      add({ key: `v-${v.id}`, src: v.image, alt: imageAlt(product, v.color_name) });
                     }
                   });
               } else {
