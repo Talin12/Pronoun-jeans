@@ -192,71 +192,71 @@
   "rewrites": [
     {
       "source": "/catalog",
-      "destination": "/index.html"
+      "destination": "/"
     },
     {
       "source": "/catalog/:path*",
-      "destination": "/index.html"
+      "destination": "/"
     },
     {
       "source": "/product/:path*",
-      "destination": "/index.html"
+      "destination": "/"
     },
     {
       "source": "/about",
-      "destination": "/index.html"
+      "destination": "/"
     },
     {
       "source": "/contact",
-      "destination": "/index.html"
+      "destination": "/"
     },
     {
       "source": "/terms",
-      "destination": "/index.html"
+      "destination": "/"
     },
     {
       "source": "/privacy",
-      "destination": "/index.html"
+      "destination": "/"
     },
     {
       "source": "/refund",
-      "destination": "/index.html"
+      "destination": "/"
     },
     {
       "source": "/login",
-      "destination": "/index.html"
+      "destination": "/"
     },
     {
       "source": "/cart",
-      "destination": "/index.html"
+      "destination": "/"
     },
     {
       "source": "/history",
-      "destination": "/index.html"
+      "destination": "/"
     },
     {
       "source": "/dashboard",
-      "destination": "/index.html"
+      "destination": "/"
     },
     {
       "source": "/reset-password/:path*",
-      "destination": "/index.html"
+      "destination": "/"
     },
     {
       "source": "/agent",
-      "destination": "/index.html"
+      "destination": "/"
     },
     {
       "source": "/agent/:path*",
-      "destination": "/index.html"
+      "destination": "/"
     },
     {
       "source": "/admin",
-      "destination": "/index.html"
+      "destination": "/"
     },
     {
       "source": "/admin/:path*",
-      "destination": "/index.html"
+      "destination": "/"
     }
   ],
   "headers": [
