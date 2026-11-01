@@ -7,6 +7,7 @@ import { listCategories, createCategory, deleteCategory, updateCategory } from '
 import { SeoSection, FieldHeader, GooglePreview } from '../../components/admin/SeoFields';
 import { effectiveCategorySeo, META_DESCRIPTION_MAX } from '../../config/seoCopy';
 import { SITE_URL } from '../../config/site';
+import { CATEGORY_CONTENT } from '../../content/seoContent';
 
 // text-base on phones: anything under 16px makes iOS Safari zoom in on focus.
 const inputCls = 'w-full px-3 py-2.5 rounded-xl border border-gray-200 dark:border-white/10 bg-gray-50 dark:bg-zinc-800 text-base sm:text-sm text-gray-900 dark:text-zinc-100 focus:outline-none focus:ring-2 focus:ring-accent/40';
@@ -245,21 +246,40 @@ function Blocker({ icon: Icon, heading, instruction, names, total }) {
  * editing an existing row, and nothing else on this page does that.
  */
 function CategorySeoPanel({ category }) {
+  const initial = {
+    description: category.description || '',
+    content: category.content || '',
+    faqs: Array.isArray(category.faqs) ? category.faqs : [],
+  };
   const [open, setOpen]         = useState(false);
-  const [value, setValue]       = useState(category.description || '');
-  const [saved, setSaved]       = useState(category.description || '');
+  const [form, setForm]         = useState(initial);
+  const [saved, setSaved]       = useState(initial);
   const [saving, setSaving]     = useState(false);
   const [error, setError]       = useState('');
   const [justSaved, setJustSaved] = useState(false);
 
-  const dirty = value !== saved;
-  const preview = effectiveCategorySeo({ name: category.name, description: value });
+  const set = (key, value) => setForm(f => ({ ...f, [key]: value }));
+  const setFaq = (i, key, value) =>
+    set('faqs', form.faqs.map((f, j) => (j === i ? { ...f, [key]: value } : f)));
+
+  const dirty = JSON.stringify(form) !== JSON.stringify(saved);
+  const preview = effectiveCategorySeo({ name: category.name, description: form.description });
+  const fallback = CATEGORY_CONTENT[category.slug];
+  const words = form.content.trim() ? form.content.trim().split(/\s+/).length : 0;
+  const overridden = [saved.description, saved.content].filter(v => v.trim()).length
+    + (saved.faqs.length ? 1 : 0);
 
   const save = () => {
     setSaving(true); setError(''); setJustSaved(false);
-    updateCategory(category.id, { description: value })
+    const faqs = form.faqs.filter(f => (f.q || '').trim() && (f.a || '').trim());
+    updateCategory(category.id, { description: form.description, content: form.content, faqs })
       .then(c => {
-        setSaved(c.description || '');
+        const next = {
+          description: c.description || '',
+          content: c.content || '',
+          faqs: Array.isArray(c.faqs) ? c.faqs : [],
+        };
+        setSaved(next); setForm(next);
         setJustSaved(true);
         setTimeout(() => setJustSaved(false), 2500);
       })
@@ -271,17 +291,17 @@ function CategorySeoPanel({ category }) {
     <SeoSection
       open={open}
       onToggle={() => setOpen(o => !o)}
-      overridden={saved.trim() ? 1 : 0}
-      subtitle={`How /catalog/${category.slug} appears in Google. Optional — blank is written for you.`}
+      overridden={overridden}
+      subtitle={`How /catalog/${category.slug} appears in Google, plus the page copy and FAQs. Optional — blank uses the default.`}
     >
       <div>
-        <FieldHeader label="Meta description" value={value} max={META_DESCRIPTION_MAX} soft={140} />
+        <FieldHeader label="Meta description" value={form.description} max={META_DESCRIPTION_MAX} soft={140} />
         <textarea
           rows={3}
           maxLength={META_DESCRIPTION_MAX}
           className={inputCls}
-          value={value}
-          onChange={e => setValue(e.target.value)}
+          value={form.description}
+          onChange={e => set('description', e.target.value)}
           placeholder={preview.generatedDescription ? 'Generated — type here to override' : ''}
         />
       </div>
@@ -292,6 +312,55 @@ function CategorySeoPanel({ category }) {
         description={preview.description}
         generatedDescription={preview.generatedDescription}
       />
+
+      <div>
+        <div className="flex items-center justify-between mb-1.5">
+          <label className="text-xs font-bold text-gray-500 dark:text-zinc-400 uppercase tracking-wider">Page copy</label>
+          <span className={`text-xs font-semibold ${words && (words < 150 || words > 300) ? 'text-amber-600' : 'text-gray-400'}`}>
+            {words ? `${words} words · aim for 150–300` : 'Using default copy'}
+          </span>
+        </div>
+        <textarea
+          rows={8}
+          className={inputCls}
+          value={form.content}
+          onChange={e => set('content', e.target.value)}
+          placeholder={fallback ? fallback.paragraphs.join('\n\n') : 'Fabric, sizes, MOQ, who it is for, dispatch. Separate paragraphs with a blank line.'}
+        />
+      </div>
+
+      <div className="space-y-3">
+        <div className="flex items-center justify-between">
+          <label className="text-xs font-bold text-gray-500 dark:text-zinc-400 uppercase tracking-wider">FAQs</label>
+          <span className="text-xs text-gray-400">{form.faqs.length ? `${form.faqs.length} written` : `Using ${fallback?.faqs.length ?? 3} default FAQs`}</span>
+        </div>
+        {form.faqs.map((f, i) => (
+          <div key={i} className="space-y-2 p-3 rounded-xl border border-gray-200 dark:border-white/10">
+            <div className="flex gap-2">
+              <input className={inputCls} value={f.q || ''} placeholder="Question"
+                onChange={e => setFaq(i, 'q', e.target.value)} />
+              <button type="button" onClick={() => set('faqs', form.faqs.filter((_, j) => j !== i))}
+                className="shrink-0 p-2 rounded-xl text-gray-400 hover:text-red-600" aria-label="Remove FAQ">
+                <X size={16} />
+              </button>
+            </div>
+            <textarea rows={2} className={inputCls} value={f.a || ''} placeholder="Answer"
+              onChange={e => setFaq(i, 'a', e.target.value)} />
+          </div>
+        ))}
+        <div className="flex flex-wrap gap-2">
+          <button type="button" onClick={() => set('faqs', [...form.faqs, { q: '', a: '' }])}
+            className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl border border-gray-200 dark:border-white/10 text-sm font-semibold text-gray-700 dark:text-zinc-300">
+            <Plus size={14} /> Add FAQ
+          </button>
+          {!form.faqs.length && fallback && (
+            <button type="button" onClick={() => set('faqs', fallback.faqs.map(f => ({ ...f })))}
+              className="px-3 py-2 rounded-xl border border-gray-200 dark:border-white/10 text-sm font-semibold text-gray-700 dark:text-zinc-300">
+              Start from default FAQs
+            </button>
+          )}
+        </div>
+      </div>
 
       {error && (
         <div className="flex items-start gap-2 text-red-600 dark:text-red-400 text-sm">
@@ -310,7 +379,7 @@ function CategorySeoPanel({ category }) {
           disabled={saving || !dirty}
           className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-accent text-white text-sm font-bold hover:brightness-110 transition disabled:opacity-50"
         >
-          {saving ? <Loader size={15} className="animate-spin" /> : <Check size={15} />} Save description
+          {saving ? <Loader size={15} className="animate-spin" /> : <Check size={15} />} Save
         </button>
       </div>
     </SeoSection>

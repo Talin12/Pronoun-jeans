@@ -16,7 +16,7 @@ class CategorySerializer(serializers.ModelSerializer):
         fields = ['id', 'name', 'slug', 'image', 'parent', 'subcategories',
                   # description feeds the category page's meta description;
                   # updated_at feeds <lastmod> in the build-time sitemap.
-                  'description', 'updated_at']
+                  'description', 'content', 'faqs', 'updated_at']
 
 
 class ProductImageSerializer(serializers.ModelSerializer):

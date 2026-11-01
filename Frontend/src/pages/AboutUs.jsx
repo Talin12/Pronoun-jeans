@@ -12,8 +12,8 @@ const AboutUs = () => {
     <div className="bg-gray-50 dark:bg-zinc-950 min-h-screen">
 
       <Seo
-        title="About Pronoun Jeans — Denim Manufacturer, Ahmedabad"
-        description="Pronoun Jeans manufactures men's denim and casual bottomwear in Ahmedabad, working with long-standing mills and tailors to supply retailers across India."
+        title="About Pronoun Jeans — Men's Bottom-wear Manufacturer, Ahmedabad"
+        description="Pronoun Jeans manufactures men's cargo pants, trousers, shorts and casual bottom-wear in Ahmedabad, working with long-standing mills and tailors to supply retailers across India."
         canonical="/about"
       />
 

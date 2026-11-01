@@ -8,6 +8,7 @@ import Seo from '../components/seo/Seo';
 import JsonLd from '../components/seo/JsonLd';
 import { categoryItemListSchema, breadcrumbSchema } from '../config/schema';
 import { categorySeoTitle, categorySeoDescription } from '../config/seoCopy';
+import { categoryContent, faqSchema, moqLabel, CATALOG_TITLE, CATALOG_DESCRIPTION } from '../content/seoContent';
 import { usePrerenderReady } from '../hooks/usePrerenderReady';
 import BootstrapData from '../lib/BootstrapData';
 import { readBootstrap } from '../lib/bootstrap';
@@ -18,7 +19,7 @@ import { readBootstrap } from '../lib/bootstrap';
 const forBootstrap = (products) => products.map(p => ({
   id: p.id, slug: p.slug, name: p.name, image: p.image,
   category_name: p.category_name, moq: p.moq,
-  variations: (p.variations ?? []).map(v => ({ id: v.id })),
+  variations: (p.variations ?? []).map(v => ({ id: v.id, pieces: v.pieces, size: v.size })),
 }));
 
 const CategoryProducts = () => {
@@ -40,6 +41,9 @@ const CategoryProducts = () => {
   const [loading, setLoading]             = useState(!boot);
   const [categoryName, setCategoryName]   = useState(boot?.name ?? '');
   const [categoryDesc, setCategoryDesc]   = useState(boot?.description ?? '');
+  // Admin-written page copy and FAQs; blank falls back to the defaults in
+  // content/seoContent.js. The server render (api/render.js) uses the same.
+  const [categoryCopy, setCategoryCopy]   = useState({ content: boot?.content ?? '', faqs: boot?.faqs ?? [] });
   const [subcategories, setSubcategories] = useState(boot?.subcategories ?? []);
   const [activeSubcategory, setActiveSubcategory] = useState(searchParams.get('subcategory') || '');
   const [searchQuery, setSearchQuery]     = useState('');
@@ -51,6 +55,7 @@ const CategoryProducts = () => {
       .then(res => {
         setCategoryName(res.data.name);
         setCategoryDesc(res.data.description || '');
+        setCategoryCopy({ content: res.data.content || '', faqs: res.data.faqs || [] });
         setSubcategories(res.data.subcategories || []);
       })
       .catch(() => {});
@@ -101,6 +106,10 @@ const CategoryProducts = () => {
   // from separate requests, so neither alone is enough to snapshot on.
   usePrerenderReady(Boolean(categoryName) && !loading);
 
+  const copy = categoryContent({
+    slug: category_slug, name: categoryName, content: categoryCopy.content, faqs: categoryCopy.faqs,
+  });
+
   return (
     <div className="p-10 bg-gray-50 dark:bg-zinc-950 min-h-screen">
       <BootstrapData
@@ -108,6 +117,8 @@ const CategoryProducts = () => {
         data={{
           name: categoryName,
           description: categoryDesc,
+          content: categoryCopy.content,
+          faqs: categoryCopy.faqs,
           subcategories,
           products: forBootstrap(products),
         }}
@@ -124,6 +135,7 @@ const CategoryProducts = () => {
           canonical={`/catalog/${category_slug}`}
         >
           <JsonLd data={categoryItemListSchema({ name: categoryName, slug: category_slug, products })} />
+          <JsonLd data={faqSchema(copy.faqs)} />
           <JsonLd data={breadcrumbSchema([
             { name: 'Home', path: '/' },
             { name: 'Catalogue', path: '/catalog' },
@@ -132,8 +144,8 @@ const CategoryProducts = () => {
         </Seo>
       ) : (
         <Seo
-          title="Wholesale Denim Catalogue — Bulk Jeans & Bottomwear"
-          description="Browse wholesale men's jeans, cargos and joggers from Pronoun Jeans, Ahmedabad. Bulk orders in ready size sets, with MOQ pricing for verified B2B buyers."
+          title={CATALOG_TITLE}
+          description={CATALOG_DESCRIPTION}
           canonical={`/catalog/${category_slug}`}
         />
       )}
@@ -227,7 +239,7 @@ const CategoryProducts = () => {
                 )}
                 {isAuthenticated ? (
                   <div className="absolute top-3 right-3 bg-white/90 dark:bg-zinc-900/80 backdrop-blur-sm text-gray-700 dark:text-zinc-300 text-xs font-bold px-3 py-1 rounded-full flex items-center gap-1 border border-gray-200 dark:border-white/10">
-                    <BadgeCheck className="w-3 h-3" /> MOQ: {product.moq}
+                    <BadgeCheck className="w-3 h-3" /> MOQ: {moqLabel(product)}
                   </div>
                 ) : (
                   <div className="absolute top-3 right-3 bg-white/90 dark:bg-zinc-900/80 backdrop-blur-sm text-gray-400 dark:text-zinc-500 text-xs font-bold px-3 py-1 rounded-full flex items-center gap-1 border border-gray-200 dark:border-white/10">
@@ -246,6 +258,35 @@ const CategoryProducts = () => {
             </Link>
           ))}
         </div>
+      )}
+
+      {/* Category copy and FAQs. Shown to everyone, and identical to what
+          api/render.js puts in the server HTML. */}
+      {categoryName && (
+        <section className="mt-16 max-w-3xl">
+          <h2 className="text-gray-900 dark:text-zinc-100 text-2xl font-bold mb-4">{copy.heading}</h2>
+          <div className="space-y-3">
+            {copy.paragraphs.map((p, i) => (
+              <p key={i} className="text-gray-600 dark:text-zinc-400 text-sm leading-relaxed">{p}</p>
+            ))}
+          </div>
+          {copy.faqs.length > 0 && (
+            <>
+              <h2 className="text-gray-900 dark:text-zinc-100 text-2xl font-bold mt-12 mb-4">Frequently asked questions</h2>
+              <div className="space-y-3">
+                {copy.faqs.map((f, i) => (
+                  <details key={i} className="group bg-white dark:bg-zinc-900 border border-gray-200 dark:border-white/5 rounded-xl px-5 py-4">
+                    <summary className="cursor-pointer list-none font-semibold text-gray-900 dark:text-zinc-100 text-sm flex items-center justify-between gap-4">
+                      {f.q}
+                      <span className="text-accent text-lg leading-none group-open:rotate-45 transition-transform">+</span>
+                    </summary>
+                    <p className="text-gray-600 dark:text-zinc-400 text-sm leading-relaxed mt-3">{f.a}</p>
+                  </details>
+                ))}
+              </div>
+            </>
+          )}
+        </section>
       )}
     </div>
   );

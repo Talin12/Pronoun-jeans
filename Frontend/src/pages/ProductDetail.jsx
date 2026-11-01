@@ -14,6 +14,7 @@ import Seo from '../components/seo/Seo';
 import JsonLd from '../components/seo/JsonLd';
 import { productSchema } from '../config/schema';
 import { productSeoTitle, productSeoDescription } from '../config/seoCopy';
+import { sets, moqLabel, CATALOG_TITLE, CATALOG_DESCRIPTION } from '../content/seoContent';
 import { usePrerenderReady } from '../hooks/usePrerenderReady';
 
 const decodeHtml = (text) => {
@@ -22,9 +23,10 @@ const decodeHtml = (text) => {
   return (doc.body.textContent ?? '').replace(/\\n/g, '\n');
 };
 
-// "1 units" is what every one of these strings said the moment the default MOQ
-// became 1, which is now the common case rather than the rare one.
-const units = (n) => `${n} unit${Number(n) === 1 ? '' : 's'}`;
+// Product.moq counts SETS — each variation row is one size set and the
+// quantity box orders whole sets. Saying "1 unit" next to a title reading
+// "SET OF 5 PCS" was the contradiction buyers (and Google) saw.
+const units = (n) => sets(n);
 
 // Alt text for images whose own alt_text is blank. Rows saved before the
 // server started defaulting alt_text still have '', and "Main" describes
@@ -361,8 +363,8 @@ const ProductDetail = () => {
   if (loading) return (
     <div className="flex items-center justify-center min-h-screen bg-gray-50 dark:bg-zinc-950">
       <Seo
-        title="Wholesale Jeans & Denim — Bulk Size Sets"
-        description="Wholesale men's jeans, cargos and joggers from Pronoun Jeans, a B2B denim manufacturer in Ahmedabad. Bulk size sets, MOQ pricing, pan-India dispatch."
+        title={CATALOG_TITLE}
+        description={CATALOG_DESCRIPTION}
         canonical={`/product/${slug}`}
       />
       <Loader className="animate-spin text-accent w-10 h-10" />
@@ -372,7 +374,7 @@ const ProductDetail = () => {
     <div className="flex items-center justify-center min-h-screen bg-gray-50 dark:bg-zinc-950">
       <Seo
         title="Product Not Found"
-        description="This product is no longer listed. Browse the Pronoun Jeans wholesale catalogue for current men's jeans, cargo pants and joggers available in bulk."
+        description="This product is no longer listed. Browse the Pronoun Jeans wholesale catalogue for current men's cargo pants, trousers, shorts and boxers available in bulk."
         canonical={`/product/${slug}`}
         noindex
       />
@@ -528,7 +530,7 @@ const ProductDetail = () => {
               {isAuthenticated ? (
                 <div className="flex flex-wrap gap-2">
                   <div className="inline-flex items-center gap-1.5 bg-accent/10 border border-accent/30 text-accent text-xs font-semibold px-3 py-1.5 rounded-full">
-                    <BadgeCheck className="w-3.5 h-3.5" /> MOQ: {units(product.moq)}
+                    <BadgeCheck className="w-3.5 h-3.5" /> MOQ: {moqLabel(product)}
                   </div>
                   {(() => {
                     const total = product.variations.reduce((s, v) => s + (v.stock_quantity ?? 0), 0);
@@ -666,6 +668,11 @@ const ProductDetail = () => {
                   <Lock className="w-7 h-7 text-gray-400 dark:text-zinc-500" />
                 </div>
                 <h3 className="text-gray-900 dark:text-zinc-100 text-lg font-bold mb-2">Wholesale Pricing & Ordering</h3>
+                {/* Visible signed out too: the MOQ is public information, and
+                    the one place it is stated must agree with the title. */}
+                <p className="inline-flex items-center gap-1.5 bg-accent/10 border border-accent/30 text-accent text-xs font-semibold px-3 py-1.5 rounded-full mb-3">
+                  <BadgeCheck className="w-3.5 h-3.5" /> Minimum order: {moqLabel(product)}
+                </p>
                 <p className="text-gray-500 dark:text-zinc-400 text-sm max-w-sm mb-6 leading-relaxed">
                   Sign in to your partner account to view wholesale pricing, MOQ details, and place bulk orders.
                 </p>

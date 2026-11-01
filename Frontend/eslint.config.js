@@ -35,4 +35,9 @@ export default defineConfig([
       }],
     },
   },
+  {
+    // Vercel functions and build config run on Node, not in the browser.
+    files: ['api/**/*.js', 'vite.config.js'],
+    languageOptions: { globals: globals.node },
+  },
 ])

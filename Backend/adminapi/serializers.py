@@ -156,15 +156,35 @@ class CategorySerializer(serializers.ModelSerializer):
     class Meta:
         model  = Category
         fields = ['id', 'name', 'slug', 'parent', 'parent_name', 'image', 'image_url',
-                  'description']
+                  'description', 'content', 'faqs']
         extra_kwargs = {
             'image':       {'write_only': True, 'required': False},
             'slug':        {'required': False},
             'description': {'required': False},
+            'content':     {'required': False},
+            'faqs':        {'required': False},
         }
 
     def get_image_url(self, obj):
         return _image_url(obj.image)
+
+    def validate_faqs(self, value):
+        # Stored as given and rendered on a public page, so the shape is
+        # checked here rather than trusted: a list of {q, a} strings, blanks
+        # dropped.
+        if value in (None, ''):
+            return []
+        if not isinstance(value, list):
+            raise serializers.ValidationError('Expected a list of {"q", "a"} objects.')
+        clean = []
+        for item in value:
+            if not isinstance(item, dict):
+                raise serializers.ValidationError('Each FAQ must be an object with "q" and "a".')
+            q = str(item.get('q') or '').strip()
+            a = str(item.get('a') or '').strip()
+            if q and a:
+                clean.append({'q': q[:300], 'a': a[:2000]})
+        return clean
 
     def validate(self, attrs):
         # Auto-slug from name if not supplied.

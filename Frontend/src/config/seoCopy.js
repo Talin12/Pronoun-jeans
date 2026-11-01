@@ -6,62 +6,19 @@
 // second, slightly different copy of the rules is worse than no preview — it
 // would quietly tell the person writing the copy something untrue.
 
-import { SITE_NAME, TITLE_SUFFIX, clampDescription } from './site';
+import {
+  withBrandSuffix, clampDescription,
+  productSeoTitle, productSeoDescription, categorySeoTitle, categorySeoDescription,
+} from '../content/seoContent';
+
+export { withBrandSuffix, productSeoTitle, productSeoDescription, categorySeoTitle, categorySeoDescription };
 
 export const META_TITLE_MAX = 70;
 export const META_DESCRIPTION_MAX = 160;
 
-/** Mirrors <Seo>: the brand is appended unless the title already names it. */
-export function withBrandSuffix(title) {
-  const text = (title ?? '').trim();
-  if (!text) return SITE_NAME;
-  return text.includes(SITE_NAME) ? text : `${text}${TITLE_SUFFIX}`;
-}
-
-/**
- * Entity-decode and flatten free text typed into the admin panel.
- *
- * Descriptions come back with HTML entities and hard line breaks in them;
- * neither belongs in a meta tag.
- */
-function plainText(value) {
-  if (!value) return '';
-  const doc = new DOMParser().parseFromString(String(value), 'text/html');
-  return (doc.body.textContent ?? '').replace(/\s+/g, ' ').trim();
-}
-
-// ── Products ─────────────────────────────────────────────────────────────────
-
-export function productSeoTitle(product) {
-  return `${product.name} — Wholesale ${product.category_name || 'Denim'}`;
-}
-
-/**
- * Assembled from whatever the product actually carries. fabric_details is free
- * text typed into the admin panel and is blank on plenty of SKUs, so it is cut
- * to its first sentence and dropped entirely when missing rather than leaving a
- * dangling clause in the search snippet.
- */
-export function productSeoDescription(product) {
-  const fabric = plainText(product.fabric_details).split(/[.\n]/)[0].trim();
-  const moq = Number(product.moq) || 0;
-  return [
-    `${product.name} — wholesale ${(product.category_name || 'denim').toLowerCase()} from ${SITE_NAME}, Ahmedabad.`,
-    fabric && `${fabric}.`,
-    `Sold in size sets, MOQ ${moq} unit${moq === 1 ? '' : 's'}, with pan-India dispatch for retailers.`,
-  ].filter(Boolean).join(' ');
-}
-
-// ── Categories ───────────────────────────────────────────────────────────────
-
-export function categorySeoTitle(category) {
-  return `${category.name} — Wholesale ${category.name} Manufacturer`;
-}
-
-export function categorySeoDescription(category) {
-  return `Wholesale ${(category.name || '').toLowerCase()} from ${SITE_NAME}, a B2B denim `
-    + 'manufacturer in Ahmedabad. Bulk size sets, MOQ pricing and pan-India dispatch for retailers.';
-}
+// The generators themselves live in content/seoContent.js, which has no
+// browser or Vite dependencies, so the server render (api/render.js) builds
+// exactly the same titles and descriptions as the pages and this preview.
 
 // ── What actually ships ──────────────────────────────────────────────────────
 //

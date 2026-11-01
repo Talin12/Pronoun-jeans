@@ -14,7 +14,7 @@ const NotFound = () => {
           though noindex means Google will not act on it. */}
       <Seo
         title="Page Not Found"
-        description="This page does not exist. Browse the Pronoun Jeans wholesale catalogue of men's jeans, cargo pants and joggers, available in bulk size sets."
+        description="This page does not exist. Browse the Pronoun Jeans wholesale catalogue of men's cargo pants, trousers, shorts and boxers, available in bulk size sets."
         canonical={pathname}
         noindex
       />

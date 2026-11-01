@@ -39,6 +39,19 @@ class Category(models.Model):
         help_text='Used as the meta description on the category page. '
                   'Left blank, one is generated from the category name.',
     )
+    # The long-form copy and FAQs shown under the product grid on
+    # /catalog/:slug (and in the server-rendered HTML crawlers read). Blank
+    # means "use the default copy for this slug" in
+    # Frontend/src/content/seoContent.js — never an empty section.
+    content = models.TextField(
+        blank=True,
+        help_text='Category page copy, 150–300 words. Separate paragraphs with a blank line. '
+                  'Blank uses the default copy.',
+    )
+    faqs = models.JSONField(
+        default=list, blank=True,
+        help_text='List of {"q": "...", "a": "..."}. Empty uses the default FAQs.',
+    )
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:

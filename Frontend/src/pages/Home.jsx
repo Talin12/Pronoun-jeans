@@ -6,6 +6,7 @@ import ResponsiveImage from '../components/shared/ResponsiveImage';
 import Seo from '../components/seo/Seo';
 import JsonLd from '../components/seo/JsonLd';
 import { websiteSchema } from '../config/schema';
+import { HOME_HEADING, HOME_INTRO, HOME_ABOUT, HOME_FAQS, SITE_DESCRIPTION, faqSchema } from '../content/seoContent';
 import { usePrerenderReady } from '../hooks/usePrerenderReady';
 import BootstrapData from '../lib/BootstrapData';
 import { readBootstrap } from '../lib/bootstrap';
@@ -190,11 +191,12 @@ const Home = () => {
       <BootstrapData id="home" data={{ slides, categories }} />
 
       <Seo
-        title="Wholesale Jeans Manufacturer in Ahmedabad"
-        description="Pronoun Jeans manufactures wholesale men's jeans, cargo pants and joggers in Ahmedabad. Bulk size sets, MOQ pricing and pan-India dispatch for retailers."
+        title={HOME_HEADING}
+        description={SITE_DESCRIPTION}
         canonical="/"
       >
         <JsonLd data={websiteSchema()} />
+        <JsonLd data={faqSchema(HOME_FAQS)} />
       </Seo>
 
       {/* ── Hero ── */}
@@ -215,12 +217,12 @@ const Home = () => {
                 Wholesale Partner Portal
               </span>
               <h1 className="text-5xl sm:text-6xl lg:text-7xl font-black text-white leading-[1.05] tracking-tight mb-6">
-                Wholesale Jeans<br />
-                <span className="text-accent">Manufacturer</span><br />
+                Men's Bottom-wear<br />
+                <span className="text-accent">Wholesale Manufacturer</span><br />
                 in Ahmedabad.
               </h1>
               <p className="text-lg text-white/75 max-w-md mb-10 leading-relaxed">
-                Men's denim, cargo pants and joggers in bulk size sets. Built for retailers and distributors across India.
+                {HOME_INTRO}
               </p>
               <div className="flex items-center gap-4 flex-wrap">
                 <button onClick={() => navigate('/catalog')}
@@ -313,6 +315,32 @@ const Home = () => {
           <Link to="/catalog" className="inline-flex items-center gap-1 text-accent text-sm font-bold hover:underline">
             View All Collections <ArrowRight className="w-3.5 h-3.5" />
           </Link>
+        </div>
+      </section>
+
+      {/* ── About + FAQ ── real copy for buyers and search engines alike;
+          the same text api/render.js sends in the server HTML. */}
+      <section className="border-t border-gray-200 dark:border-white/5">
+        <div className="max-w-3xl mx-auto px-6 py-16">
+          <h2 className="text-gray-900 dark:text-zinc-100 text-3xl font-black mb-6">About Pronoun Jeans</h2>
+          <div className="space-y-4">
+            {HOME_ABOUT.map((p, i) => (
+              <p key={i} className="text-gray-600 dark:text-zinc-400 text-sm sm:text-base leading-relaxed">{p}</p>
+            ))}
+          </div>
+
+          <h2 className="text-gray-900 dark:text-zinc-100 text-2xl font-black mt-14 mb-5">Frequently asked questions</h2>
+          <div className="space-y-3">
+            {HOME_FAQS.map((f, i) => (
+              <details key={i} className="group bg-gray-50 dark:bg-zinc-900 border border-gray-200 dark:border-white/5 rounded-xl px-5 py-4">
+                <summary className="cursor-pointer list-none font-semibold text-gray-900 dark:text-zinc-100 text-sm flex items-center justify-between gap-4">
+                  {f.q}
+                  <span className="text-accent text-lg leading-none group-open:rotate-45 transition-transform">+</span>
+                </summary>
+                <p className="text-gray-600 dark:text-zinc-400 text-sm leading-relaxed mt-3">{f.a}</p>
+              </details>
+            ))}
+          </div>
         </div>
       </section>
 

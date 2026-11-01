@@ -96,10 +96,10 @@ export function catalogPageSchema(categories = []) {
     '@type': 'CollectionPage',
     '@id': `${absoluteUrl('/catalog')}#collectionpage`,
     url: absoluteUrl('/catalog'),
-    name: 'Wholesale Denim Catalogue',
+    name: "Wholesale Men's Bottom-wear Catalogue",
     description:
-      "Wholesale men's jeans, cargo pants, joggers and casual bottomwear from Pronoun Jeans, "
-      + 'sold in ready size sets with a minimum order quantity.',
+      "Wholesale men's cargo pants, travel-wear pants, trousers, formal pants, shorts and boxers "
+      + 'from Pronoun Jeans, sold in ready size sets with a minimum order of 1 set per design.',
     inLanguage: 'en-IN',
     isPartOf: { '@id': `${SITE_URL}/#website` },
     about: { '@id': ORGANIZATION_ID },
