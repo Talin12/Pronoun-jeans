@@ -212,67 +212,67 @@
     },
     {
       "source": "/catalog/:path*",
-      "destination": "/app.html"
+      "destination": "/app"
     },
     {
       "source": "/about",
-      "destination": "/app.html"
+      "destination": "/app"
     },
     {
       "source": "/contact",
-      "destination": "/app.html"
+      "destination": "/app"
     },
     {
       "source": "/terms",
-      "destination": "/app.html"
+      "destination": "/app"
     },
     {
       "source": "/privacy",
-      "destination": "/app.html"
+      "destination": "/app"
     },
     {
       "source": "/refund",
-      "destination": "/app.html"
+      "destination": "/app"
     },
     {
       "source": "/login",
-      "destination": "/app.html"
+      "destination": "/app"
     },
     {
       "source": "/cart",
-      "destination": "/app.html"
+      "destination": "/app"
     },
     {
       "source": "/history",
-      "destination": "/app.html"
+      "destination": "/app"
     },
     {
       "source": "/dashboard",
-      "destination": "/app.html"
+      "destination": "/app"
     },
     {
       "source": "/reset-password/:path*",
-      "destination": "/app.html"
+      "destination": "/app"
     },
     {
       "source": "/agent",
-      "destination": "/app.html"
+      "destination": "/app"
     },
     {
       "source": "/agent/:path*",
-      "destination": "/app.html"
+      "destination": "/app"
     },
     {
       "source": "/admin",
-      "destination": "/app.html"
+      "destination": "/app"
     },
     {
       "source": "/admin/:path*",
-      "destination": "/app.html"
+      "destination": "/app"
     },
     {
       "source": "/product/:path*",
-      "destination": "/app.html"
+      "destination": "/app"
     }
   ],
   "headers": [

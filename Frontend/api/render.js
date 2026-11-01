@@ -57,12 +57,19 @@ async function loadShell(origin) {
   // Preview deployments sit behind Vercel Authentication; the automation
   // bypass secret (when configured) lets the function read its own shell.
   const bypass = process.env.VERCEL_AUTOMATION_BYPASS_SECRET;
-  const res = await fetch(`${origin}/app.html`, {
+  // `/app` (cleanUrls form of app.html). In production read it from the
+  // public domain: the forwarded host there can be the *.vercel.app
+  // deployment URL, which sits behind Vercel Authentication and answers with
+  // a login page instead of the shell.
+  const base = process.env.VERCEL_ENV === 'production' ? SITE_URL : origin;
+  const res = await fetch(`${base}/app`, {
     redirect: 'follow',
     headers: bypass ? { 'x-vercel-protection-bypass': bypass } : {},
   });
   if (!res.ok) throw new Error(`shell fetch → ${res.status}`);
-  return res.text();
+  const html = await res.text();
+  if (!/<div id="root">\s*<\/div>/.test(html)) throw new Error('shell fetch returned something other than the app shell');
+  return html;
 }
 
 function getShell(origin) {
