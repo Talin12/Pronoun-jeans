@@ -563,6 +563,18 @@ class AddressSerializer(serializers.ModelSerializer):
 
 
 class AgentProfileSerializer(serializers.ModelSerializer):
+    # `validators=[]` drops the UniqueValidator DRF would build from the model's
+    # unique=True on agent_code. A nested serializer is never bound to an
+    # instance, so that validator has no `self.instance` to exclude and matches
+    # the agent's *own* row: re-sending an existing agent's unchanged code came
+    # back "already exists". Since the panel always sends the whole form, that
+    # blocked every edit to an agent — commission rate included — and not just
+    # a change to the code itself.
+    #
+    # The check moves to UserDetailSerializer.validate, which knows which user
+    # is being edited and can exclude them.
+    agent_code = serializers.CharField(max_length=20, validators=[])
+
     class Meta:
         model  = AgentProfile
         fields = ['agent_code', 'commission_percentage']
@@ -642,6 +654,21 @@ class UserDetailSerializer(serializers.ModelSerializer):
             if not code and not existing:
                 raise serializers.ValidationError({
                     'agent_profile': 'An agent needs an agent code.',
+                })
+
+        # Uniqueness of agent_code, done here rather than on the nested field so
+        # that the agent being edited is not counted as a clash with itself.
+        code = (attrs.get('agent_profile') or {}).get('agent_code')
+        if code:
+            clash = AgentProfile.objects.filter(agent_code=code)
+            if self.instance is not None:
+                clash = clash.exclude(user=self.instance)
+            if clash.exists():
+                raise serializers.ValidationError({
+                    'agent_profile': {
+                        'agent_code': ['That agent code already belongs to '
+                                       'another agent.'],
+                    },
                 })
         return attrs
 

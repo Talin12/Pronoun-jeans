@@ -8,6 +8,7 @@ import {
   getUser, createUser, updateUser, listUsers,
 } from '../../api/adminApi';
 import { useAuthStore } from '../../store/useAuthStore';
+import { formatApiError } from '../../utils/apiErrors';
 
 const card     = 'bg-white dark:bg-zinc-900 border border-gray-100 dark:border-white/5 rounded-2xl p-5 sm:p-7';
 const labelCls = 'block text-xs font-bold uppercase tracking-wide text-gray-500 dark:text-zinc-400 mb-1.5';
@@ -117,9 +118,7 @@ export default function AdminUserProfile() {
       else { setSaved(true); load(); }
     }).catch(err => {
       const d = err.response?.data;
-      setError(d && typeof d === 'object'
-        ? Object.entries(d).map(([k, v]) => `${k}: ${[].concat(v).join(' ')}`).join('  •  ')
-        : 'Save failed.');
+      setError(d && typeof d === 'object' ? formatApiError(d) : 'Save failed.');
     }).finally(() => setSaving(false));
   };
 
