@@ -11,15 +11,48 @@ export const BRAND = 'Pronoun Jeans';
 
 export const SITE_TAGLINE = "Men's Bottom-wear Wholesale Manufacturer in Ahmedabad";
 
+// Kept under 155 characters so neither Google nor Bing truncates it (Bing
+// flagged the old 175-character version as "Meta Description too long").
+// index.html carries the same text for the plain SPA shell — keep them equal.
 export const SITE_DESCRIPTION =
-  "Pronoun Jeans manufactures men's cargo pants, travel-wear pants, cotton trousers, formal pants, "
-  + 'shorts and boxers in Ahmedabad. Wholesale size sets, 1-set MOQ, pan-India dispatch.';
+  "Wholesale men's cargo pants, trousers, formal pants, shorts & boxers from Ahmedabad. "
+  + 'Size sets, 1-set MOQ, pan-India dispatch.';
 
-export const CATALOG_TITLE = "Wholesale Men's Bottom-wear Catalogue — Cargo, Trousers & Shorts";
+// ── The business (NAP: name, address, phone) ────────────────────────────────
+//
+// Must match the Google Business Profile character-for-character in meaning:
+// Google and Bing cross-check name, address and phone across the site, the
+// schema and the profile for local ranking. Everything that prints the
+// address — Contact page, footer, JSON-LD, server render — reads it from here.
 
-export const CATALOG_DESCRIPTION =
-  "Browse Pronoun Jeans' wholesale catalogue of men's cargo pants, travel-wear pants, trousers, "
-  + 'formal pants, shorts and boxers — sold in ready size sets, MOQ 1 set per design.';
+export const BUSINESS = {
+  brand: BRAND,
+  legalName: 'M. Sankhlecha Creation',
+  phone: '+91 93751 43100',
+  phoneE164: '+919375143100',
+  phoneSchema: '+91-93751-43100',
+  whatsapp: 'https://wa.me/919375143100',
+  email: 'pronounjeans@gmail.com',
+  streetAddress: 'C-129/130, 1st Floor, Sharanam Square, Khokhra Road, Opp. Gayatri Dairy Road',
+  locality: 'Ahmedabad',
+  region: 'Gujarat',
+  postalCode: '380008',
+  country: 'IN',
+  // Pin of the Google Business Profile listing.
+  latitude: 23.0049793,
+  longitude: 72.6160975,
+  mapUrl: 'https://maps.app.goo.gl/s9NX16aYkiNnHcfr6',
+  hoursLabel: 'Mon – Sat: 10:00 AM – 6:30 PM',
+  closedLabel: 'Sunday & Public Holidays: Closed',
+};
+
+/** The address as display lines (Contact page, server render). */
+export const ADDRESS_LINES = [
+  `${BRAND} (${BUSINESS.legalName})`,
+  'C-129/130, 1st Floor, Sharanam Square',
+  'Khokhra Road, Opp. Gayatri Dairy Road',
+  `${BUSINESS.locality}, ${BUSINESS.region} — ${BUSINESS.postalCode}`,
+];
 
 // ── MOQ ─────────────────────────────────────────────────────────────────────
 //
@@ -91,6 +124,10 @@ export const HOME_FAQS = [FAQ_MOQ, FAQ_PRICES, FAQ_DISPATCH, {
 
 export const HOME_HEADING = SITE_TAGLINE;
 
+// The <title>. Shorter than the H1 so the full title (with " | Pronoun Jeans")
+// stays around 60 characters and is not cut off in Google/Bing results.
+export const HOME_TITLE = "Men's Bottom-wear Wholesale Maker in Ahmedabad";
+
 export const HOME_INTRO =
   "Cargo pants, travel-wear pants, trousers, formal pants, shorts and boxers in bulk size sets — "
   + 'made in Ahmedabad for retailers and distributors across India.';
@@ -107,6 +144,65 @@ export const HOME_ABOUT = [
   + 'multi-brand outlets, distributors and online sellers order from us across India, with dispatch '
   + 'from Ahmedabad through trusted logistics partners.',
 ];
+
+// ── About ───────────────────────────────────────────────────────────────────
+
+export const ABOUT_TITLE = "About Pronoun Jeans — Men's Bottom-wear Maker, Ahmedabad";
+export const ABOUT_DESCRIPTION =
+  'Pronoun Jeans (M. Sankhlecha Creation) makes men\'s cargo pants, trousers, track pants and shorts '
+  + 'in Ahmedabad for retailers across India.';
+export const ABOUT_HEADING = 'Fashion Should Empower, Not Constrict –';
+export const ABOUT_HEADING_ACCENT = 'Comfort is the Ultimate Luxury.';
+export const ABOUT_LEAD =
+  "Awkward fits are our nemesis. At PRO-NOUN, we've never chased trends—we chase ease. "
+  + "We've been in rooms where \"cool\" was dictated by rigid styles, but we'd rather redefine it: "
+  + 'cool is the man who moves freely, unapologetically, in clothes that bend with his life. '
+  + 'No gimmicks, no pretense—just designs that let you be.';
+// The long brand paragraph. AboutUs.jsx renders the same words with a few
+// italicised phrases; keep the two in step when the copy changes.
+export const ABOUT_STORY =
+  "A man's wardrobe should be two things: effortless and authentic. We believe luxury isn't in logos, "
+  + 'but in the whisper-soft touch of cotton-Lycra, the precision of a stitch that outlasts seasons. '
+  + 'We design for the man who does—whether he\'s navigating a workday or a weekend adventure—not '
+  + 'the mannequin in a store window. Balance is everything, and it\'s hard: between durability and '
+  + 'lightness, structure and stretch, trend and timelessness. Our relationships with fabric mills and '
+  + "tailors span years; this isn't fast fashion, it's conscious craft. Celebrity flash? We'd "
+  + 'rather elevate the everyday. Our mission? To make budget-friendly pieces feel premium, and premium '
+  + "pieces feel lived-in. Confidence isn't vanity—it's self-respect. PRO-NOUN isn't about hiding behind "
+  + "layers; it's about clothes that reveal you. And casual? We've mastered it: every pair of "
+  + 'joggers, every cargo short, is a lesson in refined ease.';
+
+// Plain facts for buyers (and search engines): who the firm is, what it
+// makes, how it sells. Reuses the homepage "About" copy so the two never
+// disagree.
+export const ABOUT_WHO_HEADING = 'Who We Are';
+export const ABOUT_WHO = [
+  `${BRAND} (PRO-NOUN) is the menswear brand of ${BUSINESS.legalName}, a men's bottom-wear `
+  + 'manufacturer and wholesaler at Sharanam Square, Khokhra Road, Ahmedabad.',
+  ...HOME_ABOUT.slice(1),
+];
+
+export const ABOUT_VALUES = [
+  { title: 'Comfort First', body: 'Every cut, every stitch is engineered around how the human body actually moves—not how it looks on a hanger.' },
+  { title: 'Conscious Craft', body: 'Long-term relationships with mills and tailors mean every piece is built to outlast fast fashion by years.' },
+  { title: 'Honest Pricing', body: 'Premium feel without the premium markup. Budget-friendly pieces that refuse to feel budget.' },
+];
+
+// ── Contact ─────────────────────────────────────────────────────────────────
+
+export const CONTACT_TITLE = 'Contact Us — Wholesale Enquiry, Ahmedabad';
+export const CONTACT_DESCRIPTION =
+  'WhatsApp or call +91 93751 43100 for men\'s bottom-wear wholesale rates and catalogue. '
+  + 'Sharanam Square, Khokhra Road, Ahmedabad 380008.';
+export const CONTACT_HEADING = 'Contact Our Wholesale Team';
+export const CONTACT_INTRO =
+  'Reach out to discuss bulk orders, partnership inquiries, or any questions about our B2B programme.';
+
+export const CATALOG_TITLE = "Wholesale Men's Bottom-wear Catalogue — Cargo, Trousers & Shorts";
+
+export const CATALOG_DESCRIPTION =
+  "Browse Pronoun Jeans' wholesale catalogue of men's cargo pants, travel-wear pants, trousers, "
+  + 'formal pants, shorts and boxers — sold in ready size sets, MOQ 1 set per design.';
 
 // ── Categories ──────────────────────────────────────────────────────────────
 //

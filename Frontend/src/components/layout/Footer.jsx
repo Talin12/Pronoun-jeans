@@ -1,6 +1,7 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
-import { MapPin, Phone, Mail } from 'lucide-react';
+import { MapPin, Phone, Mail, MessageCircle } from 'lucide-react';
+import { BUSINESS } from '../../content/seoContent';
 
 const Footer = () => (
   <footer className="bg-gray-50 dark:bg-zinc-900 border-t border-gray-200 dark:border-white/5 mt-auto">
@@ -60,26 +61,28 @@ const Footer = () => (
         <div className="space-y-4">
           <h4 className="text-gray-900 dark:text-zinc-100 text-xs font-black uppercase tracking-widest">Contact</h4>
           <ul className="space-y-3">
-            {/* TODO(NAP): needs the full street address — building, street and
-                area — to match the Google Business Profile exactly. Google
-                cross-checks name/address/phone across the web for local
-                ranking, and a city-and-PIN-only address cannot be matched. */}
             <li className="flex items-start gap-2.5 text-sm text-gray-500 dark:text-zinc-400">
               <MapPin className="w-4 h-4 text-accent mt-0.5 shrink-0" />
-              <a href="https://maps.app.goo.gl/s9NX16aYkiNnHcfr6" target="_blank" rel="noopener noreferrer" className="hover:text-accent transition-colors">
-                Pronoun Jeans, Ahmedabad, Gujarat — 380002
+              <a href={BUSINESS.mapUrl} target="_blank" rel="noopener noreferrer" className="hover:text-accent transition-colors">
+                {BUSINESS.legalName}, {BUSINESS.streetAddress}, {BUSINESS.locality}, {BUSINESS.region} — {BUSINESS.postalCode}
               </a>
             </li>
             <li>
-              <a href="tel:+919375143100" className="flex items-center gap-2.5 text-sm text-gray-500 dark:text-zinc-400 hover:text-accent transition-colors">
+              <a href={`tel:${BUSINESS.phoneE164}`} className="flex items-center gap-2.5 text-sm text-gray-500 dark:text-zinc-400 hover:text-accent transition-colors">
                 <Phone className="w-4 h-4 text-accent shrink-0" />
-                +91 93751 43100
+                {BUSINESS.phone}
               </a>
             </li>
             <li>
-              <a href="mailto:pronounjeans@gmail.com" className="flex items-center gap-2.5 text-sm text-gray-500 dark:text-zinc-400 hover:text-accent transition-colors">
+              <a href={BUSINESS.whatsapp} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2.5 text-sm text-gray-500 dark:text-zinc-400 hover:text-accent transition-colors">
+                <MessageCircle className="w-4 h-4 text-accent shrink-0" />
+                WhatsApp {BUSINESS.phone}
+              </a>
+            </li>
+            <li>
+              <a href={`mailto:${BUSINESS.email}`} className="flex items-center gap-2.5 text-sm text-gray-500 dark:text-zinc-400 hover:text-accent transition-colors">
                 <Mail className="w-4 h-4 text-accent shrink-0" />
-                pronounjeans@gmail.com
+                {BUSINESS.email}
               </a>
             </li>
           </ul>
@@ -87,7 +90,7 @@ const Footer = () => (
       </div>
 
       <div className="mt-12 pt-6 border-t border-gray-200 dark:border-white/5 flex flex-col sm:flex-row items-center justify-between gap-3">
-        <p className="text-gray-400 dark:text-zinc-600 text-xs">© {new Date().getFullYear()} Pronoun Jeans. All rights reserved.</p>
+        <p className="text-gray-400 dark:text-zinc-600 text-xs">© {new Date().getFullYear()} Pronoun Jeans ({BUSINESS.legalName}). All rights reserved.</p>
         <p className="text-gray-400 dark:text-zinc-600 text-xs">B2B Wholesale Portal · Authorised Partners Only</p>
       </div>
     </div>

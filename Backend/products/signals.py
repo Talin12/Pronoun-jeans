@@ -81,3 +81,61 @@ def request_redeploy(reason):
 @receiver(post_delete, sender='products.Category')
 def redeploy_on_catalogue_change(sender, instance, **kwargs):
     request_redeploy(f'{sender.__name__} {instance.pk} changed')
+
+
+# ── IndexNow ─────────────────────────────────────────────────────────────────
+#
+# Submit every URL a catalogue change touches: the page itself, its old URL if
+# the slug was renamed (so the dead one is dropped), and the listing pages it
+# appears on. See products/indexnow.py.
+
+from django.db.models.signals import pre_save  # noqa: E402
+
+from products import indexnow  # noqa: E402
+
+
+@receiver(pre_save, sender='products.Product')
+@receiver(pre_save, sender='products.Category')
+def remember_old_slug(sender, instance, **kwargs):
+    """Stash the slug as stored, so a rename can also announce the old URL."""
+    if not indexnow.enabled() or not instance.pk:
+        instance._indexnow_old_slug = None
+        return
+    instance._indexnow_old_slug = (
+        sender.objects.filter(pk=instance.pk).values_list('slug', flat=True).first()
+    )
+
+
+def _product_urls(instance):
+    urls = [indexnow.product_url(instance.slug), indexnow.absolute('/catalog')]
+    old = getattr(instance, '_indexnow_old_slug', None)
+    if old and old != instance.slug:
+        urls.append(indexnow.product_url(old))
+    if instance.category_id:
+        try:
+            urls.append(indexnow.category_url(instance.category.slug))
+        except Exception:  # the category itself is being deleted in this transaction
+            pass
+    return urls
+
+
+def _category_urls(instance):
+    urls = [indexnow.category_url(instance.slug), indexnow.absolute('/catalog'), indexnow.absolute('/')]
+    old = getattr(instance, '_indexnow_old_slug', None)
+    if old and old != instance.slug:
+        urls.append(indexnow.category_url(old))
+    return urls
+
+
+@receiver(post_save, sender='products.Product')
+@receiver(post_delete, sender='products.Product')
+def indexnow_product_changed(sender, instance, **kwargs):
+    if indexnow.enabled():
+        indexnow.submit(_product_urls(instance))
+
+
+@receiver(post_save, sender='products.Category')
+@receiver(post_delete, sender='products.Category')
+def indexnow_category_changed(sender, instance, **kwargs):
+    if indexnow.enabled():
+        indexnow.submit(_category_urls(instance))

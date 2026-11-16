@@ -307,3 +307,80 @@ class MoqBackfillMigrationTests(TestCase):
 
         product.refresh_from_db()
         self.assertEqual(product.moq, 1)
+
+
+from unittest import mock  # noqa: E402
+
+from django.test import override_settings  # noqa: E402
+
+from . import indexnow  # noqa: E402
+
+
+@override_settings(
+    INDEXNOW_ENABLED=True,
+    INDEXNOW_KEY='testkey123',
+    INDEXNOW_SITE_URL='https://www.pronounjeans.com',
+)
+class IndexNowTests(TestCase):
+    """Catalogue changes are announced to IndexNow after commit, never before."""
+
+    def setUp(self):
+        cache.clear()
+        self.category = Category.objects.create(name='Cargo Pant', slug='cargo-pant')
+        cache.clear()
+
+    def submitted(self, callbacks):
+        """URLs handed to the background poster by the committed callbacks."""
+        urls = []
+        with mock.patch.object(indexnow.threading, 'Thread') as thread:
+            for callback in callbacks:
+                callback()
+            for call in thread.call_args_list:
+                urls.extend(call.kwargs['args'][0])
+        return urls
+
+    def test_new_product_submits_its_page_and_listings(self):
+        with self.captureOnCommitCallbacks() as callbacks:
+            Product.objects.create(name='K-2', slug='k-2', category=self.category, moq=1)
+        urls = self.submitted(callbacks)
+        self.assertIn('https://www.pronounjeans.com/product/k-2', urls)
+        self.assertIn('https://www.pronounjeans.com/catalog/cargo-pant', urls)
+        self.assertIn('https://www.pronounjeans.com/catalog', urls)
+
+    def test_renamed_slug_also_submits_the_old_url(self):
+        product = Product.objects.create(name='Old', slug='product-name-old', category=self.category, moq=1)
+        cache.clear()
+        product.slug = 'clean-new'
+        with self.captureOnCommitCallbacks() as callbacks:
+            product.save()
+        urls = self.submitted(callbacks)
+        self.assertIn('https://www.pronounjeans.com/product/clean-new', urls)
+        self.assertIn('https://www.pronounjeans.com/product/product-name-old', urls)
+
+    def test_deleted_product_is_submitted(self):
+        product = Product.objects.create(name='Gone', slug='gone', category=self.category, moq=1)
+        cache.clear()
+        with self.captureOnCommitCallbacks() as callbacks:
+            product.delete()
+        self.assertIn('https://www.pronounjeans.com/product/gone', self.submitted(callbacks))
+
+    @override_settings(INDEXNOW_ENABLED=False)
+    def test_disabled_submits_nothing(self):
+        with self.captureOnCommitCallbacks() as callbacks:
+            Product.objects.create(name='Quiet', slug='quiet', category=self.category, moq=1)
+        self.assertEqual(self.submitted(callbacks), [])
+
+    def test_payload_matches_the_protocol(self):
+        body = indexnow.payload(['https://www.pronounjeans.com/product/k-2'])
+        self.assertEqual(body['host'], 'www.pronounjeans.com')
+        self.assertEqual(body['key'], 'testkey123')
+        self.assertEqual(body['keyLocation'], 'https://www.pronounjeans.com/testkey123.txt')
+        self.assertEqual(body['urlList'], ['https://www.pronounjeans.com/product/k-2'])
+
+    def test_submit_now_posts_to_the_endpoint(self):
+        with mock.patch('requests.post') as post:
+            post.return_value.status_code = 202
+            status = indexnow.submit_now(['https://www.pronounjeans.com/product/k-2'] * 2)
+        self.assertEqual(status, 202)
+        self.assertEqual(post.call_args.args[0], 'https://api.indexnow.org/indexnow')
+        self.assertEqual(post.call_args.kwargs['json']['urlList'], ['https://www.pronounjeans.com/product/k-2'])

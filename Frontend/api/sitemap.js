@@ -16,9 +16,9 @@ const STATIC_PAGES = [
   { path: '/catalog', changefreq: 'daily',   priority: '0.9' },
   { path: '/about',   changefreq: 'monthly', priority: '0.5' },
   { path: '/contact', changefreq: 'monthly', priority: '0.5' },
-  { path: '/terms',   changefreq: 'yearly',  priority: '0.2' },
-  { path: '/privacy', changefreq: 'yearly',  priority: '0.2' },
-  { path: '/refund',  changefreq: 'yearly',  priority: '0.2' },
+  // /terms, /privacy and /refund are deliberately absent: those pages carry
+  // noindex, and listing a noindex URL in the sitemap is a contradiction
+  // Search Console and Bing report as an error.
 ];
 
 const day = (iso) => {

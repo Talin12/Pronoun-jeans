@@ -1,4 +1,6 @@
 import os
+import sys
+
 import environ
 import dj_database_url
 from pathlib import Path
@@ -59,6 +61,21 @@ MIDDLEWARE = [
 # is saved or deleted. Unset means the hooks no-op — local dev and CI never
 # call out.
 VERCEL_DEPLOY_HOOK = env('VERCEL_DEPLOY_HOOK', default=None)
+
+
+# ── IndexNow (Bing, Yandex, Seznam, Naver …) ─────────────────────────────────
+# products/indexnow.py tells IndexNow-enabled search engines the moment a
+# product or category is added, edited, hidden or deleted, instead of waiting
+# for the next crawl. The key is not a secret: it is published at
+# https://www.pronounjeans.com/<key>.txt (Frontend/public/<key>.txt) and the
+# two must be identical. Off when DEBUG is on and under `manage.py test`, so
+# local work never pings the live search engines.
+INDEXNOW_KEY      = env('INDEXNOW_KEY', default='1cc8a07e05b7b85724dcd5d4374bec10')
+INDEXNOW_SITE_URL = env('INDEXNOW_SITE_URL', default='https://www.pronounjeans.com').rstrip('/')
+INDEXNOW_ENABLED  = env.bool(
+    'INDEXNOW_ENABLED',
+    default=(not DEBUG) and 'test' not in sys.argv,
+)
 
 
 # ── CORS ──────────────────────────────────────────────────────────────────────

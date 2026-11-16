@@ -3,6 +3,8 @@
 //   /catalog          → page=catalog
 //   /catalog/:slug    → page=category
 //   /product/:slug    → page=product
+//   /about            → page=about
+//   /contact          → page=contact
 // (wired up by the rewrites in vercel.json).
 //
 // Why this exists: the storefront is a client-rendered SPA, so the HTML a
@@ -27,8 +29,11 @@ import {
   SITE_URL, absoluteUrl, apiGet, escapeHtml as esc, listCategories, listProducts,
 } from './_lib/catalog.js';
 import {
-  BRAND, SITE_DESCRIPTION, HOME_HEADING, HOME_INTRO, HOME_ABOUT, HOME_FAQS,
+  BRAND, BUSINESS, ADDRESS_LINES, SITE_DESCRIPTION, HOME_HEADING, HOME_TITLE, HOME_INTRO, HOME_ABOUT, HOME_FAQS,
   CATALOG_TITLE, CATALOG_DESCRIPTION,
+  ABOUT_TITLE, ABOUT_DESCRIPTION, ABOUT_HEADING, ABOUT_HEADING_ACCENT, ABOUT_LEAD, ABOUT_STORY,
+  ABOUT_WHO_HEADING, ABOUT_WHO, ABOUT_VALUES,
+  CONTACT_TITLE, CONTACT_DESCRIPTION, CONTACT_HEADING, CONTACT_INTRO,
   categoryContent, faqSchema, moqLabel, piecesLabel, sizeRanges, plainText,
   withBrandSuffix, clampDescription,
   productSeoTitle, productSeoDescription, categorySeoTitle, categorySeoDescription,
@@ -181,7 +186,7 @@ async function homePage() {
   const shown = categories.slice(0, 6);
   return {
     head: headTags({
-      title: withBrandSuffix(HOME_HEADING),
+      title: withBrandSuffix(HOME_TITLE),
       description: clampDescription(SITE_DESCRIPTION),
       canonical: absoluteUrl('/'),
       jsonLd: [faqSchema(HOME_FAQS)],
@@ -316,9 +321,96 @@ async function productPage(slug) {
   };
 }
 
+function aboutPage() {
+  const items = [{ name: 'Home', path: '/' }, { name: 'About', path: '/about' }];
+  return {
+    head: headTags({
+      title: withBrandSuffix(ABOUT_TITLE),
+      description: clampDescription(ABOUT_DESCRIPTION),
+      canonical: absoluteUrl('/about'),
+      jsonLd: [breadcrumbSchema(items)],
+    }),
+    body: `
+  ${crumbs(items)}
+  <h1>${esc(ABOUT_HEADING)} ${esc(ABOUT_HEADING_ACCENT)}</h1>
+  <p>${esc(ABOUT_LEAD)}</p>
+  <p>${esc(ABOUT_STORY)}</p>
+  <h2>${esc(ABOUT_WHO_HEADING)}</h2>
+  ${paragraphs(ABOUT_WHO)}
+  <h2>What We Stand For</h2>
+  ${ABOUT_VALUES.map((v) => `<h3>${esc(v.title)}</h3><p>${esc(v.body)}</p>`).join('\n  ')}
+  <h2>Ready to stock PRO-NOUN?</h2>
+  <p>Join our network of wholesale partners across India. <a href="/catalog">Browse the wholesale catalogue</a> or <a href="/contact">contact us</a>.</p>`,
+  };
+}
+
+function contactPage() {
+  const items = [{ name: 'Home', path: '/' }, { name: 'Contact', path: '/contact' }];
+  return {
+    head: headTags({
+      title: withBrandSuffix(CONTACT_TITLE),
+      description: clampDescription(CONTACT_DESCRIPTION),
+      canonical: absoluteUrl('/contact'),
+      jsonLd: [breadcrumbSchema(items), contactSchema()],
+    }),
+    body: `
+  ${crumbs(items)}
+  <h1>${esc(CONTACT_HEADING)}</h1>
+  <p>${esc(CONTACT_INTRO)}</p>
+  <h2>Our Details</h2>
+  <address>
+  <p><a href="${esc(BUSINESS.mapUrl)}">${ADDRESS_LINES.map(esc).join('<br />')}</a></p>
+  <p>Phone: <a href="tel:${esc(BUSINESS.phoneE164)}">${esc(BUSINESS.phone)}</a></p>
+  <p>WhatsApp: <a href="${esc(BUSINESS.whatsapp)}">${esc(BUSINESS.phone)}</a></p>
+  <p>Email: <a href="mailto:${esc(BUSINESS.email)}">${esc(BUSINESS.email)}</a></p>
+  </address>
+  <h2>Business Hours</h2>
+  <p>${esc(BUSINESS.hoursLabel)}</p>
+  <p>${esc(BUSINESS.closedLabel)}</p>`,
+  };
+}
+
+// Mirrors contactLocalBusinessSchema() in src/config/schema.js (which cannot
+// be imported here: it pulls in import.meta via config/site.js).
+function contactSchema() {
+  return {
+    '@context': 'https://schema.org',
+    '@type': 'LocalBusiness',
+    '@id': `${SITE_URL}/#localbusiness`,
+    name: BRAND,
+    legalName: BUSINESS.legalName,
+    url: `${SITE_URL}/`,
+    image: DEFAULT_OG_IMAGE,
+    telephone: BUSINESS.phoneSchema,
+    email: BUSINESS.email,
+    priceRange: '$$',
+    parentOrganization: { '@id': `${SITE_URL}/#organization` },
+    address: {
+      '@type': 'PostalAddress',
+      streetAddress: BUSINESS.streetAddress,
+      addressLocality: BUSINESS.locality,
+      addressRegion: BUSINESS.region,
+      postalCode: BUSINESS.postalCode,
+      addressCountry: BUSINESS.country,
+    },
+    geo: { '@type': 'GeoCoordinates', latitude: BUSINESS.latitude, longitude: BUSINESS.longitude },
+    areaServed: { '@type': 'Country', name: 'IN' },
+    openingHoursSpecification: [{
+      '@type': 'OpeningHoursSpecification',
+      dayOfWeek: ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'],
+      opens: '10:00',
+      closes: '18:30',
+    }],
+    hasMap: BUSINESS.mapUrl,
+  };
+}
+
 // ── Handler ─────────────────────────────────────────────────────────────────
 
-const PAGES = { home: homePage, catalog: catalogPage, category: categoryPage, product: productPage };
+const PAGES = {
+  home: homePage, catalog: catalogPage, category: categoryPage, product: productPage,
+  about: aboutPage, contact: contactPage,
+};
 
 export default async function handler(req, res) {
   const proto = req.headers['x-forwarded-proto'] || 'https';

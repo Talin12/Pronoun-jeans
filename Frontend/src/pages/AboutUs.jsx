@@ -1,33 +1,33 @@
 import React from 'react';
-import { useNavigate } from 'react-router-dom';
+import { Link } from 'react-router-dom';
 import { ArrowRight } from 'lucide-react';
 import Seo from '../components/seo/Seo';
 import { usePrerenderReady } from '../hooks/usePrerenderReady';
+import {
+  ABOUT_TITLE, ABOUT_DESCRIPTION, ABOUT_HEADING, ABOUT_HEADING_ACCENT, ABOUT_LEAD,
+  ABOUT_WHO_HEADING, ABOUT_WHO, ABOUT_VALUES,
+} from '../content/seoContent';
 
 const AboutUs = () => {
-  const navigate = useNavigate();
   usePrerenderReady();
 
   return (
     <div className="bg-gray-50 dark:bg-zinc-950 min-h-screen">
 
       <Seo
-        title="About Pronoun Jeans — Men's Bottom-wear Manufacturer, Ahmedabad"
-        description="Pronoun Jeans manufactures men's cargo pants, trousers, shorts and casual bottom-wear in Ahmedabad, working with long-standing mills and tailors to supply retailers across India."
+        title={ABOUT_TITLE}
+        description={ABOUT_DESCRIPTION}
         canonical="/about"
       />
 
       {/* Hero */}
       <div className="max-w-4xl mx-auto px-6 py-24 text-center">
         <h1 className="text-4xl sm:text-5xl font-black text-gray-900 dark:text-zinc-100 leading-tight mb-8">
-          Fashion Should Empower, Not Constrict –{' '}
-          <span className="text-accent">Comfort is the Ultimate Luxury.</span>
+          {ABOUT_HEADING}{' '}
+          <span className="text-accent">{ABOUT_HEADING_ACCENT}</span>
         </h1>
         <p className="text-lg font-semibold text-gray-700 dark:text-zinc-300 leading-relaxed mb-8">
-          Awkward fits are our nemesis. At PRO-NOUN, we've never chased trends—we chase ease.
-          We've been in rooms where "cool" was dictated by rigid styles, but we'd rather redefine it:
-          cool is the man who moves freely, unapologetically, in clothes that bend with his life.
-          No gimmicks, no pretense—just designs that let you be.
+          {ABOUT_LEAD}
         </p>
         <p className="text-base text-gray-600 dark:text-zinc-400 leading-relaxed max-w-3xl mx-auto">
           A man's wardrobe should be two things: effortless and authentic. We believe luxury isn't in logos,
@@ -46,15 +46,23 @@ const AboutUs = () => {
       {/* Divider */}
       <div className="border-t border-gray-200 dark:border-white/5 max-w-4xl mx-auto" />
 
+      {/* Who we are — plain facts for buyers */}
+      <div className="max-w-4xl mx-auto px-6 py-20">
+        <h2 className="text-2xl font-black text-gray-900 dark:text-zinc-100 text-center mb-8">{ABOUT_WHO_HEADING}</h2>
+        <div className="space-y-4 max-w-3xl mx-auto">
+          {ABOUT_WHO.map((para) => (
+            <p key={para.slice(0, 40)} className="text-base text-gray-600 dark:text-zinc-400 leading-relaxed">{para}</p>
+          ))}
+        </div>
+      </div>
+
+      <div className="border-t border-gray-200 dark:border-white/5 max-w-4xl mx-auto" />
+
       {/* Values grid */}
       <div className="max-w-4xl mx-auto px-6 py-20">
         <h2 className="text-2xl font-black text-gray-900 dark:text-zinc-100 text-center mb-12">What We Stand For</h2>
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-8">
-          {[
-            { title: 'Comfort First',    body: 'Every cut, every stitch is engineered around how the human body actually moves—not how it looks on a hanger.' },
-            { title: 'Conscious Craft',  body: 'Long-term relationships with mills and tailors mean every piece is built to outlast fast fashion by years.' },
-            { title: 'Honest Pricing',   body: 'Premium feel without the premium markup. Budget-friendly pieces that refuse to feel budget.' },
-          ].map((item) => (
+          {ABOUT_VALUES.map((item) => (
             <div key={item.title} className="bg-white dark:bg-zinc-900 rounded-2xl border border-gray-200 dark:border-white/5 p-6 shadow-sm">
               <div className="w-2 h-2 rounded-full bg-accent mb-4" />
               <h3 className="text-gray-900 dark:text-zinc-100 font-bold text-base mb-2">{item.title}</h3>
@@ -71,12 +79,12 @@ const AboutUs = () => {
           <p className="text-gray-500 dark:text-zinc-400 mb-8 text-sm">
             Join our network of wholesale partners across India.
           </p>
-          <button
-            onClick={() => navigate('/catalog')}
+          <Link
+            to="/catalog"
             className="inline-flex items-center gap-2 bg-accent hover:bg-red-700 text-white font-bold px-8 py-3 rounded-full transition-colors text-sm"
           >
             Browse Wholesale Catalog <ArrowRight className="w-4 h-4" />
-          </button>
+          </Link>
         </div>
       </div>
 

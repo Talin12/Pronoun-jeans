@@ -9,25 +9,27 @@
 // instead of several near-duplicates.
 
 import { SITE_URL, SITE_NAME, absoluteUrl } from './site';
+import { BUSINESS } from '../content/seoContent';
 
 export const ORGANIZATION_ID = `${SITE_URL}/#organization`;
 export const LOCAL_BUSINESS_ID = `${SITE_URL}/#localbusiness`;
 
+// Same NAP as the Google Business Profile — see BUSINESS in seoContent.js.
 const POSTAL_ADDRESS = {
   '@type': 'PostalAddress',
-  streetAddress: 'Textile Market, Ring Road',
-  addressLocality: 'Ahmedabad',
-  addressRegion: 'Gujarat',
-  postalCode: '380002',
-  addressCountry: 'IN',
+  streetAddress: BUSINESS.streetAddress,
+  addressLocality: BUSINESS.locality,
+  addressRegion: BUSINESS.region,
+  postalCode: BUSINESS.postalCode,
+  addressCountry: BUSINESS.country,
 };
 
 // Read off the company's own Google Business Profile pin — the same place the
 // address links to from the footer and the contact page.
 const GEO = {
   '@type': 'GeoCoordinates',
-  latitude: 23.0147644,
-  longitude: 72.5972153,
+  latitude: BUSINESS.latitude,
+  longitude: BUSINESS.longitude,
 };
 
 // Mon–Sat 10:00–18:30, matching the hours shown on /contact. Sunday is absent
@@ -244,17 +246,17 @@ export function contactLocalBusinessSchema() {
     '@type': 'LocalBusiness',
     '@id': LOCAL_BUSINESS_ID,
     name: SITE_NAME,
-    legalName: 'Pronoun Jeans Pvt. Ltd.',
+    legalName: BUSINESS.legalName,
     url: `${SITE_URL}/`,
     image: `${SITE_URL}/og-default.jpg`,
-    telephone: '+91-93751-43100',
-    email: 'pronounjeans@gmail.com',
+    telephone: BUSINESS.phoneSchema,
+    email: BUSINESS.email,
     priceRange: '$$',
     parentOrganization: { '@id': ORGANIZATION_ID },
     address: POSTAL_ADDRESS,
     geo: GEO,
     areaServed: { '@type': 'Country', name: 'IN' },
     openingHoursSpecification: OPENING_HOURS,
-    hasMap: 'https://maps.app.goo.gl/s9NX16aYkiNnHcfr6',
+    hasMap: BUSINESS.mapUrl,
   };
 }

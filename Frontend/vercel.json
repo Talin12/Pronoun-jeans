@@ -216,11 +216,11 @@
     },
     {
       "source": "/about",
-      "destination": "/app"
+      "destination": "/api/render?page=about"
     },
     {
       "source": "/contact",
-      "destination": "/app"
+      "destination": "/api/render?page=contact"
     },
     {
       "source": "/terms",

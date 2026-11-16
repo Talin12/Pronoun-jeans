@@ -23,7 +23,7 @@ const TERMS_SECTIONS = [
   },
   {
     id: 'ip', title: 'Intellectual Property',
-    body: `All product imagery, branding, and content on this portal are the intellectual property of Pronoun Jeans Pvt. Ltd. Partners may use approved product images solely for the purpose of retail resale. Reproduction, distribution, or modification of any content without prior written consent is strictly prohibited.`,
+    body: `All product imagery, branding, and content on this portal are the intellectual property of M. Sankhlecha Creation (Pronoun Jeans). Partners may use approved product images solely for the purpose of retail resale. Reproduction, distribution, or modification of any content without prior written consent is strictly prohibited.`,
   },
   {
     id: 'termination', title: 'Termination',

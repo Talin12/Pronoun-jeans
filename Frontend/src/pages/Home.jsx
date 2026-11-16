@@ -6,7 +6,7 @@ import ResponsiveImage from '../components/shared/ResponsiveImage';
 import Seo from '../components/seo/Seo';
 import JsonLd from '../components/seo/JsonLd';
 import { websiteSchema } from '../config/schema';
-import { HOME_HEADING, HOME_INTRO, HOME_ABOUT, HOME_FAQS, SITE_DESCRIPTION, faqSchema } from '../content/seoContent';
+import { HOME_TITLE, HOME_INTRO, HOME_ABOUT, HOME_FAQS, SITE_DESCRIPTION, faqSchema } from '../content/seoContent';
 import { usePrerenderReady } from '../hooks/usePrerenderReady';
 import BootstrapData from '../lib/BootstrapData';
 import { readBootstrap } from '../lib/bootstrap';
@@ -191,7 +191,7 @@ const Home = () => {
       <BootstrapData id="home" data={{ slides, categories }} />
 
       <Seo
-        title={HOME_HEADING}
+        title={HOME_TITLE}
         description={SITE_DESCRIPTION}
         canonical="/"
       >

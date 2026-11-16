@@ -4,6 +4,9 @@ import Seo from '../components/seo/Seo';
 import JsonLd from '../components/seo/JsonLd';
 import { contactLocalBusinessSchema } from '../config/schema';
 import { usePrerenderReady } from '../hooks/usePrerenderReady';
+import {
+  BUSINESS, ADDRESS_LINES, CONTACT_TITLE, CONTACT_DESCRIPTION, CONTACT_HEADING, CONTACT_INTRO,
+} from '../content/seoContent';
 
 const Contact = () => {
   const [form, setForm]       = useState({ name: '', email: '', company: '', message: '' });
@@ -18,8 +21,8 @@ const Contact = () => {
   return (
     <div className="bg-gray-50 dark:bg-zinc-950 min-h-screen">
       <Seo
-        title="Contact — Wholesale Enquiries & Bulk Orders"
-        description="Contact Pronoun Jeans, Ahmedabad, for wholesale enquiries and bulk orders. Call +91 93751 43100, message us on WhatsApp, or send your MOQ requirement."
+        title={CONTACT_TITLE}
+        description={CONTACT_DESCRIPTION}
         canonical="/contact"
       >
         <JsonLd data={contactLocalBusinessSchema()} />
@@ -28,9 +31,9 @@ const Contact = () => {
 
         <div className="mb-12 text-center">
           <span className="text-accent text-xs font-black uppercase tracking-widest block mb-3">Get in Touch</span>
-          <h1 className="text-4xl font-black text-gray-900 dark:text-zinc-100 mb-3">Contact Our Wholesale Team</h1>
+          <h1 className="text-4xl font-black text-gray-900 dark:text-zinc-100 mb-3">{CONTACT_HEADING}</h1>
           <p className="text-gray-500 dark:text-zinc-400 text-base max-w-xl mx-auto">
-            Reach out to discuss bulk orders, partnership inquiries, or any questions about our B2B programme.
+            {CONTACT_INTRO}
           </p>
         </div>
 
@@ -47,10 +50,10 @@ const Contact = () => {
                 </div>
                 <div>
                   <p className="text-gray-900 dark:text-zinc-100 text-sm font-semibold">Address</p>
-                  <a href="https://maps.app.goo.gl/s9NX16aYkiNnHcfr6" target="_blank" rel="noopener noreferrer" className="text-gray-500 dark:text-zinc-400 hover:text-accent text-sm mt-0.5 leading-relaxed block transition-colors">
-                    Pronoun Jeans Pvt. Ltd.<br />
-                    Textile Market, Ring Road<br />
-                    Ahmedabad, Gujarat — 380002
+                  <a href={BUSINESS.mapUrl} target="_blank" rel="noopener noreferrer" className="text-gray-500 dark:text-zinc-400 hover:text-accent text-sm mt-0.5 leading-relaxed block transition-colors">
+                    {ADDRESS_LINES.map((line, i) => (
+                      <React.Fragment key={line}>{i > 0 && <br />}{line}</React.Fragment>
+                    ))}
                   </a>
                 </div>
               </div>
@@ -61,8 +64,11 @@ const Contact = () => {
                 </div>
                 <div>
                   <p className="text-gray-900 dark:text-zinc-100 text-sm font-semibold">Phone</p>
-                  <a href="tel:+919375143100" className="text-gray-500 dark:text-zinc-400 hover:text-accent text-sm mt-0.5 block transition-colors">
-                    +91 93751 43100
+                  <a href={`tel:${BUSINESS.phoneE164}`} className="text-gray-500 dark:text-zinc-400 hover:text-accent text-sm mt-0.5 block transition-colors">
+                    {BUSINESS.phone}
+                  </a>
+                  <a href={BUSINESS.whatsapp} target="_blank" rel="noopener noreferrer" className="text-gray-500 dark:text-zinc-400 hover:text-accent text-sm mt-0.5 block transition-colors">
+                    WhatsApp: {BUSINESS.phone}
                   </a>
                 </div>
               </div>
@@ -73,8 +79,8 @@ const Contact = () => {
                 </div>
                 <div>
                   <p className="text-gray-900 dark:text-zinc-100 text-sm font-semibold">Email</p>
-                  <a href="mailto:pronounjeans@gmail.com" className="text-gray-500 dark:text-zinc-400 hover:text-accent text-sm mt-0.5 block transition-colors">
-                    pronounjeans@gmail.com
+                  <a href={`mailto:${BUSINESS.email}`} className="text-gray-500 dark:text-zinc-400 hover:text-accent text-sm mt-0.5 block transition-colors">
+                    {BUSINESS.email}
                   </a>
                 </div>
               </div>
@@ -82,8 +88,8 @@ const Contact = () => {
 
             <div className="bg-accent/5 border border-accent/20 rounded-2xl p-5">
               <p className="text-accent text-xs font-black uppercase tracking-widest mb-2">Business Hours</p>
-              <p className="text-gray-700 dark:text-zinc-300 text-sm">Mon – Sat: 10:00 AM – 6:30 PM</p>
-              <p className="text-gray-500 dark:text-zinc-400 text-xs mt-1">Sunday & Public Holidays: Closed</p>
+              <p className="text-gray-700 dark:text-zinc-300 text-sm">{BUSINESS.hoursLabel}</p>
+              <p className="text-gray-500 dark:text-zinc-400 text-xs mt-1">{BUSINESS.closedLabel}</p>
             </div>
           </div>
 
