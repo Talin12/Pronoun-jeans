@@ -18,6 +18,7 @@ import MediaPicker from '../../components/admin/MediaPicker';
 import SizeRangeBuilder from '../../components/admin/SizeRangeBuilder';
 import BulkVariantBuilder from '../../components/admin/BulkVariantBuilder';
 import AttributePicker from '../../components/admin/AttributePicker';
+import MerchantToggle from '../../components/admin/MerchantToggle';
 
 const card    = 'bg-white dark:bg-zinc-900 border border-gray-100 dark:border-white/5 rounded-2xl p-5 sm:p-7';
 const labelCls = 'block text-xs font-bold uppercase tracking-wide text-gray-500 dark:text-zinc-400 mb-1.5';
@@ -115,7 +116,13 @@ export default function AdminProductEditor() {
     // form, so these persist through Save & Next, Save as Draft and Publish
     // alike, and the "Unsaved changes" marker covers them for free.
     meta_title: '', meta_description: '',
+    // Same reasoning: the Merchant Center toggle rides with the base payload
+    // so flipping it is saved by whichever button the admin reaches for.
+    list_on_merchant: false,
   });
+  // Read-only, server-owned: whether the last push to Google landed. Not part
+  // of `form`, so it never counts towards the unsaved-changes marker.
+  const [merchantStatus, setMerchantStatus] = useState(null);
   const [seoOpen, setSeoOpen] = useState(false);
   const [slug, setSlug]       = useState('');
   // The share image is a file, saved on its own the moment it is chosen.
@@ -159,12 +166,14 @@ export default function AdminProductEditor() {
           fabric_details: p.fabric_details || '', moq: p.moq ?? 1, is_active: p.is_active,
           attribute_options: p.attribute_options || [],
           meta_title: p.meta_title || '', meta_description: p.meta_description || '',
+          list_on_merchant: !!p.list_on_merchant,
         };
         setForm(loaded);
         setSavedForm(normalizeBase(loaded));
         setSlug(p.slug || '');
         setOgImageUrl(p.og_image_url || '');
         setVariations(p.variations || []);
+        setMerchantStatus(p.merchant_status || null);
       })
       .catch(() => setError('Failed to load product.'))
       .finally(() => setLoad(false));
@@ -214,6 +223,9 @@ export default function AdminProductEditor() {
     const req = isNew ? createProduct(basePayload()) : updateProduct(id, basePayload());
     return req.then(p => {
       setSavedForm(basePayload());
+      // The push to Google is queued after commit, so this comes back
+      // 'pending'; the next load of the editor shows how it actually went.
+      setMerchantStatus(p.merchant_status || null);
       if (isNew) { navigate(`/admin/products/${p.id}`, { replace: true }); }
       else if (goNext) setStep('images');
       return p;
@@ -569,6 +581,15 @@ export default function AdminProductEditor() {
                 <Row label="Variants" value={`${variations.length}`} />
                 <Row label="Status" value={form.is_active ? 'Active (live)' : 'Draft (hidden)'} />
               </dl>
+
+              <MerchantToggle
+                productId={id}
+                isNew={isNew}
+                value={form.list_on_merchant}
+                onChange={v => set('list_on_merchant', v)}
+                status={merchantStatus}
+                onStatusChange={setMerchantStatus}
+              />
               {!variations.length && (
                 <div className="flex items-start gap-2 bg-amber-50 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-500/20 text-amber-700 dark:text-amber-400 text-sm rounded-xl px-4 py-3 mt-5">
                   <AlertCircle size={16} className="mt-0.5 shrink-0" /> No variants yet — buyers won't be able to order. Add at least one in the previous step.

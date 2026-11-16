@@ -205,6 +205,31 @@ ANYMAIL            = {'RESEND_API_KEY': env('RESEND_API_KEY', default='')}
 DEFAULT_FROM_EMAIL = env('DEFAULT_FROM_EMAIL', default='Pronoun Jeans <onboarding@resend.dev>')
 FRONTEND_URL       = env('FRONTEND_URL', default='http://localhost:5173')
 
+# ── Google Merchant Center ───────────────────────────────────────────────────
+#
+# See products/merchant.py. Blank credentials disable the push entirely, so
+# local development and CI never reach Google. The account and data source
+# below are the live ones; only the service-account key is secret.
+MERCHANT_ACCOUNT_ID          = env('MERCHANT_ACCOUNT_ID',          default='')
+MERCHANT_DATA_SOURCE_ID      = env('MERCHANT_DATA_SOURCE_ID',      default='')
+MERCHANT_SERVICE_ACCOUNT_JSON = env('MERCHANT_SERVICE_ACCOUNT_JSON', default='')
+
+MERCHANT_FEED_LABEL       = env('MERCHANT_FEED_LABEL',       default='IN')
+MERCHANT_CONTENT_LANGUAGE = env('MERCHANT_CONTENT_LANGUAGE', default='en')
+MERCHANT_CURRENCY         = env('MERCHANT_CURRENCY',         default='INR')
+MERCHANT_BRAND            = env('MERCHANT_BRAND',            default='PRO-NOUN')
+
+# Every listing points here rather than at its own product page, matching the
+# listings the client built by hand — product pages carry no price, because
+# wholesale rates are gated. products/merchant.py explains the trade-off.
+MERCHANT_LANDING_URL = env('MERCHANT_LANDING_URL', default='https://www.pronounjeans.com/')
+
+# 'per_piece' reads mrp_per_piece / per_piece_price; 'set' reads mrp /
+# b2b_price. The live listings read as per-piece figures.
+MERCHANT_PRICE_BASIS      = env('MERCHANT_PRICE_BASIS',      default='per_piece')
+MERCHANT_DEFAULT_GENDER   = env('MERCHANT_DEFAULT_GENDER',   default='UNISEX')
+MERCHANT_DEFAULT_AGE_GROUP = env('MERCHANT_DEFAULT_AGE_GROUP', default='ADULT')
+
 # ══════════════════════════════════════════════════════════════════════════════
 # JAZZMIN — Premium Django Admin UI
 # ══════════════════════════════════════════════════════════════════════════════

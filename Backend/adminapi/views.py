@@ -13,7 +13,7 @@ from decimal import Decimal, InvalidOperation
 from django.contrib.auth import get_user_model
 from django.db import transaction
 from django.db.models import Count, Q, Sum
-from rest_framework import filters, mixins, viewsets
+from rest_framework import filters, mixins, status, viewsets
 from rest_framework.decorators import action
 from rest_framework.exceptions import ValidationError as DRFValidationError
 from rest_framework.pagination import PageNumberPagination
@@ -24,6 +24,7 @@ from rest_framework.views import APIView
 from medialib import presenters, services
 from medialib.models import ATTACHABLE_TYPES, ROLE_CHOICES, MediaAsset
 from orders.models import Cart, Coupon, Order
+from products import merchant
 from products.models import (
     Attribute, Category, Color, HeroSlide, Product, ProductVariation, SizeSet,
 )
@@ -35,7 +36,7 @@ from .serializers import (
     CategorySerializer, ColorSerializer, CouponSerializer, HeroSlideSerializer,
     OrderDetailSerializer, OrderListSerializer, ProductDetailSerializer,
     ProductListSerializer, ProductVariationSerializer, SizeSetSerializer,
-    UserDetailSerializer, UserListSerializer,
+    UserDetailSerializer, UserListSerializer, merchant_status,
 )
 
 logger = logging.getLogger(__name__)
@@ -106,6 +107,33 @@ class ProductViewSet(viewsets.ModelViewSet):
         if self.action in ('list',):
             return ProductListSerializer
         return ProductDetailSerializer
+
+    @action(detail=True, methods=['post'], url_path='merchant-sync')
+    def merchant_sync(self, request, pk=None):
+        """
+        Push this product to Merchant Center now, and report what happened.
+
+        Saving already queues a sync, but that one runs off-thread and its
+        result only turns up on the next fetch. This runs inline so the admin
+        who just fixed a missing MRP gets a straight answer, and so a failure
+        that was transient — Google down, token expired — can be retried
+        without inventing a change to the product.
+        """
+        product = self.get_object()
+
+        if not merchant.enabled():
+            return Response(
+                {'detail': 'Google Merchant Center is not configured on this server.'},
+                status=status.HTTP_503_SERVICE_UNAVAILABLE,
+            )
+
+        error = merchant.sync(product)
+        product.refresh_from_db()
+        return Response(
+            {'detail': error or 'Product sent to Google Merchant Center.',
+             'merchant_status': merchant_status(product)},
+            status=status.HTTP_200_OK if not error else status.HTTP_502_BAD_GATEWAY,
+        )
 
 
 class UserViewSet(viewsets.ModelViewSet):

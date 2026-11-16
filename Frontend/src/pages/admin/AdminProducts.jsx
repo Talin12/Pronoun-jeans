@@ -2,10 +2,41 @@ import React, { useCallback, useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Plus, Search, Loader, Package, ChevronLeft, ChevronRight, ImageOff, Pencil,
-  ArrowUpDown, FolderTree, ToggleLeft, X,
+  ArrowUpDown, FolderTree, ToggleLeft, X, AlertCircle, ShoppingBag,
 } from 'lucide-react';
 import { listCategories, listProducts, updateProduct } from '../../api/adminApi';
 import StatusToggle from '../../components/admin/StatusToggle';
+
+/**
+ * Whether this product reached Google Merchant Center.
+ *
+ * Nothing is drawn for a product that was never flagged, which is most of
+ * the catalogue — a row of grey "off" pills would be noise on every line.
+ */
+function MerchantBadge({ status }) {
+  if (!status || status.state === 'off') return null;
+
+  const { state, detail } = status;
+  const live = state === 'live';
+  const failed = state === 'error';
+  const title = failed
+    ? `Not on Google: ${detail}`
+    : live ? 'Live on Google Merchant' : 'Being sent to Google';
+
+  return (
+    <span title={title}
+      className={`inline-flex items-center gap-1 shrink-0 px-2 py-1 rounded-full border text-xs font-bold ${
+        failed
+          ? 'bg-red-50 dark:bg-red-500/10 text-red-700 dark:text-red-400 border-red-200 dark:border-red-500/20'
+          : live
+            ? 'bg-green-50 dark:bg-green-500/10 text-green-700 dark:text-green-400 border-green-200 dark:border-green-500/20'
+            : 'bg-blue-50 dark:bg-blue-500/10 text-blue-700 dark:text-blue-400 border-blue-200 dark:border-blue-500/20'
+      }`}>
+      {failed ? <AlertCircle size={12} /> : <ShoppingBag size={12} />}
+      <span className="hidden sm:inline">{failed ? 'Google' : live ? 'Google' : 'Sending'}</span>
+    </span>
+  );
+}
 
 // Every sort the list offers, as the `ordering` value the API expects. Kept as
 // one list so the dropdown and the request cannot disagree about what "Newest"
@@ -202,6 +233,11 @@ export default function AdminProducts() {
               {/* On a phone these drop to a full-width row of their own rather
                   than squeezing the product name to nothing. */}
               <div className="flex items-center gap-2 w-full sm:w-auto">
+                {/* Read-only here: the toggle itself lives in the editor,
+                    where the price and image it depends on can be fixed.
+                    Without this the client would have to open all 200
+                    products to find which ones reached Google. */}
+                <MerchantBadge status={p.merchant_status} />
                 <StatusToggle active={p.is_active} busy={busyId === p.id}
                   onToggle={() => toggleActive(p)} />
                 <button onClick={() => navigate(`/admin/products/${p.id}`)}

@@ -139,3 +139,64 @@ def indexnow_product_changed(sender, instance, **kwargs):
 def indexnow_category_changed(sender, instance, **kwargs):
     if indexnow.enabled():
         indexnow.submit(_category_urls(instance))
+
+
+# ── Google Merchant Center ───────────────────────────────────────────────────
+#
+# Keep the listing in step with the row it was built from, so a price edit or
+# a stock change here reaches Google without anyone opening Merchant Center.
+# See products/merchant.py.
+
+from products import merchant  # noqa: E402
+
+
+def _touches_merchant(product):
+    """
+    Whether this product has any business talking to Merchant Center.
+
+    Listed products obviously do. So do products that *were* listed — they
+    carry an offer ID, and their listing has to be withdrawn rather than
+    left behind. Everything else, which is most of the catalogue, is skipped
+    so an ordinary save stays an ordinary save.
+    """
+    return bool(product.list_on_merchant or product.merchant_offer_id)
+
+
+@receiver(post_save, sender='products.Product')
+def merchant_product_saved(sender, instance, **kwargs):
+    if merchant.enabled() and _touches_merchant(instance):
+        merchant.sync_async(instance, reason=f'Product {instance.pk} saved')
+
+
+@receiver(post_delete, sender='products.Product')
+def merchant_product_deleted(sender, instance, **kwargs):
+    """A deleted product must not keep advertising itself on Google."""
+    if merchant.enabled() and instance.merchant_offer_id:
+        # Not sync_async: the row is gone, so there is nothing to record the
+        # outcome on, and sync() would try to write to a deleted pk.
+        transaction.on_commit(
+            lambda: threading.Thread(
+                target=merchant.remove, args=(instance,), daemon=True
+            ).start()
+        )
+
+
+@receiver(post_save, sender='products.ProductVariation')
+@receiver(post_delete, sender='products.ProductVariation')
+def merchant_variation_changed(sender, instance, **kwargs):
+    """
+    A variation carries the price, the colour, the size and the stock level,
+    so a change to one changes the listing even though the product row itself
+    never moved.
+    """
+    if not merchant.enabled():
+        return
+    try:
+        product = instance.product
+    except Exception:
+        # The parent product is being deleted in this same transaction and
+        # the cascade reached the variation first; its own post_delete
+        # handles the withdrawal.
+        return
+    if _touches_merchant(product):
+        merchant.sync_async(product, reason=f'Variation {instance.pk} changed')

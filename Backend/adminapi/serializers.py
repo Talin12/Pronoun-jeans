@@ -19,6 +19,7 @@ from rest_framework import serializers
 
 from accounts.models import Address, AgentProfile
 from orders.models import Cart, CartItem, Coupon, Order, OrderItem
+from products import merchant
 from products.models import (
     Attribute, AttributeOption, Category, Color, HeroSlide, Product,
     ProductVariation, SizeSet, SizeSetBreakdown,
@@ -436,18 +437,50 @@ class AttributeSerializer(serializers.ModelSerializer):
 
 # ── Products ───────────────────────────────────────────────────────────────────
 
+def merchant_status(product):
+    """
+    How this product stands with Google Merchant Center, for the admin panel.
+
+    `state` is what the UI colours on: 'off' when the toggle is down,
+    'pending' once it is up but the push has not landed, 'error' when the
+    last attempt failed, 'live' when the listing is up to date. The push runs
+    off-thread, so 'pending' is a real state the admin will see for a second
+    or two after saving, not just a placeholder.
+    """
+    if not product.list_on_merchant:
+        return {'state': 'off', 'detail': '', 'synced_at': None,
+                'configured': merchant.enabled()}
+    if product.merchant_sync_error:
+        state, detail = 'error', product.merchant_sync_error
+    elif product.merchant_synced_at:
+        state, detail = 'live', ''
+    else:
+        state, detail = 'pending', ''
+    return {
+        'state': state,
+        'detail': detail,
+        'synced_at': product.merchant_synced_at,
+        'configured': merchant.enabled(),
+    }
+
+
 class ProductListSerializer(serializers.ModelSerializer):
     category_name   = serializers.CharField(source='category.name', read_only=True)
     thumb           = serializers.SerializerMethodField()
     variation_count = serializers.IntegerField(read_only=True)
+    merchant_status = serializers.SerializerMethodField()
 
     class Meta:
         model  = Product
         fields = ['id', 'name', 'code', 'slug', 'category', 'category_name',
-                  'is_active', 'moq', 'thumb', 'variation_count', 'created_at']
+                  'is_active', 'moq', 'thumb', 'variation_count', 'created_at',
+                  'list_on_merchant', 'merchant_status']
 
     def get_thumb(self, obj):
         return _thumb_url(obj.image, width=400)
+
+    def get_merchant_status(self, obj):
+        return merchant_status(obj)
 
 
 class ProductDetailSerializer(serializers.ModelSerializer):
@@ -459,6 +492,7 @@ class ProductDetailSerializer(serializers.ModelSerializer):
     # `attributes` is the same data grouped for display, so the panel's review
     # step and the storefront read one shape and neither regroups it by hand.
     attributes    = serializers.SerializerMethodField()
+    merchant_status = serializers.SerializerMethodField()
 
     class Meta:
         model  = Product
@@ -468,6 +502,7 @@ class ProductDetailSerializer(serializers.ModelSerializer):
             'attribute_options', 'attributes',
             'image', 'image_url', 'variations', 'created_at', 'updated_at',
             'meta_title', 'meta_description', 'og_image', 'og_image_url',
+            'list_on_merchant', 'merchant_status',
         ]
         extra_kwargs = {
             'slug':     {'required': False},
@@ -487,6 +522,25 @@ class ProductDetailSerializer(serializers.ModelSerializer):
 
     def get_attributes(self, obj):
         return obj.grouped_attributes()
+
+    def get_merchant_status(self, obj):
+        return merchant_status(obj)
+
+    def validate_list_on_merchant(self, value):
+        """
+        Refuse the toggle when the environment cannot honour it.
+
+        Flipping a switch that silently does nothing is worse than a switch
+        that says why it will not move — the client would believe the product
+        was listed and never check Merchant Center.
+        """
+        if value and not merchant.enabled():
+            raise serializers.ValidationError(
+                'Google Merchant Center is not configured on this server. '
+                'Set MERCHANT_ACCOUNT_ID, MERCHANT_DATA_SOURCE_ID and '
+                'MERCHANT_SERVICE_ACCOUNT_JSON first.'
+            )
+        return value
 
     def validate_attribute_options(self, options):
         """

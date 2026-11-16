@@ -245,6 +245,48 @@ class Product(models.Model):
                   'Blank falls back to the cover image, then the site card.',
     )
 
+    # ── Google Merchant Center ────────────────────────────────────────────
+    #
+    # Until now the client typed every product into Merchant Center by hand,
+    # a second time, from the same details already entered here. These fields
+    # drive products.merchant, which pushes the listing over the Merchant API
+    # so the product is entered once.
+    #
+    # The retail price (ProductVariation.mrp) and the wholesale price
+    # (b2b_price) are what get published, mirroring the hand-built listings
+    # that are already live. Both are gated from anonymous callers in
+    # products.serializers; the push runs server-side off the model, so the
+    # storefront's gating is unaffected by any of this.
+    list_on_merchant = models.BooleanField(
+        default=False,
+        verbose_name='List on Google Merchant',
+        help_text='Publish this product to Google Merchant Center. '
+                  'Turning it off removes the listing from Google.',
+    )
+
+    # Assigned once, on the first successful push, and never recomputed.
+    # Merchant Center keys a listing on its offer ID, so deriving this from
+    # the slug or code on every sync would orphan the old listing and create
+    # a duplicate the moment either one was edited.
+    merchant_offer_id = models.CharField(
+        max_length=50, unique=True, null=True, blank=True, editable=False,
+        help_text='Offer ID this product occupies in Merchant Center.',
+    )
+
+    merchant_synced_at = models.DateTimeField(
+        null=True, blank=True, editable=False,
+        help_text='When this product last reached Merchant Center.',
+    )
+
+    # Empty string means the last attempt succeeded. The failure is kept on
+    # the row rather than only logged, because the person who needs to see it
+    # is the admin who flipped the toggle, and they are looking at the
+    # product editor, not at the server logs.
+    merchant_sync_error = models.TextField(
+        blank=True, default='', editable=False,
+        help_text='Why the last push failed. Blank when the last push worked.',
+    )
+
     def __str__(self):
         return self.name
 

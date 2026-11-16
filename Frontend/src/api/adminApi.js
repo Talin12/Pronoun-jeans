@@ -33,6 +33,16 @@ export const updateProduct = (id, data) =>
   api.patch(`admin/products/${id}/`, data).then(r => r.data);
 
 /**
+ * Push this product to Google Merchant Center now and wait for the verdict.
+ *
+ * Saving already queues a push, but that one runs in the background and its
+ * result only shows up on the next fetch. This is the "it failed, I fixed it,
+ * try again" path, so it runs inline and returns the outcome.
+ */
+export const syncProductToMerchant = (id) =>
+  api.post(`admin/products/${id}/merchant-sync/`).then(r => r.data);
+
+/**
  * The share image is a file, so it cannot ride in the JSON Base Details
  * payload. Kept as its own call for that reason — and so that touching it can
  * never disturb the publish flow, which sends every base field at once.
