@@ -121,11 +121,15 @@ function headTags({ title, description, canonical, image, type = 'website', noin
 
 const DEFAULT_TAG = /<(title|meta|link)\b[^>]*\bdata-default-meta\b[^>]*>(?:[^<]*<\/title>)?\s*/gi;
 
+// The replacements are passed as functions, not strings: in a replacement
+// string `$$`, `$&`, `` $` `` and `$1` are special, so JSON-LD carrying
+// priceRange "$$" arrived as "$", and a product name holding `$&` would paste
+// the matched tag — or the whole document before it — into the page.
 function assemble(shell, { head, body, data = '' }) {
   return shell
     .replace(DEFAULT_TAG, '')
-    .replace('</head>', `    ${head}\n  </head>`)
-    .replace(/<div id="root">\s*<\/div>/, `<div id="root">${data}<div class="ssr">${body}</div></div>`);
+    .replace('</head>', () => `    ${head}\n  </head>`)
+    .replace(/<div id="root">\s*<\/div>/, () => `<div id="root">${data}<div class="ssr">${body}</div></div>`);
 }
 
 // Readable without JavaScript, and close enough to the real layout that the
