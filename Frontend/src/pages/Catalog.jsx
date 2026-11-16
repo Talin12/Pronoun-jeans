@@ -62,17 +62,6 @@ const Catalog = () => {
           <span className="text-accent text-xs font-bold uppercase tracking-widest">Shop by Category</span>
         </div>
         <h1 className="text-gray-900 dark:text-zinc-100 text-4xl font-bold">Wholesale Men's Bottom-wear Catalogue</h1>
-        <p className="text-gray-500 dark:text-zinc-400 text-sm leading-relaxed mt-4 max-w-3xl">
-          Pronoun Jeans is a men's bottom-wear manufacturer based in Ahmedabad, Gujarat, supplying cargo
-          pants, travel-wear pants, cotton and linen trousers, formal pants, shorts and boxers to retailers,
-          distributors and multi-brand outlets across India. Every collection below is sold wholesale only — in
-          ready size sets rather than single pieces, with a minimum order of 1 set per design. Browse by
-          category to see the fits, washes and fabrics currently in production; each product page lists
-          its size breakdown, pieces per set and available colours. Wholesale rates are reserved for verified B2B
-          partners, so prices appear once your account is approved and you sign in. New buyer? Send us
-          your requirement — categories, quantities and delivery city — on WhatsApp or through the
-          contact form, and our team will share current rates, fabric details and lead times for bulk orders.
-        </p>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
