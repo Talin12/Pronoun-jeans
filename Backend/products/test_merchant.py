@@ -130,7 +130,20 @@ class MerchantPayloadTests(TestCase):
         self.assertEqual(self.payload()['productAttributes']['gender'], 'FEMALE')
 
     @override_settings(**MERCHANT_ON)
-    def test_an_uncategorised_product_is_unisex_rather_than_guessed(self):
+    def test_a_category_with_no_gender_in_its_name_falls_back_to_male(self):
+        """Which is every real category: they are cuts and fabrics.
+
+        The fallback is MALE rather than UNISEX because the catalogue is
+        menswear throughout, and a unisex listing loses the men's filters
+        that are the only ones these products belong in.
+        """
+        self.category.name = 'Travel Wear'
+        self.category.save()
+        self.assertEqual(self.payload()['productAttributes']['gender'], 'MALE')
+
+    @override_settings(**MERCHANT_ON, MERCHANT_DEFAULT_GENDER='UNISEX')
+    def test_the_fallback_gender_is_still_a_setting(self):
+        """A women's line later changes the setting, not this code."""
         self.category.name = 'Travel Wear'
         self.category.save()
         self.assertEqual(self.payload()['productAttributes']['gender'], 'UNISEX')
@@ -471,10 +484,29 @@ class MerchantReadinessTests(ReadinessFixture, TestCase):
         self.product.save()
         self.assertIn('description', self.fields('warning'))
 
-    def test_a_gendered_name_under_a_neutral_category_is_flagged(self):
+    def test_a_name_that_contradicts_the_published_gender_is_flagged(self):
+        """The check that survives the MALE fallback.
+
+        With every category gender-neutral and the fallback set to male, a
+        men's product is published correctly and has nothing to say. A
+        women's product under the same category is not: it publishes as
+        menswear, and that is exactly the case this has to catch, because it
+        is the one the client will hit the day they add a women's line.
+        """
         self.category.name = 'Cargo Pant'
         self.category.save(update_fields=['name'])
+        self.assertNotIn('category', self.fields('warning'))
+
+        self.product.name = "PRO-NOUN Women's Linen Cargo Pant"
+        self.product.save(update_fields=['name'])
         self.assertIn('category', self.fields('warning'))
+
+    def test_a_name_that_says_nothing_about_gender_is_not_flagged(self):
+        self.category.name = 'Cargo Pant'
+        self.category.save(update_fields=['name'])
+        self.product.name = 'D. NO 1891 LINEN CARGO PANT'
+        self.product.save(update_fields=['name'])
+        self.assertNotIn('category', self.fields('warning'))
 
     def test_every_check_names_the_thing_to_do(self):
         """The panel shows these verbatim, so each has to stand on its own."""
@@ -548,8 +580,12 @@ class MerchantReadinessFixTargetsTests(ReadinessFixture, TestCase):
         self.assertEqual(fix['field'], 'cover-image')
 
     def test_the_category_warning_points_at_the_category_field(self):
+        # A women's name under a gender-neutral category: with the MALE
+        # fallback that is the case that still contradicts itself.
         self.category.name = 'Cargo Pant'
         self.category.save(update_fields=['name'])
+        self.product.name = "PRO-NOUN Women's Linen Cargo Pant"
+        self.product.save(update_fields=['name'])
         fix = self.fix_for('category')
         self.assertEqual((fix['step'], fix['field']), ('base', 'category'))
 

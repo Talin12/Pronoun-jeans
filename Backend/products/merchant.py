@@ -265,17 +265,20 @@ def _attribute_value(product, *names):
 
 def _gender(product):
     """
-    Derived from the category, which is where this catalogue records it.
+    Derived from the category, falling back to MERCHANT_DEFAULT_GENDER.
 
-    Returning UNISEX rather than guessing keeps a mis-categorised product off
-    the wrong search results; MERCHANT_DEFAULT_GENDER overrides the fallback.
+    The categories are cuts and fabrics -- Shorts, Travel Wear Pant, Cotton
+    Trousers -- so in practice none of them names a gender and the fallback is
+    what every listing gets. That fallback is MALE because the catalogue is
+    menswear throughout; see settings.py. "women" is tested first because it
+    contains "men".
     """
     name = ((product.category.name if product.category_id else '') or '').lower()
     if 'women' in name or 'ladies' in name:
         return 'FEMALE'
     if 'men' in name or 'boys' in name:
         return 'MALE'
-    return _setting('MERCHANT_DEFAULT_GENDER', 'UNISEX')
+    return _setting('MERCHANT_DEFAULT_GENDER', 'MALE')
 
 
 def _description(product):
@@ -321,6 +324,10 @@ def _fix(step, target, variation=None):
         'variation': variation.pk if variation is not None else None,
         'label': label,
     }
+
+
+# How a gender reads in a sentence the admin has to act on.
+GENDER_WORDS = {'MALE': "men's", 'FEMALE': "women's", 'UNISEX': 'unisex'}
 
 
 def _check(level, field, label, detail='', fix=None):
@@ -454,13 +461,16 @@ def readiness(product):
             _fix('base', 'description'),
         ))
 
-    if _gender(product) == 'UNISEX' and _looks_gendered(product):
+    published = _gender(product)
+    named = _name_gender(product)
+    if named and named != published:
         checks.append(_check(
             'warning', 'category', 'Check the category',
-            "The name reads as men's or women's wear but the category does "
-            'not say so, so the listing publishes as unisex and misses those '
-            'searches. Gender is read from the category name, so filing this '
-            "under a men's or women's category is what fixes it.",
+            f'The name reads as {GENDER_WORDS[named]} wear but this publishes '
+            f'as {GENDER_WORDS[published]}. Google is being told the wrong '
+            'audience, so it will be shown against the wrong filters. Gender '
+            'comes from the category name, so a category that says '
+            f'{GENDER_WORDS[named]} is what fixes it.',
             _fix('base', 'category'),
         ))
 
@@ -488,10 +498,20 @@ def _rupees(amount):
     return f'Rs {Decimal(str(amount)):,.0f}'
 
 
-def _looks_gendered(product):
+# Gender according to the product's own name, or None when it does not say.
+# "women" is tested first because every women's spelling contains "men".
+NAME_GENDER = (
+    ('FEMALE', ("women's", 'womens ', 'ladies', "girl's", 'girls ')),
+    ('MALE', ("men's", 'mens ', 'men ', 'boys')),
+)
+
+
+def _name_gender(product):
     name = (product.name or '').lower()
-    return any(word in name for word in
-               ("men's", 'mens ', 'men ', "women's", 'womens ', 'ladies', 'boys'))
+    for gender, words in NAME_GENDER:
+        if any(word in name for word in words):
+            return gender
+    return None
 
 
 def build_payload(product):

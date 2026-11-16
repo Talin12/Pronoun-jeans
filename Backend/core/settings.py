@@ -227,7 +227,15 @@ MERCHANT_LANDING_URL = env('MERCHANT_LANDING_URL', default='https://www.pronounj
 # 'per_piece' reads mrp_per_piece / per_piece_price; 'set' reads mrp /
 # b2b_price. The live listings read as per-piece figures.
 MERCHANT_PRICE_BASIS      = env('MERCHANT_PRICE_BASIS',      default='per_piece')
-MERCHANT_DEFAULT_GENDER   = env('MERCHANT_DEFAULT_GENDER',   default='UNISEX')
+
+# MALE, not UNISEX. Gender is otherwise read from the category name, and not
+# one of the 24 categories carries a gender in its name -- they are cuts and
+# fabrics (Shorts, Travel Wear Pant, Cotton Trousers), so every listing was
+# publishing as unisex and missing the men's filters. The catalogue is
+# menswear throughout, so male is the truthful fallback rather than a guess.
+# A women's line later means setting this back and naming the category, which
+# merchant.readiness() will say out loud the moment such a product appears.
+MERCHANT_DEFAULT_GENDER   = env('MERCHANT_DEFAULT_GENDER',   default='MALE')
 MERCHANT_DEFAULT_AGE_GROUP = env('MERCHANT_DEFAULT_AGE_GROUP', default='ADULT')
 
 # ══════════════════════════════════════════════════════════════════════════════
