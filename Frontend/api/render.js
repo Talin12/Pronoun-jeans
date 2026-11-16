@@ -44,12 +44,24 @@ const DEFAULT_OG_IMAGE = `${SITE_URL}/og-default.jpg`;
 // ── The SPA shell ───────────────────────────────────────────────────────────
 //
 // vite.config.js emits the built index.html as dist/app.html (so that "/" is
-// not a static file and reaches this function). The function fetches it from
-// its own deployment once per warm instance — the asset hashes inside it are
-// per-deploy, and so is this function, so the cached copy cannot go stale. A
-// local file is used instead when one is present (e.g. under `vercel dev`).
+// not a static file and reaches this function). vercel.json ships that file
+// inside this function's own bundle (functions → includeFiles), so the shell
+// is normally read straight off the local filesystem — the same path used
+// under `vercel dev`.
+//
+// The network fetch is the fallback, and it is only trusted briefly. The
+// earlier reasoning here — the function is per-deploy, so its cached shell
+// cannot go stale — missed that the fetch goes through the public CDN, which
+// for a short window after a deploy still answers with the *previous*
+// deploy's /app. That shell names asset bundles this deployment no longer
+// serves, so the SSR text renders and then React never boots because its
+// <script> 404s. Caching it for the life of the instance made that outage
+// permanent; a short TTL lets the next request heal it.
+
+const NETWORK_SHELL_TTL_MS = 60_000;
 
 let shellPromise = null;
+let shellExpires = 0;
 
 async function loadShell(origin) {
   const candidates = [
@@ -57,7 +69,8 @@ async function loadShell(origin) {
     path.join(process.cwd(), 'app.html'),
   ];
   for (const file of candidates) {
-    try { return await fs.readFile(file, 'utf8'); } catch { /* try the next */ }
+    // Local: this deployment's own shell, so it can be kept indefinitely.
+    try { return { html: await fs.readFile(file, 'utf8'), ttl: Infinity }; } catch { /* try the next */ }
   }
   // Preview deployments sit behind Vercel Authentication; the automation
   // bypass secret (when configured) lets the function read its own shell.
@@ -74,12 +87,20 @@ async function loadShell(origin) {
   if (!res.ok) throw new Error(`shell fetch → ${res.status}`);
   const html = await res.text();
   if (!/<div id="root">\s*<\/div>/.test(html)) throw new Error('shell fetch returned something other than the app shell');
-  return html;
+  return { html, ttl: NETWORK_SHELL_TTL_MS };
 }
 
 function getShell(origin) {
-  if (!shellPromise) {
-    shellPromise = loadShell(origin).catch((err) => { shellPromise = null; throw err; });
+  if (!shellPromise || Date.now() >= shellExpires) {
+    // Set provisionally before awaiting, so concurrent requests on a cold
+    // instance share one load instead of starting a fetch each.
+    shellExpires = Date.now() + NETWORK_SHELL_TTL_MS;
+    shellPromise = loadShell(origin)
+      .then(({ html, ttl }) => {
+        shellExpires = ttl === Infinity ? Infinity : Date.now() + ttl;
+        return html;
+      })
+      .catch((err) => { shellPromise = null; shellExpires = 0; throw err; });
   }
   return shellPromise;
 }

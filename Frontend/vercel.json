@@ -297,7 +297,8 @@
   ],
   "functions": {
     "api/render.js": {
-      "maxDuration": 15
+      "maxDuration": 15,
+      "includeFiles": "dist/app.html"
     },
     "api/sitemap.js": {
       "maxDuration": 15
