@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import {
   ArrowLeft, ArrowRight, Loader, Save, Trash2, Plus, Check, Lock,
@@ -19,6 +19,7 @@ import SizeRangeBuilder from '../../components/admin/SizeRangeBuilder';
 import BulkVariantBuilder from '../../components/admin/BulkVariantBuilder';
 import AttributePicker from '../../components/admin/AttributePicker';
 import MerchantToggle from '../../components/admin/MerchantToggle';
+import { revealField } from '../../utils/revealField';
 
 const card    = 'bg-white dark:bg-zinc-900 border border-gray-100 dark:border-white/5 rounded-2xl p-5 sm:p-7';
 const labelCls = 'block text-xs font-bold uppercase tracking-wide text-gray-500 dark:text-zinc-400 mb-1.5';
@@ -124,6 +125,10 @@ export default function AdminProductEditor() {
   // of `form`, so it never counts towards the unsaved-changes marker.
   const [merchantStatus, setMerchantStatus] = useState(null);
   const [merchantReadiness, setMerchantReadiness] = useState(null);
+  // Which variant row the readiness panel asked for, so that row's edit
+  // panel opens before the field inside it is scrolled to. Carries a
+  // timestamp so clicking the same finding twice still counts as a request.
+  const [variantFocus, setVariantFocus] = useState(null);
   const [seoOpen, setSeoOpen] = useState(false);
   const [slug, setSlug]       = useState('');
   // The share image is a file, saved on its own the moment it is chosen.
@@ -277,6 +282,34 @@ export default function AdminProductEditor() {
   });
   const seoOverrides = [form.meta_title, form.meta_description].filter(v => v.trim()).length;
 
+  // Take the admin to where a readiness finding is fixed. Each finding
+  // carries its own destination from merchant.readiness(), so this only has
+  // to open the right step, open the variant's panel when the field belongs
+  // to a variant, and let revealField wait for it to mount.
+  const goFix = useCallback((fix) => {
+    if (!fix) return;
+    if (fix.step) setStep(fix.step);
+    if (fix.variation) setVariantFocus({ id: fix.variation, at: Date.now() });
+    revealField(fix.field);
+  }, []);
+
+  // ?fix=next — the products list links straight here from its "3 missing"
+  // chip, and landing at the top of the form would undo the point of that.
+  // Once only: the readiness report is refetched after every save, and being
+  // yanked back to the first finding mid-edit is worse than not jumping.
+  const requestedFix = params.get('fix');
+  const fixJumped = useRef(false);
+  useEffect(() => {
+    const checks = merchantReadiness?.checks;
+    if (!requestedFix || fixJumped.current || !checks?.length) return;
+    const pick = requestedFix === 'next'
+      ? (checks.find(c => c.level === 'blocker') || checks[0])
+      : checks.find(c => c.field === requestedFix);
+    if (!pick) return;
+    fixJumped.current = true;
+    goFix(pick.fix);
+  }, [requestedFix, merchantReadiness, goFix]);
+
   const stepIndex = STEPS.findIndex(s => s.key === step);
   const gotoStep  = (key) => { if (!isNew || key === 'base') setStep(key); };
 
@@ -368,7 +401,7 @@ export default function AdminProductEditor() {
                       : '. Falls back to the product name if left blank.'}
                   </p>
                 </div>
-                <div>
+                <div data-fix="category">
                   <label className={labelCls}>Category</label>
                   <select className={inputCls} value={form.category} onChange={e => selectCategory(e.target.value ? Number(e.target.value) : '')}>
                     <option value="">— Select —</option>
@@ -396,7 +429,7 @@ export default function AdminProductEditor() {
                     </div>
                   </div>
                 )}
-                <div className="sm:col-span-2">
+                <div className="sm:col-span-2" data-fix="description">
                   <label className={labelCls}>Description</label>
                   <textarea rows={3} className={inputCls} value={form.description} onChange={e => set('description', e.target.value)} />
                 </div>
@@ -513,7 +546,7 @@ export default function AdminProductEditor() {
               <h2 className="text-lg font-black text-gray-900 dark:text-zinc-100 mb-1">Images</h2>
               <p className="text-sm text-gray-400 dark:text-zinc-500 mb-5">Upload once into the library, then click to choose. Reuse anywhere without re-uploading.</p>
               <div className="space-y-6">
-                <div>
+                <div data-fix="cover-image">
                   <label className={labelCls}>Cover image (shown first to buyers)</label>
                   <MediaPicker type="product" id={Number(id)} role="primary" single folder="products" label="cover image"
                     categoryId={Number(form.category) || null} />
@@ -544,6 +577,7 @@ export default function AdminProductEditor() {
                 colors={colors} sizeSets={sizeSets}
                 categoryId={Number(form.category) || null}
                 variations={variations} onChange={setVariations}
+                focus={variantFocus}
                 onColorsChange={setColors} onSizeSetsChange={setSizeSets} />
               <div className="mt-6 flex justify-between">
                 <button onClick={() => setStep('images')} className={btnGhost}><ArrowLeft size={16} /> Back</button>
@@ -592,6 +626,7 @@ export default function AdminProductEditor() {
                 onChange={v => set('list_on_merchant', v)}
                 status={merchantStatus}
                 readiness={merchantReadiness}
+                onFix={goFix}
                 onStatusChange={setMerchantStatus}
               />
               {!variations.length && (
@@ -624,7 +659,7 @@ const Row = ({ label, value }) => (
 );
 
 // ── Variants editor ──────────────────────────────────────────────────────────
-function VariantsEditor({ productId, productName, productCode, colors, sizeSets, categoryId, variations, onChange, onColorsChange, onSizeSetsChange }) {
+function VariantsEditor({ productId, productName, productCode, colors, sizeSets, categoryId, variations, onChange, focus, onColorsChange, onSizeSetsChange }) {
   const [adding, setAdding]   = useState(false);
   const [bulk, setBulk]       = useState(false);
   // Which row has a panel open, and which one: { id, kind: 'edit' | 'images' }.
@@ -643,6 +678,13 @@ function VariantsEditor({ productId, productName, productCode, colors, sizeSets,
 
   const openPanel = (id, kind) =>
     setPanel(p => (p?.id === id && p.kind === kind ? null : { id, kind }));
+
+  // A readiness finding about a variant field is fixed inside that row's edit
+  // panel, so arriving from "Take me there" has to open it. Set, not toggled:
+  // the request is "show me this row", which is true however the panels stood.
+  useEffect(() => {
+    if (focus?.id) setPanel({ id: focus.id, kind: 'edit' });
+  }, [focus]);
 
   // The server returns the saved row, including the recalculated set total and
   // any regenerated SKU — so the summary line updates from what was actually
@@ -735,7 +777,7 @@ function VariantsEditor({ productId, productName, productCode, colors, sizeSets,
           onCancel={() => setAdding(false)}
           onSaved={(v) => { onChange([...variations, v]); setAdding(false); }} />
       ) : (
-        <div className="flex flex-wrap gap-2">
+        <div className="flex flex-wrap gap-2" data-fix="add-variant">
           <button onClick={() => { setNote(''); setBulk(true); }} className={btnPrimary}>
             <Layers size={16} /> Build all variants
           </button>
@@ -833,7 +875,7 @@ function VariantForm({ productId, productCode, colors, sizeSets, variation = nul
     <div className={editing ? '' : 'border border-gray-200 dark:border-white/10 rounded-2xl p-4 bg-gray-50/50 dark:bg-white/[0.02]'}>
       {err && <p className="text-sm text-red-600 dark:text-red-400 mb-3">{err}</p>}
       <div className="grid sm:grid-cols-3 gap-3">
-        <div>
+        <div data-fix="sku">
           <label className={labelCls}>SKU</label>
           {/* Generated by the server from code, colour, size set and pieces.
               Typing here overrides it for this one variant. */}
@@ -848,7 +890,7 @@ function VariantForm({ productId, productCode, colors, sizeSets, variation = nul
             </p>
           )}
         </div>
-        <div>
+        <div data-fix="size_set">
           <div className="flex items-center justify-between">
             <label className={labelCls}>Size set</label>
             <button type="button" onClick={() => setSizeModal(true)} className="text-xs font-bold text-accent hover:underline mb-1.5">+ New</button>
@@ -865,7 +907,7 @@ function VariantForm({ productId, productCode, colors, sizeSets, variation = nul
             {breakdowns.map(b => <option key={b.id} value={b.id}>{b.label} ({b.pieces} pcs)</option>)}
           </select>
         </div>
-        <div>
+        <div data-fix="color_palette">
           <div className="flex items-center justify-between">
             <label className={labelCls}>Colour</label>
             <button type="button" onClick={() => setColorModal(true)} className="text-xs font-bold text-accent hover:underline mb-1.5">+ New</button>
@@ -875,15 +917,15 @@ function VariantForm({ productId, productCode, colors, sizeSets, variation = nul
             {colors.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
           </select>
         </div>
-        <div>
+        <div data-fix="per_piece_price">
           <label className={labelCls}>Per-piece price ₹</label>
           <input type="number" step="0.01" className={inputCls} value={v.per_piece_price} onChange={e => set('per_piece_price', e.target.value)} />
         </div>
-        <div>
+        <div data-fix="mrp_per_piece">
           <label className={labelCls}>MRP per piece ₹</label>
           <input type="number" step="0.01" className={inputCls} value={v.mrp_per_piece} onChange={e => set('mrp_per_piece', e.target.value)} />
         </div>
-        <div>
+        <div data-fix="stock_quantity">
           <label className={labelCls}>Stock</label>
           <input type="number" min="0" className={inputCls} value={v.stock_quantity} onChange={e => set('stock_quantity', e.target.value)} />
         </div>

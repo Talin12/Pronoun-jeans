@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { AlertCircle, Check, Info, Loader, RefreshCw, ShoppingBag } from 'lucide-react';
+import { AlertCircle, ArrowRight, Check, Info, Loader, RefreshCw, ShoppingBag } from 'lucide-react';
 import { syncProductToMerchant } from '../../api/adminApi';
 
 /**
@@ -16,6 +16,11 @@ import { syncProductToMerchant } from '../../api/adminApi';
  * product makes a good listing. It shows whether the toggle is on or off,
  * because its job is to answer "why can't I list this yet" before the client
  * flips the switch and waits for a failure to tell them.
+ *
+ * Every line carries the place it is fixed, and `onFix` takes the admin
+ * there — the right wizard step, the right variant's panel open, the cursor
+ * in the field. Naming a field they then have to go and find is the part of
+ * a checklist that makes people ignore it.
  */
 
 const STATES = {
@@ -51,7 +56,7 @@ function summarise({ ready, blockers, warnings }) {
   return 'Ready to list — nothing missing';
 }
 
-export default function MerchantToggle({ productId, isNew, value, onChange, status, onStatusChange, readiness }) {
+export default function MerchantToggle({ productId, isNew, value, onChange, status, onStatusChange, readiness, onFix }) {
   const [busy, setBusy] = useState(false);
   const [note, setNote] = useState('');
 
@@ -157,6 +162,19 @@ export default function MerchantToggle({ productId, isNew, value, onChange, stat
                       )}
                     </p>
                     <p className="text-xs text-gray-500 dark:text-zinc-400 mt-0.5">{c.detail}</p>
+                    {c.fix && onFix && (
+                      <button type="button" onClick={() => onFix(c.fix)}
+                        className="inline-flex items-center gap-1 mt-1.5 text-xs font-bold text-accent hover:underline">
+                        Take me there
+                        {/* The destination is named so the jump is never a
+                            surprise, and so the admin can get there by hand
+                            if they would rather. */}
+                        <span className="font-semibold text-gray-400 dark:text-zinc-500">
+                          · {c.fix.label}
+                        </span>
+                        <ArrowRight size={12} className="shrink-0" />
+                      </button>
+                    )}
                   </div>
                 </li>
               ))}

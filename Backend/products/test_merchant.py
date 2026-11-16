@@ -363,15 +363,11 @@ class MerchantTransportTests(TestCase):
             delete.assert_not_called()
 
 
-class MerchantReadinessTests(TestCase):
-    """
-    What the panel tells the client is still missing.
+class ReadinessFixture:
+    """A listable product, shared by the two readiness test classes.
 
-    The catalogue this ships against has a real problem these checks exist to
-    surface: roughly half the variations carry an MRP of exactly 5000, which
-    is a placeholder someone typed past a required field rather than a retail
-    price. Publishing it advertises a saving that never existed, so it is
-    flagged even though Google would accept the listing.
+    A mixin rather than a base test case: inheriting from the first class
+    would re-run all of its tests under the second one's name.
     """
 
     def setUp(self):
@@ -405,6 +401,19 @@ class MerchantReadinessTests(TestCase):
     def fields(self, level=None):
         return {c['field'] for c in self.report()['checks']
                 if level is None or c['level'] == level}
+
+
+
+class MerchantReadinessTests(ReadinessFixture, TestCase):
+    """
+    What the panel tells the client is still missing.
+
+    The catalogue this ships against has a real problem these checks exist to
+    surface: roughly half the variations carry an MRP of exactly 5000, which
+    is a placeholder someone typed past a required field rather than a retail
+    price. Publishing it advertises a saving that never existed, so it is
+    flagged even though Google would accept the listing.
+    """
 
     def test_a_complete_product_is_ready(self):
         report = self.report()
@@ -474,3 +483,89 @@ class MerchantReadinessTests(TestCase):
             self.assertTrue(check['label'])
             self.assertTrue(check['detail'])
             self.assertIn(check['level'], ('blocker', 'warning'))
+
+
+class MerchantReadinessFixTargetsTests(ReadinessFixture, TestCase):
+    """
+    Where each finding says it is fixed.
+
+    The panel renders `fix` as a "Take me there" button that opens a wizard
+    step, opens a variant's panel and puts the cursor in a field. A fix
+    pointing at the wrong step or at a stale variation sends the admin to an
+    empty form, which is worse than no button, so the destinations are
+    asserted rather than eyeballed.
+    """
+
+    def fix_for(self, field):
+        for check in self.report()['checks']:
+            if check['field'] == field:
+                return check['fix']
+        self.fail(f'no check for {field!r}')
+
+    def test_every_finding_carries_a_destination(self):
+        self.product.image = ''
+        self.product.description = ''
+        self.product.fabric_details = ''
+        self.product.meta_description = ''
+        self.product.save()
+        ProductVariation.objects.filter(pk=self.variation.pk).update(
+            sku='', stock_quantity=0)
+
+        checks = self.report()['checks']
+        self.assertTrue(checks)
+        for check in checks:
+            fix = check['fix']
+            self.assertIsNotNone(fix, check['field'])
+            self.assertIn(fix['step'], merchant.STEP_LABELS)
+            self.assertTrue(fix['field'])
+            self.assertTrue(fix['label'])
+
+    def test_a_variant_field_points_at_that_variant_row(self):
+        ProductVariation.objects.filter(pk=self.variation.pk).update(
+            mrp_per_piece=Decimal('5000.00'))
+        fix = self.fix_for('mrp')
+        self.assertEqual(fix['step'], 'variants')
+        self.assertEqual(fix['field'], 'mrp_per_piece')
+        self.assertEqual(fix['variation'], self.variation.pk)
+        # The SKU is in the button so it is obvious which row is about to open.
+        self.assertIn(self.variation.sku, fix['label'])
+
+    def test_a_product_field_points_at_no_variant(self):
+        self.product.description = 'Nice pant.'
+        self.product.fabric_details = ''
+        self.product.meta_description = ''
+        self.product.save()
+        fix = self.fix_for('description')
+        self.assertEqual(fix['step'], 'base')
+        self.assertEqual(fix['field'], 'description')
+        self.assertIsNone(fix['variation'])
+
+    def test_a_missing_image_points_at_the_images_step(self):
+        self.product.image = ''
+        self.product.save(update_fields=['image'])
+        fix = self.fix_for('image')
+        self.assertEqual(fix['step'], 'images')
+        self.assertEqual(fix['field'], 'cover-image')
+
+    def test_the_category_warning_points_at_the_category_field(self):
+        self.category.name = 'Cargo Pant'
+        self.category.save(update_fields=['name'])
+        fix = self.fix_for('category')
+        self.assertEqual((fix['step'], fix['field']), ('base', 'category'))
+
+    def test_no_variations_points_at_the_add_buttons(self):
+        self.variation.delete()
+        fix = self.fix_for('variations')
+        self.assertEqual((fix['step'], fix['field']), ('variants', 'add-variant'))
+        # There is no row to open, so nothing should be asked to open one.
+        self.assertIsNone(fix['variation'])
+
+    def test_the_colour_and_size_fixes_name_the_editor_selects(self):
+        """The variant form labels them Colour and Size set; the fix has to
+        point at those controls, not at the model's own field names."""
+        # `color` is a stored column written from the palette on save, so
+        # clearing the palette alone leaves the old name behind.
+        ProductVariation.objects.filter(pk=self.variation.pk).update(
+            color_palette=None, color='', size_set=None, size_breakdown=None)
+        self.assertEqual(self.fix_for('color')['field'], 'color_palette')
+        self.assertEqual(self.fix_for('size')['field'], 'size_set')

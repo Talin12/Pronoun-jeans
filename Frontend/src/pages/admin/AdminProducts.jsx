@@ -19,7 +19,11 @@ import StatusToggle from '../../components/admin/StatusToggle';
  * The toggle itself lives in the editor, so this is the only place the client
  * sees at a glance which rows still need work before they are worth opening.
  */
-function ReadinessBadge({ readiness, status }) {
+// A button, not a label: it opens the editor with ?fix=next, which lands on
+// the first thing missing with the cursor already in that field. The chip is
+// where the admin notices the problem, so it is also where the shortest route
+// to fixing it belongs.
+function ReadinessBadge({ readiness, status, onFix }) {
   // Once it is listed the Merchant badge says what matters; this would be noise.
   if (!readiness || (status && status.state !== 'off')) return null;
   if (readiness.ready && !readiness.warnings) return null;
@@ -27,12 +31,12 @@ function ReadinessBadge({ readiness, status }) {
   const blocked = !readiness.ready;
   const n = blocked ? readiness.blockers : readiness.warnings;
   const title = blocked
-    ? `${n} thing${n === 1 ? '' : 's'} missing before Google will accept this product`
-    : `Ready to list — ${n} detail${n === 1 ? '' : 's'} would improve the listing`;
+    ? `${n} thing${n === 1 ? '' : 's'} missing before Google will accept this product — click to fix the first one`
+    : `Ready to list — ${n} detail${n === 1 ? '' : 's'} would improve the listing. Click to fix the first one`;
 
   return (
-    <span title={title}
-      className={`inline-flex items-center gap-1 shrink-0 px-2 py-1 rounded-full border text-xs font-bold ${
+    <button type="button" onClick={onFix} title={title}
+      className={`inline-flex items-center gap-1 shrink-0 px-2 py-1 rounded-full border text-xs font-bold transition hover:brightness-95 dark:hover:brightness-125 ${
         blocked
           ? 'bg-red-50 dark:bg-red-500/10 text-red-700 dark:text-red-400 border-red-200 dark:border-red-500/20'
           : 'bg-amber-50 dark:bg-amber-500/10 text-amber-700 dark:text-amber-400 border-amber-200 dark:border-amber-500/20'
@@ -40,7 +44,7 @@ function ReadinessBadge({ readiness, status }) {
       <Info size={12} />
       <span className="hidden sm:inline">{blocked ? `${n} missing` : `${n} to improve`}</span>
       <span className="sm:hidden">{n}</span>
-    </span>
+    </button>
   );
 }
 
@@ -269,7 +273,8 @@ export default function AdminProducts() {
                     Without this the client would have to open all 200
                     products to find which ones reached Google. */}
                 <MerchantBadge status={p.merchant_status} />
-                <ReadinessBadge readiness={p.merchant_readiness} status={p.merchant_status} />
+                <ReadinessBadge readiness={p.merchant_readiness} status={p.merchant_status}
+                  onFix={() => navigate(`/admin/products/${p.id}?fix=next`)} />
                 <StatusToggle active={p.is_active} busy={busyId === p.id}
                   onToggle={() => toggleActive(p)} />
                 <button onClick={() => navigate(`/admin/products/${p.id}`)}

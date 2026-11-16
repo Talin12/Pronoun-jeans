@@ -37,3 +37,22 @@
     transition: background-color 0.2s ease, color 0.2s ease;
   }
 }
+/* Marks the field a Merchant readiness finding sent you to (utils/revealField).
+   A ring rather than a background tint: the fields it lands on are inputs and
+   selects that already own their background, and the ring reads the same in
+   both themes. */
+@keyframes fix-flash {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(220, 38, 38, 0); }
+  15%      { box-shadow: 0 0 0 3px rgba(220, 38, 38, 0.35); }
+  70%      { box-shadow: 0 0 0 3px rgba(220, 38, 38, 0.35); }
+}
+
+.fix-flash {
+  border-radius: 0.75rem;
+  animation: fix-flash 1.8s ease-out;
+}
+
+/* Someone who asked to be taken to a field is not asking to watch it pulse. */
+@media (prefers-reduced-motion: reduce) {
+  .fix-flash { animation: none; box-shadow: 0 0 0 3px rgba(220, 38, 38, 0.35); }
+}

@@ -298,8 +298,34 @@ PLACEHOLDER_MRP = Decimal('5000')
 MIN_DESCRIPTION = 60
 
 
-def _check(level, field, label, detail=''):
-    return {'level': level, 'field': field, 'label': label, 'detail': detail}
+# Where in the editor each finding gets fixed. The editor is a four-step
+# wizard and these fields sit at known places in it, so a finding can carry
+# its own destination rather than leaving the admin to hunt for the field:
+# `step` is the wizard step, `field` the data-fix target inside it, and
+# `variation` the row whose panel has to be opened first when the field
+# belongs to a variant rather than to the product.
+STEP_LABELS = {
+    'base': 'Base Details',
+    'images': 'Images',
+    'variants': 'Variants & Pricing',
+}
+
+
+def _fix(step, target, variation=None):
+    label = STEP_LABELS[step]
+    if variation is not None:
+        label = f"{label} / {variation.sku or 'variant'}"
+    return {
+        'step': step,
+        'field': target,
+        'variation': variation.pk if variation is not None else None,
+        'label': label,
+    }
+
+
+def _check(level, field, label, detail='', fix=None):
+    return {'level': level, 'field': field, 'label': label,
+            'detail': detail, 'fix': fix}
 
 
 def readiness(product):
@@ -315,7 +341,9 @@ def readiness(product):
     pricing-policy matter, not a cosmetic one.
 
     Everything is phrased as the thing still to do, because the person reading
-    it is the person who has to go and do it.
+    it is the person who has to go and do it -- and every finding carries the
+    `fix` that says where that is done, so the panel can take them straight
+    there instead of naming a field and leaving them to find it.
     """
     checks = []
     variations = list(product.variations.all())
@@ -325,6 +353,7 @@ def readiness(product):
             'blocker', 'variations', 'Add a variation',
             'The price, colour and size all come from a variation. '
             'There are none on this product.',
+            _fix('variants', 'add-variant'),
         ))
 
     variation = _representative_variation(product)
@@ -337,6 +366,7 @@ def readiness(product):
                 'blocker', 'mrp', 'Set an MRP',
                 'Google needs a price. Fill in the MRP on at least one '
                 'variation.',
+                _fix('variants', 'mrp_per_piece', variation),
             ))
         elif Decimal(str(price)) == PLACEHOLDER_MRP:
             checks.append(_check(
@@ -344,6 +374,7 @@ def readiness(product):
                 f'The MRP is exactly {_rupees(price)}, which is the filler '
                 'value used across the catalogue rather than a real retail '
                 'price. Publishing it advertises a saving that does not exist.',
+                _fix('variants', 'mrp_per_piece', variation),
             ))
 
         raw_sale = _raw_wholesale(variation)
@@ -352,6 +383,7 @@ def readiness(product):
                 'warning', 'b2b_price', 'Add the wholesale price',
                 'Without it the listing shows a single price and none of the '
                 'margin the buyer is being offered.',
+                _fix('variants', 'per_piece_price', variation),
             ))
         elif price and raw_sale and Decimal(str(raw_sale)) >= Decimal(str(price)):
             checks.append(_check(
@@ -359,14 +391,17 @@ def readiness(product):
                 f'Wholesale {_rupees(raw_sale)} is not under the MRP '
                 f'{_rupees(price)}, so the listing publishes at the MRP with '
                 'no saving shown. One of the two numbers is wrong.',
+                _fix('variants', 'per_piece_price', variation),
             ))
 
-        if _basis() != 'set' and not variation.mrp_per_piece                 and not variation.per_piece_price:
+        if (_basis() != 'set' and not variation.mrp_per_piece
+                and not variation.per_piece_price):
             checks.append(_check(
                 'warning', 'per_piece_price', 'Fill in the per-piece prices',
                 'Both per-piece columns are blank, so the set total is '
                 'published instead. Other products publish a per-piece price, '
                 'so this one will look far more expensive beside them.',
+                _fix('variants', 'per_piece_price', variation),
             ))
 
         if not variation.sku:
@@ -375,24 +410,29 @@ def readiness(product):
                 'The SKU is sent as the manufacturer part number. Without one '
                 'Google is told the product has no identifier, which limits '
                 'where it can appear.',
+                _fix('variants', 'sku', variation),
             ))
         if not variation.color:
             checks.append(_check(
                 'warning', 'color', 'Set the colour',
                 'Colour is a required attribute for apparel in Google '
                 'Shopping.',
+                _fix('variants', 'color_palette', variation),
             ))
         if not variation.size:
             checks.append(_check(
                 'warning', 'size', 'Set the size',
                 'Size is a required attribute for apparel in Google Shopping.',
+                _fix('variants', 'size_set', variation),
             ))
 
     if variations and sum((v.stock_quantity or 0) for v in variations) <= 0:
         checks.append(_check(
             'warning', 'stock_quantity', 'Add stock',
             'Every variation is at zero, so this publishes as out of stock '
-            'and will not be shown to shoppers.',
+            'and will not be shown to shoppers. This opens the first row; '
+            'set the quantity on whichever colours you actually hold.',
+            _fix('variants', 'stock_quantity', variation),
         ))
 
     images = [_image_url(product.image)]
@@ -402,6 +442,7 @@ def readiness(product):
             'blocker', 'image', 'Add an image',
             'Google requires at least one image and will not accept the '
             'product without it.',
+            _fix('images', 'cover-image'),
         ))
 
     description = _description(product)
@@ -410,6 +451,7 @@ def readiness(product):
             'warning', 'description', 'Write a longer description',
             f'{len(description)} characters is too thin for Google to index. '
             'Describe the fabric, fit and what is in the set.',
+            _fix('base', 'description'),
         ))
 
     if _gender(product) == 'UNISEX' and _looks_gendered(product):
@@ -417,7 +459,9 @@ def readiness(product):
             'warning', 'category', 'Check the category',
             "The name reads as men's or women's wear but the category does "
             'not say so, so the listing publishes as unisex and misses those '
-            'searches.',
+            'searches. Gender is read from the category name, so filing this '
+            "under a men's or women's category is what fixes it.",
+            _fix('base', 'category'),
         ))
 
     blockers = [c for c in checks if c['level'] == 'blocker']
