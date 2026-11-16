@@ -69,6 +69,9 @@ class ProductViewSet(viewsets.ModelViewSet):
     def get_queryset(self):
         qs = (Product.objects
               .select_related('category')
+              # Both are read for every row by the Merchant readiness summary;
+              # without the prefetch that is two queries per product.
+              .prefetch_related('variations', 'gallery_images')
               .annotate(variation_count=Count('variations', distinct=True)))
 
         # ?category=<id> — everything filed under that category. For a main

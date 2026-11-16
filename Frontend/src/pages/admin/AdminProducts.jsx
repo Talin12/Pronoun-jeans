@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Plus, Search, Loader, Package, ChevronLeft, ChevronRight, ImageOff, Pencil,
-  ArrowUpDown, FolderTree, ToggleLeft, X, AlertCircle, ShoppingBag,
+  ArrowUpDown, FolderTree, ToggleLeft, X, AlertCircle, ShoppingBag, Info,
 } from 'lucide-react';
 import { listCategories, listProducts, updateProduct } from '../../api/adminApi';
 import StatusToggle from '../../components/admin/StatusToggle';
@@ -13,6 +13,37 @@ import StatusToggle from '../../components/admin/StatusToggle';
  * Nothing is drawn for a product that was never flagged, which is most of
  * the catalogue — a row of grey "off" pills would be noise on every line.
  */
+/**
+ * How far this product is from being listable, for products not yet on Google.
+ *
+ * The toggle itself lives in the editor, so this is the only place the client
+ * sees at a glance which rows still need work before they are worth opening.
+ */
+function ReadinessBadge({ readiness, status }) {
+  // Once it is listed the Merchant badge says what matters; this would be noise.
+  if (!readiness || (status && status.state !== 'off')) return null;
+  if (readiness.ready && !readiness.warnings) return null;
+
+  const blocked = !readiness.ready;
+  const n = blocked ? readiness.blockers : readiness.warnings;
+  const title = blocked
+    ? `${n} thing${n === 1 ? '' : 's'} missing before Google will accept this product`
+    : `Ready to list — ${n} detail${n === 1 ? '' : 's'} would improve the listing`;
+
+  return (
+    <span title={title}
+      className={`inline-flex items-center gap-1 shrink-0 px-2 py-1 rounded-full border text-xs font-bold ${
+        blocked
+          ? 'bg-red-50 dark:bg-red-500/10 text-red-700 dark:text-red-400 border-red-200 dark:border-red-500/20'
+          : 'bg-amber-50 dark:bg-amber-500/10 text-amber-700 dark:text-amber-400 border-amber-200 dark:border-amber-500/20'
+      }`}>
+      <Info size={12} />
+      <span className="hidden sm:inline">{blocked ? `${n} missing` : `${n} to improve`}</span>
+      <span className="sm:hidden">{n}</span>
+    </span>
+  );
+}
+
 function MerchantBadge({ status }) {
   if (!status || status.state === 'off') return null;
 
@@ -238,6 +269,7 @@ export default function AdminProducts() {
                     Without this the client would have to open all 200
                     products to find which ones reached Google. */}
                 <MerchantBadge status={p.merchant_status} />
+                <ReadinessBadge readiness={p.merchant_readiness} status={p.merchant_status} />
                 <StatusToggle active={p.is_active} busy={busyId === p.id}
                   onToggle={() => toggleActive(p)} />
                 <button onClick={() => navigate(`/admin/products/${p.id}`)}

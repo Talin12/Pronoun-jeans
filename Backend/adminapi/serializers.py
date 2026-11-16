@@ -464,23 +464,45 @@ def merchant_status(product):
     }
 
 
+def merchant_readiness(product, full=True):
+    """
+    What is still missing before this product can be listed, for the panel.
+
+    The list view only needs the counts to colour a chip, so it asks for the
+    summary; the editor shows every line, because that is where the person
+    who has to fix them is working.
+    """
+    report = merchant.readiness(product)
+    if full:
+        return report
+    return {
+        'ready': report['ready'],
+        'blockers': report['blockers'],
+        'warnings': report['warnings'],
+    }
+
+
 class ProductListSerializer(serializers.ModelSerializer):
     category_name   = serializers.CharField(source='category.name', read_only=True)
     thumb           = serializers.SerializerMethodField()
     variation_count = serializers.IntegerField(read_only=True)
     merchant_status = serializers.SerializerMethodField()
+    merchant_readiness = serializers.SerializerMethodField()
 
     class Meta:
         model  = Product
         fields = ['id', 'name', 'code', 'slug', 'category', 'category_name',
                   'is_active', 'moq', 'thumb', 'variation_count', 'created_at',
-                  'list_on_merchant', 'merchant_status']
+                  'list_on_merchant', 'merchant_status', 'merchant_readiness']
 
     def get_thumb(self, obj):
         return _thumb_url(obj.image, width=400)
 
     def get_merchant_status(self, obj):
         return merchant_status(obj)
+
+    def get_merchant_readiness(self, obj):
+        return merchant_readiness(obj, full=False)
 
 
 class ProductDetailSerializer(serializers.ModelSerializer):
@@ -493,6 +515,7 @@ class ProductDetailSerializer(serializers.ModelSerializer):
     # step and the storefront read one shape and neither regroups it by hand.
     attributes    = serializers.SerializerMethodField()
     merchant_status = serializers.SerializerMethodField()
+    merchant_readiness = serializers.SerializerMethodField()
 
     class Meta:
         model  = Product
@@ -502,7 +525,7 @@ class ProductDetailSerializer(serializers.ModelSerializer):
             'attribute_options', 'attributes',
             'image', 'image_url', 'variations', 'created_at', 'updated_at',
             'meta_title', 'meta_description', 'og_image', 'og_image_url',
-            'list_on_merchant', 'merchant_status',
+            'list_on_merchant', 'merchant_status', 'merchant_readiness',
         ]
         extra_kwargs = {
             'slug':     {'required': False},
@@ -525,6 +548,9 @@ class ProductDetailSerializer(serializers.ModelSerializer):
 
     def get_merchant_status(self, obj):
         return merchant_status(obj)
+
+    def get_merchant_readiness(self, obj):
+        return merchant_readiness(obj)
 
     def validate_list_on_merchant(self, value):
         """

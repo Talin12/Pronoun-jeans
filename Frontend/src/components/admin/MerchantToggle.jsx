@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { AlertCircle, Check, Loader, RefreshCw, ShoppingBag } from 'lucide-react';
+import { AlertCircle, Check, Info, Loader, RefreshCw, ShoppingBag } from 'lucide-react';
 import { syncProductToMerchant } from '../../api/adminApi';
 
 /**
@@ -11,6 +11,11 @@ import { syncProductToMerchant } from '../../api/adminApi';
  * or 'error'. The error is spelled out rather than hidden behind a red dot,
  * because the usual causes — no MRP on any variation, no image — are things
  * the admin fixes in this same editor.
+ *
+ * Below the switch is the readiness list: what is still missing before this
+ * product makes a good listing. It shows whether the toggle is on or off,
+ * because its job is to answer "why can't I list this yet" before the client
+ * flips the switch and waits for a failure to tell them.
  */
 
 const STATES = {
@@ -31,7 +36,22 @@ const STATES = {
   },
 };
 
-export default function MerchantToggle({ productId, isNew, value, onChange, status, onStatusChange }) {
+/** One line saying how far off this product is, in plain words. */
+function summarise({ ready, blockers, warnings }) {
+  if (!ready) {
+    return blockers === 1
+      ? '1 thing must be added before Google will accept this product'
+      : `${blockers} things must be added before Google will accept this product`;
+  }
+  if (warnings > 0) {
+    return warnings === 1
+      ? 'Ready to list — 1 detail would make it a better listing'
+      : `Ready to list — ${warnings} details would make it a better listing`;
+  }
+  return 'Ready to list — nothing missing';
+}
+
+export default function MerchantToggle({ productId, isNew, value, onChange, status, onStatusChange, readiness }) {
   const [busy, setBusy] = useState(false);
   const [note, setNote] = useState('');
 
@@ -103,6 +123,46 @@ export default function MerchantToggle({ productId, isNew, value, onChange, stat
         <p className="text-xs text-amber-600 dark:text-amber-400 mt-3">
           Google Merchant Center is not connected on this server, so this toggle is disabled.
         </p>
+      )}
+
+      {readiness && !isNew && (
+        <div className="mt-3 rounded-lg border border-gray-200 dark:border-white/10 overflow-hidden">
+          <div className="flex items-center gap-2 px-3 py-2 bg-gray-50 dark:bg-white/5">
+            {readiness.ready
+              ? <Check size={13} className="shrink-0 text-green-600 dark:text-green-400" />
+              : <AlertCircle size={13} className="shrink-0 text-red-600 dark:text-red-400" />}
+            <p className="text-xs font-bold text-gray-700 dark:text-zinc-200">
+              {summarise(readiness)}
+            </p>
+          </div>
+
+          {readiness.checks?.length > 0 && (
+            <ul className="divide-y divide-gray-100 dark:divide-white/5">
+              {readiness.checks.map((c) => (
+                <li key={`${c.level}-${c.field}`} className="flex items-start gap-2 px-3 py-2">
+                  {c.level === 'blocker'
+                    ? <AlertCircle size={13} className="mt-0.5 shrink-0 text-red-500" />
+                    : <Info size={13} className="mt-0.5 shrink-0 text-amber-500" />}
+                  <div className="min-w-0">
+                    <p className={`text-xs font-bold ${
+                      c.level === 'blocker'
+                        ? 'text-red-700 dark:text-red-400'
+                        : 'text-amber-700 dark:text-amber-400'
+                    }`}>
+                      {c.label}
+                      {c.level === 'blocker' && (
+                        <span className="ml-1.5 font-normal text-[10px] uppercase tracking-wide opacity-70">
+                          required
+                        </span>
+                      )}
+                    </p>
+                    <p className="text-xs text-gray-500 dark:text-zinc-400 mt-0.5">{c.detail}</p>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
       )}
 
       {value && badge && !isNew && configured && (

@@ -123,6 +123,7 @@ export default function AdminProductEditor() {
   // Read-only, server-owned: whether the last push to Google landed. Not part
   // of `form`, so it never counts towards the unsaved-changes marker.
   const [merchantStatus, setMerchantStatus] = useState(null);
+  const [merchantReadiness, setMerchantReadiness] = useState(null);
   const [seoOpen, setSeoOpen] = useState(false);
   const [slug, setSlug]       = useState('');
   // The share image is a file, saved on its own the moment it is chosen.
@@ -174,6 +175,7 @@ export default function AdminProductEditor() {
         setOgImageUrl(p.og_image_url || '');
         setVariations(p.variations || []);
         setMerchantStatus(p.merchant_status || null);
+        setMerchantReadiness(p.merchant_readiness || null);
       })
       .catch(() => setError('Failed to load product.'))
       .finally(() => setLoad(false));
@@ -226,6 +228,7 @@ export default function AdminProductEditor() {
       // The push to Google is queued after commit, so this comes back
       // 'pending'; the next load of the editor shows how it actually went.
       setMerchantStatus(p.merchant_status || null);
+      setMerchantReadiness(p.merchant_readiness || null);
       if (isNew) { navigate(`/admin/products/${p.id}`, { replace: true }); }
       else if (goNext) setStep('images');
       return p;
@@ -588,6 +591,7 @@ export default function AdminProductEditor() {
                 value={form.list_on_merchant}
                 onChange={v => set('list_on_merchant', v)}
                 status={merchantStatus}
+                readiness={merchantReadiness}
                 onStatusChange={setMerchantStatus}
               />
               {!variations.length && (

@@ -361,3 +361,116 @@ class MerchantTransportTests(TestCase):
         with mock.patch('requests.delete') as delete:
             self.assertEqual(merchant.remove(self.product), '')
             delete.assert_not_called()
+
+
+class MerchantReadinessTests(TestCase):
+    """
+    What the panel tells the client is still missing.
+
+    The catalogue this ships against has a real problem these checks exist to
+    surface: roughly half the variations carry an MRP of exactly 5000, which
+    is a placeholder someone typed past a required field rather than a retail
+    price. Publishing it advertises a saving that never existed, so it is
+    flagged even though Google would accept the listing.
+    """
+
+    def setUp(self):
+        cache.clear()
+        self.category = Category.objects.create(name='Mens Cargo Pant', slug='mens-cargo')
+        self.product = Product.objects.create(
+            name="D. NO 1891 MEN'S LINEN CARGO PANT",
+            slug='d-no-1891', code='PJ1891', category=self.category,
+            description='Travel wear cargo track pants in oxford lycra, '
+                        'bio washed, set of four pieces L to 3XL.',
+            image='products/1891.jpg',
+        )
+        self.size_set = SizeSet.objects.create(name='L TO 3XL')
+        self.breakdown = SizeSetBreakdown.objects.create(
+            size_set=self.size_set, label='1xL, 1xXL, 1x2XL, 1x3XL',
+            breakdown_string='1xL, 1xXL, 1x2XL, 1x3XL', pieces=4,
+        )
+        self.colour = Color.objects.create(name='LT-GREY', hex_code='#CCCCCC')
+        self.variation = ProductVariation.objects.create(
+            product=self.product, size_set=self.size_set,
+            size_breakdown=self.breakdown, color_palette=self.colour,
+            sku='PJ1891_LTGREY_L3XL',
+            per_piece_price=Decimal('645.00'), mrp_per_piece=Decimal('1299.00'),
+            stock_quantity=12,
+        )
+
+    def report(self):
+        self.product.refresh_from_db()
+        return merchant.readiness(self.product)
+
+    def fields(self, level=None):
+        return {c['field'] for c in self.report()['checks']
+                if level is None or c['level'] == level}
+
+    def test_a_complete_product_is_ready(self):
+        report = self.report()
+        self.assertTrue(report['ready'])
+        self.assertEqual(report['blockers'], 0)
+
+    def test_a_product_with_no_variations_cannot_be_listed(self):
+        self.variation.delete()
+        report = self.report()
+        self.assertFalse(report['ready'])
+        self.assertIn('variations', self.fields('blocker'))
+
+    def test_a_missing_image_blocks_listing(self):
+        self.product.image = ''
+        self.product.save(update_fields=['image'])
+        self.assertFalse(self.report()['ready'])
+        self.assertIn('image', self.fields('blocker'))
+
+    def test_a_missing_mrp_blocks_listing(self):
+        ProductVariation.objects.filter(pk=self.variation.pk).update(
+            mrp_per_piece=None, mrp=None)
+        self.assertFalse(self.report()['ready'])
+        self.assertIn('mrp', self.fields('blocker'))
+
+    def test_the_placeholder_mrp_is_flagged_but_does_not_block(self):
+        ProductVariation.objects.filter(pk=self.variation.pk).update(
+            mrp_per_piece=Decimal('5000.00'))
+        report = self.report()
+        self.assertTrue(report['ready'])
+        self.assertIn('mrp', self.fields('warning'))
+
+    def test_a_wholesale_price_above_the_mrp_is_flagged(self):
+        ProductVariation.objects.filter(pk=self.variation.pk).update(
+            per_piece_price=Decimal('1500.00'))
+        self.assertIn('b2b_price', self.fields('warning'))
+
+    def test_blank_per_piece_columns_are_flagged(self):
+        ProductVariation.objects.filter(pk=self.variation.pk).update(
+            per_piece_price=None, mrp_per_piece=None,
+            mrp=Decimal('5196.00'), b2b_price=Decimal('2580.00'))
+        self.assertIn('per_piece_price', self.fields('warning'))
+
+    def test_zero_stock_is_flagged(self):
+        ProductVariation.objects.filter(pk=self.variation.pk).update(stock_quantity=0)
+        self.assertIn('stock_quantity', self.fields('warning'))
+
+    def test_a_missing_sku_is_flagged(self):
+        ProductVariation.objects.filter(pk=self.variation.pk).update(sku='')
+        self.assertIn('sku', self.fields('warning'))
+
+    def test_a_thin_description_is_flagged(self):
+        self.product.description = 'Nice pant.'
+        self.product.fabric_details = ''
+        self.product.meta_description = ''
+        self.product.save()
+        self.assertIn('description', self.fields('warning'))
+
+    def test_a_gendered_name_under_a_neutral_category_is_flagged(self):
+        self.category.name = 'Cargo Pant'
+        self.category.save(update_fields=['name'])
+        self.assertIn('category', self.fields('warning'))
+
+    def test_every_check_names_the_thing_to_do(self):
+        """The panel shows these verbatim, so each has to stand on its own."""
+        self.variation.delete()
+        for check in self.report()['checks']:
+            self.assertTrue(check['label'])
+            self.assertTrue(check['detail'])
+            self.assertIn(check['level'], ('blocker', 'warning'))

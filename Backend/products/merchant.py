@@ -287,6 +287,169 @@ def _description(product):
     return joined or (product.meta_description or product.name)
 
 
+# -- Readiness ----------------------------------------------------------------
+
+# Half the catalogue carries this as an MRP. It is a placeholder someone typed
+# to get past a required field, not a retail price, and publishing it would
+# advertise a struck-through number that was never real.
+PLACEHOLDER_MRP = Decimal('5000')
+
+# Short enough that Google has nothing to index and a shopper learns nothing.
+MIN_DESCRIPTION = 60
+
+
+def _check(level, field, label, detail=''):
+    return {'level': level, 'field': field, 'label': label, 'detail': detail}
+
+
+def readiness(product):
+    """
+    What is still missing before this product makes a good Merchant listing.
+
+    Two kinds of finding, and the difference matters to whoever is looking at
+    the panel. A **blocker** means the push cannot even be built -- the same
+    conditions build_payload() raises on -- so the toggle will fail outright.
+    A **warning** means Google will accept the listing but it will be a poor
+    or risky one: a placeholder price, no identifier, out of stock. Warnings
+    are not pedantry here; a wrong struck-through price is a Merchant Center
+    pricing-policy matter, not a cosmetic one.
+
+    Everything is phrased as the thing still to do, because the person reading
+    it is the person who has to go and do it.
+    """
+    checks = []
+    variations = list(product.variations.all())
+
+    if not variations:
+        checks.append(_check(
+            'blocker', 'variations', 'Add a variation',
+            'The price, colour and size all come from a variation. '
+            'There are none on this product.',
+        ))
+
+    variation = _representative_variation(product)
+    price = sale = None
+    if variation is not None:
+        price, sale = _prices(variation)
+
+        if not price:
+            checks.append(_check(
+                'blocker', 'mrp', 'Set an MRP',
+                'Google needs a price. Fill in the MRP on at least one '
+                'variation.',
+            ))
+        elif Decimal(str(price)) == PLACEHOLDER_MRP:
+            checks.append(_check(
+                'warning', 'mrp', 'Replace the placeholder MRP',
+                f'The MRP is exactly {_rupees(price)}, which is the filler '
+                'value used across the catalogue rather than a real retail '
+                'price. Publishing it advertises a saving that does not exist.',
+            ))
+
+        raw_sale = _raw_wholesale(variation)
+        if price and not raw_sale:
+            checks.append(_check(
+                'warning', 'b2b_price', 'Add the wholesale price',
+                'Without it the listing shows a single price and none of the '
+                'margin the buyer is being offered.',
+            ))
+        elif price and raw_sale and Decimal(str(raw_sale)) >= Decimal(str(price)):
+            checks.append(_check(
+                'warning', 'b2b_price', 'Wholesale price is not below the MRP',
+                f'Wholesale {_rupees(raw_sale)} is not under the MRP '
+                f'{_rupees(price)}, so the listing publishes at the MRP with '
+                'no saving shown. One of the two numbers is wrong.',
+            ))
+
+        if _basis() != 'set' and not variation.mrp_per_piece                 and not variation.per_piece_price:
+            checks.append(_check(
+                'warning', 'per_piece_price', 'Fill in the per-piece prices',
+                'Both per-piece columns are blank, so the set total is '
+                'published instead. Other products publish a per-piece price, '
+                'so this one will look far more expensive beside them.',
+            ))
+
+        if not variation.sku:
+            checks.append(_check(
+                'warning', 'sku', 'Add a SKU',
+                'The SKU is sent as the manufacturer part number. Without one '
+                'Google is told the product has no identifier, which limits '
+                'where it can appear.',
+            ))
+        if not variation.color:
+            checks.append(_check(
+                'warning', 'color', 'Set the colour',
+                'Colour is a required attribute for apparel in Google '
+                'Shopping.',
+            ))
+        if not variation.size:
+            checks.append(_check(
+                'warning', 'size', 'Set the size',
+                'Size is a required attribute for apparel in Google Shopping.',
+            ))
+
+    if variations and sum((v.stock_quantity or 0) for v in variations) <= 0:
+        checks.append(_check(
+            'warning', 'stock_quantity', 'Add stock',
+            'Every variation is at zero, so this publishes as out of stock '
+            'and will not be shown to shoppers.',
+        ))
+
+    images = [_image_url(product.image)]
+    images += [_image_url(g.image) for g in product.gallery_images.all()]
+    if not [u for u in images if u]:
+        checks.append(_check(
+            'blocker', 'image', 'Add an image',
+            'Google requires at least one image and will not accept the '
+            'product without it.',
+        ))
+
+    description = _description(product)
+    if len(description) < MIN_DESCRIPTION:
+        checks.append(_check(
+            'warning', 'description', 'Write a longer description',
+            f'{len(description)} characters is too thin for Google to index. '
+            'Describe the fabric, fit and what is in the set.',
+        ))
+
+    if _gender(product) == 'UNISEX' and _looks_gendered(product):
+        checks.append(_check(
+            'warning', 'category', 'Check the category',
+            "The name reads as men's or women's wear but the category does "
+            'not say so, so the listing publishes as unisex and misses those '
+            'searches.',
+        ))
+
+    blockers = [c for c in checks if c['level'] == 'blocker']
+    return {
+        'ready': not blockers,
+        'checks': checks,
+        'blockers': len(blockers),
+        'warnings': len(checks) - len(blockers),
+    }
+
+
+def _basis():
+    return _setting('MERCHANT_PRICE_BASIS', 'per_piece')
+
+
+def _raw_wholesale(variation):
+    """The wholesale figure before _prices() drops it for being too high."""
+    if _basis() == 'set':
+        return variation.b2b_price or variation.per_piece_price
+    return variation.per_piece_price or variation.b2b_price
+
+
+def _rupees(amount):
+    return f'Rs {Decimal(str(amount)):,.0f}'
+
+
+def _looks_gendered(product):
+    name = (product.name or '').lower()
+    return any(word in name for word in
+               ("men's", 'mens ', 'men ', "women's", 'womens ', 'ladies', 'boys'))
+
+
 def build_payload(product):
     """The ProductInput body for this product, or None if it cannot be listed."""
     variation = _representative_variation(product)
