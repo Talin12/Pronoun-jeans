@@ -357,7 +357,7 @@ async function productPage(slug) {
 // switch moves both at once.
 function aboutPage() {
   const items = [{ name: 'Home', path: '/' }, { name: 'About', path: '/about' }];
-  const { h1, tagline, sections, closing } = aboutContent();
+  const { h1, tagline, intro, sections, closing } = aboutContent();
   return {
     head: headTags({
       title: withBrandSuffix(ABOUT_TITLE),
@@ -369,13 +369,14 @@ function aboutPage() {
   ${crumbs(items)}
   <h1>${esc(h1)}</h1>
   <p>${esc(tagline)}</p>
+  ${paragraphs(intro ?? [])}
   ${sections.map((s) => `<section>
   <h2 id="${esc(s.id)}">${esc(s.heading)}</h2>
   ${s.cards
     ? s.cards.map((c) => `<h3>${esc(c.title)}</h3><p>${esc(c.body)}</p>`).join('\n  ')
     : paragraphs(s.paragraphs)}
   </section>`).join('\n  ')}
-  <p>${esc(closing.line)}</p>
+  ${closing.lines.map((line) => `<p>${esc(line)}</p>`).join('\n  ')}
   ${closing.showAddress ? `<address><p><a href="${esc(BUSINESS.mapUrl)}">${aboutAddressLines().map(esc).join('<br />')}</a></p></address>` : ''}
   <h2>Ready to stock ${esc(mark(BUSINESS.brand))}?</h2>
   <p>Join our network of wholesale partners across India. <a href="/catalog">Browse the wholesale catalogue</a> or <a href="/contact">contact us</a>.</p>`,

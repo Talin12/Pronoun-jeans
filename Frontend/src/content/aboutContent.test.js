@@ -56,19 +56,28 @@ for (const name of NAMES) {
       }
     }
 
-    assert.ok(page.closing.line.trim().length > 0);
+    for (const para of page.intro ?? []) {
+      assert.equal(typeof para, 'string');
+      assert.ok(para.trim().length > 0, 'empty intro paragraph');
+    }
+
+    assert.ok(Array.isArray(page.closing.lines) && page.closing.lines.length > 0);
+    for (const line of page.closing.lines) assert.ok(line.trim().length > 0);
     assert.equal(typeof page.closing.showAddress, 'boolean');
+  });
+
+  test(`variant ${name} carries the full text the client supplied`, () => {
+    // Both variants are complete now, so neither may ship an empty section.
+    for (const section of ABOUT_VARIANTS[name].sections) {
+      const filled = (section.paragraphs ?? section.cards ?? []).length;
+      assert.ok(filled > 0, `${name}: section ${section.id} has no copy`);
+    }
   });
 }
 
-test('the default variant carries the full text the client supplied', () => {
+test('the default variant reads the size sets from the ledger', () => {
   const page = ABOUT_VARIANTS['who-we-are'];
   assert.equal(page.h1, 'About Us');
-  // Every section has copy — this is the one that renders today.
-  for (const section of page.sections) {
-    const filled = (section.paragraphs ?? section.cards ?? []).length;
-    assert.ok(filled > 0, `section ${section.id} has no copy`);
-  }
   // The size sets and waist range come from the ledger, not from a literal.
   const ordering = page.sections.find((s) => s.id === 'wholesale-ordering');
   for (const set of ASSUMPTIONS.sizeSets) {
@@ -78,11 +87,12 @@ test('the default variant carries the full text the client supplied', () => {
 });
 
 test('the trademark symbol in the About copy answers to the ledger flag', () => {
-  const page = ABOUT_VARIANTS['who-we-are'];
   const wrong = ASSUMPTIONS.trademarkRegistered ? '™' : '®';
-  const all = JSON.stringify(page);
-  assert.ok(all.includes(mark(BUSINESS.brand)));
-  assert.ok(!all.includes(wrong), `the About copy hardcodes a ${wrong}`);
+  for (const name of NAMES) {
+    const all = JSON.stringify(ABOUT_VARIANTS[name]);
+    assert.ok(all.includes(mark(BUSINESS.brand)), `${name} never names the brand with its mark`);
+    assert.ok(!all.includes(wrong), `${name} hardcodes a ${wrong}`);
+  }
 });
 
 test('the address under the closing line comes from BUSINESS', () => {

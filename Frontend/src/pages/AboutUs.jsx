@@ -16,7 +16,7 @@ const Divider = () => (
 );
 
 const AboutUs = () => {
-  const { h1, tagline, sections, closing } = aboutContent();
+  const { h1, tagline, intro, sections, closing } = aboutContent();
   usePrerenderReady();
 
   return (
@@ -36,6 +36,16 @@ const AboutUs = () => {
         <p className="text-lg font-semibold text-gray-700 dark:text-zinc-300 leading-relaxed">
           {tagline}
         </p>
+        {/* Only the long variant opens with paragraphs before its first heading. */}
+        {(intro ?? []).length > 0 && (
+          <div className="space-y-4 max-w-3xl mx-auto mt-8 text-left">
+            {intro.map((para) => (
+              <p key={para.slice(0, 40)} className="text-base text-gray-600 dark:text-zinc-400 leading-relaxed">
+                {para}
+              </p>
+            ))}
+          </div>
+        )}
       </div>
 
       {sections.map((section) => (
@@ -76,7 +86,17 @@ const AboutUs = () => {
 
       {/* Closing line and the business address */}
       <div className="max-w-4xl mx-auto px-6 py-20 text-center">
-        <p className="text-lg font-black text-gray-900 dark:text-zinc-100 mb-6">{closing.line}</p>
+        {closing.lines.map((line, i) => (
+          <p
+            key={line}
+            className={i === 0
+              ? 'text-lg font-black text-gray-900 dark:text-zinc-100 mb-3'
+              : 'text-sm text-gray-500 dark:text-zinc-400 mb-3'}
+          >
+            {line}
+          </p>
+        ))}
+        <div className="mb-3" />
         {closing.showAddress && (
           <address className="not-italic text-sm text-gray-500 dark:text-zinc-400 leading-relaxed">
             <a href={BUSINESS.mapUrl} target="_blank" rel="noopener noreferrer" className="hover:text-accent transition-colors">

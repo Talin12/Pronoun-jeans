@@ -10,10 +10,12 @@
 // runs). Neither may hold copy the other does not.
 //
 // Shape:
-//   { h1, tagline, sections: [{ id, heading, paragraphs?, cards? }],
-//     closing: { line, showAddress } }
+//   { h1, tagline, intro?, sections: [{ id, heading, paragraphs?, cards? }],
+//     closing: { lines, showAddress } }
 // A section carries either paragraphs or cards, never both. `id` is the
-// heading's anchor.
+// heading's anchor. `intro` is for a text that opens with paragraphs before
+// its first heading, and `closing.lines` for one that signs off on more than
+// one line — both of which the long variant does and the short one does not.
 //
 // Nothing here is paraphrased. Hyphen bullets became cards and the ® goes
 // through mark() so one flag controls the symbol, but no sentence was
@@ -111,35 +113,90 @@ const WHO_WE_ARE = {
     },
   ],
   closing: {
-    line: `${PRO_NOUN} | Where Style Meets Comfort`,
+    lines: [`${PRO_NOUN} | Where Style Meets Comfort`],
     showAddress: true,
   },
 };
 
 // ── Variant: about-us-long (stored, not rendered) ───────────────────────────
 //
-// INCOMPLETE — the client's long "ABOUT US | PRO-NOUN®" text was not supplied
-// with the brief. Its section headings and its sign-off were, and they are
-// recorded below in the client's order so that the structure is ready; the
-// body paragraphs are deliberately empty because inventing the client's
-// marketing voice is not ours to do. Paste each section's sentences into its
-// `paragraphs` array verbatim, then flip ASSUMPTIONS.aboutVariant.
+// The client's full "ABOUT US | PRO-NOUN®" text, verbatim, in their order.
+// Stored but not rendered: ASSUMPTIONS.aboutVariant selects 'who-we-are'.
+// Flip that one value to publish this instead — no code change.
 //
-// Until then this variant renders its headings and sign-off and nothing else,
-// which is why the default stays 'who-we-are'.
+// Note for whoever makes that call: this text names a different product range
+// from the short variant ("trousers, cargo pants, track pants, shorts and
+// everyday casual wear" — track pants are not a catalogue category, and
+// boxers, co-ord sets and formal trousers are missing). Marketing copy is the
+// client's voice and is left alone either way, but it is a third product list
+// after the short variant's and the Terms'.
 
 const ABOUT_US_LONG = {
   h1: `About Us | ${PRO_NOUN}`,
   tagline: 'Fashion Should Empower, Not Constrict. Comfort Is the Ultimate Luxury.',
+  intro: [
+    `At ${PRO_NOUN}, we believe great clothing should make everyday life more comfortable. Fashion `
+    + 'is not just about following trends. It is about finding the right balance between comfort, '
+    + 'quality, fit and style.',
+    `${BUSINESS.brand} is the men's bottom-wear brand of ${BUSINESS.legalName}, an Ahmedabad-based `
+    + "manufacturer and wholesaler specialising in men's trousers, cargo pants, track pants, shorts "
+    + 'and everyday casual wear.',
+  ],
   sections: [
-    { id: 'designed-for-comfort', heading: 'Designed for Comfort. Made for Everyday Life.', paragraphs: [] },
-    { id: 'quality-that-makes-a-difference', heading: 'Quality That Makes a Difference', paragraphs: [] },
-    { id: 'supporting-retailers', heading: 'Supporting Retailers and Wholesale Businesses', paragraphs: [] },
-    { id: 'our-philosophy', heading: 'Our Philosophy', paragraphs: [] },
+    {
+      id: 'designed-for-comfort',
+      heading: 'Designed for Comfort. Made for Everyday Life.',
+      paragraphs: [
+        'We understand that a good pair of trousers or cargo pants should do more than look good. '
+        + 'It should offer comfortable movement, a practical fit and dependable quality.',
+        'That is why we focus on carefully selected fabrics, thoughtful stitching, functional '
+        + 'designs and comfortable fits. Our collections feature fabrics such as cotton, cotton '
+        + 'Lycra, linen Lycra, khadi linen Lycra, Tencel linen, dobby and 4-way Lycra, with many '
+        + 'styles featuring bio-washed finishes.',
+        'From everyday casual trousers to stylish cargos and comfortable track pants, every '
+        + 'collection is developed with practical use and changing customer preferences in mind.',
+      ],
+    },
+    {
+      id: 'quality-that-makes-a-difference',
+      heading: 'Quality That Makes a Difference',
+      paragraphs: [
+        'We believe quality is in the details: the feel of the fabric, the finishing, the '
+        + 'stitching, the fit and the durability of the garment.',
+        'Our focus is to offer well-made, comfortable and affordable men\'s bottom wear that '
+        + 'delivers excellent value to retailers and their customers.',
+      ],
+    },
+    {
+      id: 'supporting-retailers',
+      heading: 'Supporting Retailers and Wholesale Businesses',
+      paragraphs: [
+        `${BUSINESS.brand} is built around the needs of the wholesale market. We supply ready size `
+        + 'sets rather than individual pieces, making it easier for retailers to maintain a '
+        + 'complete size range.',
+        'With a minimum order of just one complete size set per design, retailers can introduce '
+        + 'new collections with greater flexibility.',
+        'We serve retailers, multi-brand outlets, distributors and online sellers across India, '
+        + 'with dispatch from Ahmedabad through trusted logistics partners.',
+      ],
+    },
+    {
+      id: 'our-philosophy',
+      heading: 'Our Philosophy',
+      paragraphs: [
+        "We don't believe good fashion needs to be complicated. It should be comfortable, "
+        + 'practical, well-designed and accessible.',
+        "Our aim is to make everyday men's fashion better through quality fabrics, reliable "
+        + 'manufacturing and designs that combine comfort with contemporary style.',
+      ],
+    },
   ],
   closing: {
-    line: `Manufactured and marketed by ${BUSINESS.legalName}, ${BUSINESS.locality}, `
+    lines: [
+      `${PRO_NOUN} | Where Style Meets Comfort`,
+      `Manufactured and marketed by ${BUSINESS.legalName}, ${BUSINESS.locality}, `
       + `${BUSINESS.region}, India.`,
+    ],
     showAddress: true,
   },
 };
