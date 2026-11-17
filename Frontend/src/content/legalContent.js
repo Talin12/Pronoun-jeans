@@ -12,7 +12,8 @@
 //   - the business name, brand, address, phone, email and website are read
 //     from BUSINESS instead of being retyped, so the legal pages cannot state
 //     a different address from the contact page;
-//   - the ® goes through mark().
+//   - the ® goes through mark();
+//   - the three authorised edits in Part E (see E1/E2/E3 below).
 //
 // No sentence was reworded, shortened, merged or improved, including the ones
 // that read awkwardly. If a promise in here contradicts the code, the promise
@@ -50,6 +51,41 @@ export function legalLastUpdatedLabel(iso = A.legalLastUpdated) {
   return `${d} ${MONTHS[m - 1]} ${y}`;
 }
 
+// ── E1: the exchange terms, stored once ────────────────────────────────────
+//
+// The Terms and the Refund Policy disagreed on six points: what qualifies
+// (wrong goods only, vs damaged AND wrong), the evidence (photographs vs a
+// compulsory unboxing video), the damaged-goods deadline ("promptly" vs a hard
+// two days), refunds (silent vs exchange-only), the condition carve-out and
+// the same-design-only rule. The Refund Policy is the authoritative version
+// and stays verbatim; the Terms are reduced to a summary built from these
+// values, so the two cannot drift apart again.
+
+export const EXCHANGE_POLICY = {
+  windowDays: 2,
+  windowUnit: 'calendar days',
+  windowFrom: A.claimWindowFrom,
+  eligibleCases: ['Damaged goods', 'Wrong goods'],
+  evidence: A.exchangeEvidence === 'buyer-unboxing'
+    ? 'A clear, continuous parcel opening (unboxing) video'
+    : null,
+  remedy: 'an exchange for the same product, subject to stock availability',
+  refundStance: 'We do not offer refunds for change of mind, buyer preference, '
+    + 'unsold stock or correctly supplied goods.',
+};
+
+if (EXCHANGE_POLICY.evidence === null) {
+  // Deliberately fatal. ASSUMPTIONS.exchangeEvidence is set to something other
+  // than 'buyer-unboxing', which means the client meant a different kind of
+  // video from the one both documents describe. Improvising replacement
+  // wording for a compulsory evidence rule is not ours to do: the Refund
+  // Policy's section 3 has to be rewritten by the client first.
+  throw new Error(
+    `ASSUMPTIONS.exchangeEvidence is '${A.exchangeEvidence}'. The exchange evidence wording `
+    + 'must come from the client, not from this file. See assumptions.js A2.',
+  );
+}
+
 // ── Terms & Conditions ──────────────────────────────────────────────────────
 
 function termsPage(siteUrl) {
@@ -71,9 +107,13 @@ function termsPage(siteUrl) {
         id: 'about-our-business',
         heading: 'About Our Business',
         body: [
+          // E3: the draft listed capris and lounge wear, which are not
+          // categories, and omitted boxers, co-ord sets and cotton trousers,
+          // which are. The list is rendered from the live catalogue
+          // (ASSUMPTIONS.legalProductCategories); the sentence around it is
+          // the client's, unchanged.
           `${PRO_NOUN} is a men's bottom-wear brand dealing in manufacturing and wholesale supply `
-          + 'of garments, including cargo pants, casual trousers, formal trousers, track pants, '
-          + 'shorts, capris, lounge wear and other related products.',
+          + `of garments, including ${A.legalProductCategories.join(', ')} and other related products.`,
           'Our website is primarily intended for retailers, wholesalers, shopkeepers, distributors, '
           + 'multi-brand outlets and other business buyers.',
         ],
@@ -158,64 +198,45 @@ function termsPage(siteUrl) {
         ],
       },
       {
-        id: 'two-day-exchange-policy',
-        heading: 'Two-Day Exchange Policy',
+        // E1. Replaces the draft's clause 8 ("Two-Day Exchange Policy", wrong
+        // goods only, photographs) and clause 9 ("Wrong, Defective or Damaged
+        // Goods", "notify us promptly") — the latter deleted in full, because
+        // its "promptly" was the contradiction.
+        id: 'exchange-policy',
+        heading: 'Exchange Policy',
         body: [
-          "Our standard exchange policy is limited to wrong goods supplied against the buyer's "
-          + 'confirmed order.',
-          'The following conditions apply:',
+          'Our standard exchange policy covers damaged goods and wrong goods supplied against the '
+          + "buyer's confirmed order. It is set out in full in our Refund, Return, Exchange & "
+          + 'Cancellation Policy, which forms part of these Terms.',
+          'In summary:',
         ],
-        listType: 'ol',
-        list: [
-          'Buyers must report receipt of wrong goods within 2 calendar days from the date of delivery.',
-          `The buyer must contact us at ${BUSINESS.email} or ${formatPhone(BUSINESS.phone)}.`,
-          'The buyer must provide the order number or invoice number, clear photographs of the goods received and details of the discrepancy.',
-          'The goods must remain unused, unwashed, unaltered and in their original condition, with original tags and packaging.',
-          'Our team will review the claim and confirm whether the goods supplied differ from the confirmed order.',
-          'If the claim is approved, the exchange process and return-shipping arrangements will be communicated by our team.',
-          'Replacement goods will be subject to stock availability. If the same goods are unavailable, our team will discuss an appropriate resolution with the buyer.',
-        ],
-        after: ['The following are not eligible for standard exchange:'],
-      },
-      {
-        id: 'not-eligible-for-standard-exchange',
-        heading: 'Not Eligible for Standard Exchange',
         listType: 'ul',
         list: [
-          'Change of mind after order confirmation.',
-          'Preference for another colour, design or style.',
-          'Incorrect size selection by the buyer.',
-          'Unsold stock or slow-moving products.',
-          'Goods ordered correctly but no longer required by the buyer.',
-          'Goods that have been used, washed, altered or damaged after delivery.',
+          `Claims must be reported within ${EXCHANGE_POLICY.windowDays} ${EXCHANGE_POLICY.windowUnit} `
+          + `from ${EXCHANGE_POLICY.windowFrom}.`,
+          `${EXCHANGE_POLICY.evidence} is compulsory for every claim.`,
+          `The approved remedy is ${EXCHANGE_POLICY.remedy}, for the same design, D. NO., fabric, `
+          + 'colour and size set as originally ordered.',
+          EXCHANGE_POLICY.refundStance,
         ],
         after: [
+          `To make a claim, contact us at ${BUSINESS.email} or ${formatPhone(BUSINESS.phone)} with `
+          + 'your order number or invoice number.',
           'This standard exchange policy does not exclude remedies that may be available under '
           + 'applicable law for defective, deficient, spurious or materially misdescribed goods.',
         ],
       },
       {
-        id: 'wrong-defective-or-damaged-goods',
-        heading: 'Wrong, Defective or Damaged Goods',
-        body: [
-          'Buyers should inspect their shipment upon delivery.',
-          'If goods are received damaged, defective or materially different from the confirmed '
-          + 'order or product description, the buyer should notify us promptly with the invoice '
-          + 'number and supporting photographs.',
-          'Such claims will be reviewed individually and handled in accordance with applicable law. '
-          + 'We may request additional information or inspection of the goods before deciding the '
-          + 'appropriate resolution.',
-        ],
-      },
-      {
+        // E2. The clause itself moved, verbatim, to the Refund Policy, which
+        // is what the page title and the footer link promise.
         id: 'order-cancellation',
         heading: 'Order Cancellation',
-        listType: 'ul',
-        list: [
-          'Buyers should request cancellation before dispatch.',
-          'Once an order has been packed or dispatched, cancellation may not be possible.',
-          'Any approved cancellation or payment adjustment will be handled according to the order status and applicable law.',
-          'Orders placed using incorrect or unverifiable details may be held or cancelled after verification.',
+        body: [
+          {
+            text: 'Order cancellation is covered in our Refund, Return, Exchange & Cancellation Policy.',
+            linkText: 'Refund, Return, Exchange & Cancellation Policy',
+            href: '/refund-policy',
+          },
         ],
       },
       {
@@ -600,8 +621,9 @@ function refundPage() {
   return {
     slug: 'refund-policy',
     title: 'Refund, Return, Exchange & Cancellation Policy',
-    description: 'Damaged or wrong goods: claim within 2 calendar days of delivery with an '
-      + 'unboxing video. Exchange-only policy, product availability and evidence rules.',
+    description: `Damaged or wrong goods: claim within ${EXCHANGE_POLICY.windowDays} `
+      + `${EXCHANGE_POLICY.windowUnit} of delivery with an unboxing video. Exchange-only policy and `
+      + 'order cancellation.',
     lastUpdated: legalLastUpdatedLabel(),
     intro: [
       `At ${PRO_NOUN}, a brand of ${BUSINESS.legalName}, we take care to check and dispatch orders `
@@ -616,9 +638,9 @@ function refundPage() {
         body: ['We accept claims only in the following situations:'],
         listType: 'ul',
         list: [
-          'Damaged Goods: Products received in damaged condition.',
-          "Wrong Goods: Products received that do not match the buyer's confirmed order, such as a "
-          + 'different design or product supplied.',
+          `${EXCHANGE_POLICY.eligibleCases[0]}: Products received in damaged condition.`,
+          `${EXCHANGE_POLICY.eligibleCases[1]}: Products received that do not match the buyer's `
+          + 'confirmed order, such as a different design or product supplied.',
         ],
         after: ['Claims will be reviewed and verified by our team before approval.'],
       },
@@ -627,8 +649,8 @@ function refundPage() {
         heading: 'Two-Day Claim Period',
         listType: 'ul',
         list: [
-          'Any claim for damaged or wrong goods must be reported within 2 calendar days from the '
-          + 'date of delivery.',
+          `Any claim for damaged or wrong goods must be reported within ${EXCHANGE_POLICY.windowDays} `
+          + `${EXCHANGE_POLICY.windowUnit} from ${EXCHANGE_POLICY.windowFrom}.`,
           'Claims submitted after this period may not be accepted under our standard policy, subject to applicable law.',
           'Buyers must contact us through our official email or phone number.',
           'The buyer must provide the order number or invoice number along with the required evidence.',
@@ -704,7 +726,7 @@ function refundPage() {
         body: ['Please follow these steps:'],
         listType: 'ol',
         list: [
-          'Contact our team within 2 calendar days of delivery.',
+          `Contact our team within ${EXCHANGE_POLICY.windowDays} ${EXCHANGE_POLICY.windowUnit} of delivery.`,
           'Share your order number or invoice number.',
           'Share the mandatory continuous parcel opening video.',
           'Share clear photographs of the affected or incorrect goods.',
@@ -721,11 +743,23 @@ function refundPage() {
         body: [
           'Our standard policy is to resolve approved damaged-goods and wrong-goods claims through '
           + 'an exchange of the same product, subject to availability.',
-          'We do not offer refunds for change of mind, buyer preference, unsold stock or correctly '
-          + 'supplied goods.',
+          EXCHANGE_POLICY.refundStance,
           'Where an exchange cannot be provided or a refund or other remedy is required under '
           + 'applicable law, the matter will be handled in accordance with applicable legal '
           + 'requirements.',
+        ],
+      },
+      {
+        // E2: moved here verbatim from Terms & Conditions clause 10, so the
+        // page title and the footer link are honest.
+        id: 'order-cancellation',
+        heading: 'Order Cancellation',
+        listType: 'ul',
+        list: [
+          'Buyers should request cancellation before dispatch.',
+          'Once an order has been packed or dispatched, cancellation may not be possible.',
+          'Any approved cancellation or payment adjustment will be handled according to the order status and applicable law.',
+          'Orders placed using incorrect or unverifiable details may be held or cancelled after verification.',
         ],
       },
       {
