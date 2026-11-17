@@ -68,9 +68,9 @@ export const phoneE164   = (d) => (d ? `+91${d}` : '');
 //
 // The human-readable label is DERIVED from the 24-hour values below, never
 // typed beside them. The displayed hours and the openingHoursSpecification in
-// the JSON-LD drifted apart once before (the page said 6:30 PM while the
-// schema said 18:30 on a day the hours had already changed); now they cannot,
-// because there is only one pair of numbers. Asserted by formatHours.test.js.
+// the JSON-LD drifted apart once before — the page and the schema ended up
+// naming different closing times — and now they cannot, because there is only
+// one pair of numbers to read. Asserted by formatHours.test.js.
 
 const DAY_SHORT = { Mo: 'Mon', Tu: 'Tue', We: 'Wed', Th: 'Thu', Fr: 'Fri', Sa: 'Sat', Su: 'Sun' };
 const DAY_LONG  = {

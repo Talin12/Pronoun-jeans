@@ -396,7 +396,13 @@ function contactPage() {
   </address>
   <h2>Business Hours</h2>
   <p>${esc(BUSINESS.hoursLabel)}</p>
-  ${BUSINESS.closedLabel ? `<p>${esc(BUSINESS.closedLabel)}</p>` : ''}`,
+  ${BUSINESS.closedLabel ? `<p>${esc(BUSINESS.closedLabel)}</p>` : ''}
+  <h2>Send us a Message</h2>
+  <p>The enquiry form on this page asks for your name, email, mobile number, company and
+  requirement. To reach the wholesale team directly instead, message us on
+  <a href="${esc(waHref(BUSINESS.whatsapp, WHATSAPP_ENQUIRY))}">WhatsApp at ${esc(formatPhone(BUSINESS.whatsapp))}</a>,
+  call <a href="${esc(telHref(BUSINESS.phone))}">${esc(formatPhone(BUSINESS.phone))}</a>
+  or email <a href="mailto:${esc(BUSINESS.email)}">${esc(BUSINESS.email)}</a>.</p>`,
   };
 }
 

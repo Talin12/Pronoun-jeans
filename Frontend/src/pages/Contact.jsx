@@ -8,14 +8,33 @@ import {
   BUSINESS, ADDRESS_LINES, CONTACT_TITLE, CONTACT_DESCRIPTION, CONTACT_HEADING, CONTACT_INTRO,
   formatPhone, telHref, waHref, WHATSAPP_ENQUIRY,
 } from '../content/seoContent';
+import { ASSUMPTIONS } from '../content/assumptions';
+import { mobileFieldError, normaliseIndianMobile } from '../utils/indianMobile';
 
 const Contact = () => {
-  const [form, setForm]       = useState({ name: '', email: '', company: '', message: '' });
+  const [form, setForm] = useState({
+    name: '', email: '', mobile: '', company: '', message: '', whatsappOptIn: false,
+  });
+  const [mobileError, setMobileError] = useState('');
   const [submitted, setSubmitted] = useState(false);
   usePrerenderReady();
 
+  const setField = (key) => (value) => setForm((p) => ({ ...p, [key]: value }));
+
+  // WARNING: nothing receives this submission. There is no endpoint, no model
+  // and no notification email anywhere in the repo — handleSubmit has only
+  // ever flipped `submitted`, so every enquiry typed into this form since it
+  // shipped has been discarded while the page answered "Message Sent!". The
+  // mobile number and the WhatsApp opt-in below are normalised and held in
+  // state ready to post, but until a POST target exists they go the same way.
+  // Reported to the client 18 Nov 2026; do not read this as working.
   const handleSubmit = (e) => {
     e.preventDefault();
+    const error = mobileFieldError(form.mobile, { required: ASSUMPTIONS.mobileRequired });
+    setMobileError(error);
+    if (error) return;
+    // The ten-digit form, which is what any future endpoint should store.
+    setForm((p) => ({ ...p, mobile: normaliseIndianMobile(p.mobile) }));
     setSubmitted(true);
   };
 
@@ -113,12 +132,45 @@ const Contact = () => {
                 <form onSubmit={handleSubmit} className="space-y-4">
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <FormField label="Your Name *" placeholder="Rajesh Kumar" value={form.name}
-                      onChange={v => setForm(p => ({ ...p, name: v }))} required />
+                      onChange={setField('name')} required />
                     <FormField label="Email Address *" type="email" placeholder="you@company.com" value={form.email}
-                      onChange={v => setForm(p => ({ ...p, email: v }))} required />
+                      onChange={setField('email')} required />
                   </div>
+
+                  {/* Phone is the primary channel in this trade, so it sits
+                      directly under the email and ahead of the company name. */}
+                  <FormField
+                    label={`Mobile Number${ASSUMPTIONS.mobileRequired ? ' *' : ''}`}
+                    type="tel"
+                    inputMode="numeric"
+                    autoComplete="tel"
+                    placeholder="+91 98765 43210"
+                    value={form.mobile}
+                    onChange={(v) => { setForm(p => ({ ...p, mobile: v })); if (mobileError) setMobileError(''); }}
+                    onBlur={() => setMobileError(
+                      mobileFieldError(form.mobile, { required: ASSUMPTIONS.mobileRequired }),
+                    )}
+                    required={ASSUMPTIONS.mobileRequired}
+                    error={mobileError}
+                    errorId="contact-mobile-error"
+                  />
+
+                  {ASSUMPTIONS.whatsappConsentCheckbox && (
+                    <label className="flex items-start gap-2.5 cursor-pointer select-none">
+                      <input
+                        type="checkbox"
+                        checked={form.whatsappOptIn}
+                        onChange={e => setForm(p => ({ ...p, whatsappOptIn: e.target.checked }))}
+                        className="mt-0.5 w-4 h-4 rounded border-gray-300 dark:border-white/20 bg-gray-50 dark:bg-zinc-800 text-accent accent-accent focus:outline-none focus:ring-2 focus:ring-accent/40 shrink-0"
+                      />
+                      <span className="text-gray-500 dark:text-zinc-400 text-xs leading-relaxed">
+                        You may contact me on WhatsApp about this enquiry.
+                      </span>
+                    </label>
+                  )}
+
                   <FormField label="Company Name" placeholder="Your Company Pvt. Ltd." value={form.company}
-                    onChange={v => setForm(p => ({ ...p, company: v }))} />
+                    onChange={setField('company')} />
                   <div>
                     <label className="text-gray-500 dark:text-zinc-400 text-xs font-bold uppercase tracking-widest block mb-1.5">Message *</label>
                     <textarea rows={5} required placeholder="Tell us about your requirements — categories, quantities, locations..."
@@ -139,11 +191,27 @@ const Contact = () => {
   );
 };
 
-const FormField = ({ label, type = 'text', placeholder, value, onChange, required }) => (
+// The error styling is the one the sign-in modal's fields already use
+// (src/pages/Login.jsx), so a bad mobile number looks like every other
+// rejected field on the site rather than like a new invention.
+const FormField = ({
+  label, type = 'text', placeholder, value, onChange, required,
+  inputMode, autoComplete, onBlur, error, errorId,
+}) => (
   <div>
     <label className="text-gray-500 dark:text-zinc-400 text-xs font-bold uppercase tracking-widest block mb-1.5">{label}</label>
-    <input type={type} placeholder={placeholder} value={value} onChange={e => onChange(e.target.value)} required={required}
-      className="w-full bg-gray-50 dark:bg-zinc-800 border border-gray-200 dark:border-white/10 text-gray-900 dark:text-zinc-100 placeholder-gray-400 dark:placeholder-zinc-600 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-accent transition-colors" />
+    <input
+      type={type} placeholder={placeholder} value={value}
+      onChange={e => onChange(e.target.value)} onBlur={onBlur} required={required}
+      inputMode={inputMode} autoComplete={autoComplete}
+      aria-invalid={error ? 'true' : undefined}
+      aria-describedby={error ? errorId : undefined}
+      className={`w-full bg-gray-50 dark:bg-zinc-800 border text-gray-900 dark:text-zinc-100 placeholder-gray-400 dark:placeholder-zinc-600 rounded-xl px-4 py-3 text-sm focus:outline-none transition-colors ${
+        error
+          ? 'border-red-300 dark:border-red-500/50 focus:border-red-500'
+          : 'border-gray-200 dark:border-white/10 focus:border-accent'
+      }`} />
+    {error && <p id={errorId} className="text-red-500 dark:text-red-400 text-sm mt-1">{error}</p>}
   </div>
 );
 
