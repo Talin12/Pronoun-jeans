@@ -187,6 +187,16 @@
       "source": "/comments/feed",
       "destination": "/",
       "permanent": true
+    },
+    {
+      "source": "/privacy",
+      "destination": "/privacy-policy",
+      "permanent": true
+    },
+    {
+      "source": "/refund",
+      "destination": "/refund-policy",
+      "permanent": true
     }
   ],
   "rewrites": [
@@ -224,15 +234,19 @@
     },
     {
       "source": "/terms",
-      "destination": "/app"
+      "destination": "/api/render?page=terms"
     },
     {
-      "source": "/privacy",
-      "destination": "/app"
+      "source": "/privacy-policy",
+      "destination": "/api/render?page=privacy-policy"
     },
     {
-      "source": "/refund",
-      "destination": "/app"
+      "source": "/refund-policy",
+      "destination": "/api/render?page=refund-policy"
+    },
+    {
+      "source": "/shipping-policy",
+      "destination": "/api/render?page=shipping-policy"
     },
     {
       "source": "/login",

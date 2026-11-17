@@ -11,6 +11,8 @@
 
 import { SITE_URL, escapeHtml, listCategories, listProducts } from './_lib/catalog.js';
 import { CONTENT_UPDATED } from '../src/content/seoContent.js';
+import { LEGAL_SLUGS } from '../src/content/legalContent.js';
+import { ASSUMPTIONS } from '../src/content/assumptions.js';
 
 // `lastmod` here is the date the page's copy was last edited, from
 // CONTENT_UPDATED. Home and /catalog take theirs from the newest product
@@ -21,9 +23,17 @@ const STATIC_PAGES = [
   { path: '/catalog', changefreq: 'daily',   priority: '0.9' },
   { path: '/about',   changefreq: 'monthly', priority: '0.5', lastmod: CONTENT_UPDATED.about },
   { path: '/contact', changefreq: 'monthly', priority: '0.5', lastmod: CONTENT_UPDATED.contact },
-  // /terms, /privacy and /refund are deliberately absent: those pages carry
-  // noindex, and listing a noindex URL in the sitemap is a contradiction
-  // Search Console and Bing report as an error.
+  // The legal pages are indexable now that they carry the client's real
+  // policies — a payment gateway has to be able to reach them, and Google
+  // treats a missing refund or shipping policy as a trust signal against a
+  // commerce site. They change rarely and are not what anyone searches for,
+  // hence yearly/0.3.
+  ...LEGAL_SLUGS.map((slug) => ({
+    path: `/${slug}`,
+    changefreq: 'yearly',
+    priority: '0.3',
+    lastmod: ASSUMPTIONS.legalLastUpdated,
+  })),
 ];
 
 const day = (iso) => {

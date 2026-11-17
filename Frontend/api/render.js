@@ -39,6 +39,7 @@ import {
   formatPhone, telHref, waHref, WHATSAPP_ENQUIRY, mark, grievanceContact,
 } from '../src/content/seoContent.js';
 import { aboutContent, aboutAddressLines } from '../src/content/aboutContent.js';
+import { legalPage, contactValue, LEGAL_SLUGS } from '../src/content/legalContent.js';
 // The LocalBusiness builder, shared with src/config/schema.js. This file used
 // to carry its own hand-copied contactSchema(), which is how the server HTML
 // came to publish different opening hours from the React page.
@@ -431,11 +432,72 @@ function sellerDetailsBlock() {
   </address>`;
 }
 
+// ── Legal pages ─────────────────────────────────────────────────────────────
+//
+// Rendered from the same src/content/legalContent.js objects the React pages
+// render, so the clauses a crawler or a payment-gateway reviewer reads are the
+// clauses on the page. These four MUST stay server-rendered: a route without a
+// rewrite falls through to the bare /app shell, which renders fine in a
+// browser and is invisible to both.
+
+const legalPara = (p) => {
+  if (typeof p === 'string') return `<p>${esc(p)}</p>`;
+  const at = p.text.indexOf(p.linkText);
+  if (at < 0) return `<p>${esc(p.text)}</p>`;
+  return `<p>${esc(p.text.slice(0, at))}<a href="${esc(p.href)}">${esc(p.linkText)}</a>${esc(p.text.slice(at + p.linkText.length))}</p>`;
+};
+
+const legalList = (node) => (node.list
+  ? `<${node.listType === 'ol' ? 'ol' : 'ul'}>${node.list.map((i) => `<li>${esc(i)}</li>`).join('')}</${node.listType === 'ol' ? 'ol' : 'ul'}>`
+  : '');
+
+const legalContact = (rows) => (rows
+  ? `<dl>${rows.map((row) => {
+    const v = row.key ? contactValue(row.key, SITE_URL) : { text: row.text };
+    const value = v.href ? `<a href="${esc(v.href)}">${esc(v.text)}</a>` : esc(v.text);
+    return `<dt>${esc(row.label)}</dt><dd>${value}</dd>`;
+  }).join('')}</dl>`
+  : '');
+
+const legalBlock = (node) => [
+  ...(node.body ?? []).map(legalPara),
+  legalList(node),
+  legalContact(node.contactRows),
+  ...(node.after ?? []).map(legalPara),
+].filter(Boolean).join('\n  ');
+
+function legalPageRender(slug) {
+  const page = legalPage(slug, SITE_URL);
+  if (!page) return null;
+  const items = [{ name: 'Home', path: '/' }, { name: page.title, path: `/${page.slug}` }];
+  return {
+    head: headTags({
+      title: withBrandSuffix(page.title),
+      description: clampDescription(page.description),
+      canonical: absoluteUrl(`/${page.slug}`),
+      jsonLd: [breadcrumbSchema(items)],
+    }),
+    body: `
+  ${crumbs(items)}
+  <h1>${esc(page.title)}</h1>
+  <p>Last updated: ${esc(page.lastUpdated)}</p>
+  ${page.intro.map((p) => `<p>${esc(p)}</p>`).join('\n  ')}
+  ${page.sections.map((s, i) => `<section>
+  <h2 id="${esc(s.id)}">${i + 1}. ${esc(s.heading)}</h2>
+  ${legalBlock(s)}
+  ${(s.subsections ?? []).map((sub) => `<h3 id="${esc(sub.id)}">${esc(sub.heading)}</h3>
+  ${legalBlock(sub)}`).join('\n  ')}
+  </section>`).join('\n  ')}
+  ${page.closing.map((line) => `<p>${esc(line)}</p>`).join('\n  ')}`,
+  };
+}
+
 // ── Handler ─────────────────────────────────────────────────────────────────
 
 const PAGES = {
   home: homePage, catalog: catalogPage, category: categoryPage, product: productPage,
   about: aboutPage, contact: contactPage,
+  ...Object.fromEntries(LEGAL_SLUGS.map((slug) => [slug, () => legalPageRender(slug)])),
 };
 
 export default async function handler(req, res) {

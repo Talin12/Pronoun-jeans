@@ -18,10 +18,15 @@ import Catalog from './pages/Catalog';
 import CategoryProducts from './pages/CategoryProducts';
 import ProductDetail from './pages/ProductDetail';
 import NotFound from './pages/NotFound';
+// Legal pages are eager: payment-gateway reviewers and crawlers must reach
+// them without waiting on a lazy chunk, and they are small.
+import Terms from './pages/legal/Terms';
+import Privacy from './pages/legal/Privacy';
+import Refund from './pages/legal/Refund';
+import Shipping from './pages/legal/Shipping';
 
 // Lazy: signed-in and staff-only surfaces. The admin and agent portals alone
 // were most of the bundle, and every anonymous visitor was downloading them.
-const Legal         = lazy(() => import('./pages/Legal'));
 const Cart          = lazy(() => import('./pages/Cart'));
 const OrderHistory  = lazy(() => import('./pages/OrderHistory'));
 const Dashboard     = lazy(() => import('./pages/Dashboard'));
@@ -128,9 +133,14 @@ function App() {
                 <Route path="/"                       element={<Home />} />
                 <Route path="/about"                  element={<AboutUs />} />
                 <Route path="/contact"                element={<Contact />} />
-                <Route path="/terms"                  element={<Legal page="terms" />} />
-                <Route path="/privacy"                element={<Legal page="privacy" />} />
-                <Route path="/refund"                 element={<Legal page="refund" />} />
+                <Route path="/terms"                  element={<Terms />} />
+                <Route path="/privacy-policy"         element={<Privacy />} />
+                <Route path="/refund-policy"          element={<Refund />} />
+                <Route path="/shipping-policy"        element={<Shipping />} />
+                {/* The old slugs. vercel.json 301s them, but a client-side
+                    navigation never reaches the CDN, so redirect here too. */}
+                <Route path="/privacy"                element={<Navigate to="/privacy-policy" replace />} />
+                <Route path="/refund"                 element={<Navigate to="/refund-policy" replace />} />
                 <Route path="/login"                                    element={<Login />} />
                 <Route path="/reset-password/:uid/:token"            element={<ResetPassword />} />
                 <Route path="/catalog"                element={<Catalog />} />

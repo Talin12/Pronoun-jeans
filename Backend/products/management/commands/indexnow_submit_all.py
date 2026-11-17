@@ -15,7 +15,11 @@ from django.core.management.base import BaseCommand
 from products import indexnow
 from products.models import Category, Product
 
-STATIC_PATHS = ['/', '/catalog', '/about', '/contact']
+STATIC_PATHS = [
+    '/', '/catalog', '/about', '/contact',
+    # Kept in step with LEGAL_SLUGS in Frontend/src/content/legalContent.js.
+    '/terms', '/privacy-policy', '/refund-policy', '/shipping-policy',
+]
 
 
 class Command(BaseCommand):

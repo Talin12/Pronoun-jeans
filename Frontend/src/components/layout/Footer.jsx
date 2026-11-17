@@ -50,9 +50,10 @@ const Footer = () => {
           <h4 className="text-gray-900 dark:text-zinc-100 text-xs font-black uppercase tracking-widest">Legal</h4>
           <ul className="space-y-2.5">
             {[
-              { to: '/terms',   label: 'Terms & Conditions' },
-              { to: '/privacy', label: 'Privacy Policy'     },
-              { to: '/refund',  label: 'Refund Policy'      },
+              { to: '/terms',           label: 'Terms & Conditions' },
+              { to: '/privacy-policy',  label: 'Privacy Policy'     },
+              { to: '/refund-policy',   label: 'Refund & Cancellation' },
+              { to: '/shipping-policy', label: 'Shipping & Delivery' },
             ].map(({ to, label }) => (
               <li key={to}>
                 <Link to={to} className="text-gray-500 dark:text-zinc-400 hover:text-accent dark:hover:text-accent text-sm transition-colors">
