@@ -80,7 +80,9 @@ export const ASSUMPTIONS = {
 
   // A12 — ABOUT PAGE VARIANT. The client supplied two overlapping texts. Both are stored
   // verbatim in aboutContent.js; this switch decides which renders. See Part C.
-  aboutVariant: 'who-we-are',           // 'who-we-are' | 'about-us-long'
+  // ANSWERED 18 Nov 2026: the client asked for the long "ABOUT US | PRO-NOUN®" text.
+  // No longer an assumption. Set back to 'who-we-are' to publish the short one.
+  aboutVariant: 'about-us-long',        // 'who-we-are' | 'about-us-long'
 
   // A13 — PUBLISH DATE. The drafts say 17 Nov 2026 but were not published that day.
   legalLastUpdated: '2026-11-18',
