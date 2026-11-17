@@ -1,8 +1,9 @@
 import React from 'react';
+import { BUSINESS, waHref, WHATSAPP_ENQUIRY } from '../../content/seoContent';
 
 const WhatsAppCTA = () => (
   <a
-    href="https://wa.me/919375143100?text=Hello%20Pronoun%20Jeans!%20I%20have%20a%20query%20regarding%20your%20products."
+    href={waHref(BUSINESS.whatsapp, WHATSAPP_ENQUIRY)}
     target="_blank"
     rel="noopener noreferrer"
     aria-label="Chat on WhatsApp"

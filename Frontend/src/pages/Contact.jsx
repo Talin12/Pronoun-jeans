@@ -6,6 +6,7 @@ import { contactLocalBusinessSchema } from '../config/schema';
 import { usePrerenderReady } from '../hooks/usePrerenderReady';
 import {
   BUSINESS, ADDRESS_LINES, CONTACT_TITLE, CONTACT_DESCRIPTION, CONTACT_HEADING, CONTACT_INTRO,
+  formatPhone, telHref, waHref, WHATSAPP_ENQUIRY,
 } from '../content/seoContent';
 
 const Contact = () => {
@@ -51,7 +52,7 @@ const Contact = () => {
                 <div>
                   <p className="text-gray-900 dark:text-zinc-100 text-sm font-semibold">Address</p>
                   <a href={BUSINESS.mapUrl} target="_blank" rel="noopener noreferrer" className="text-gray-500 dark:text-zinc-400 hover:text-accent text-sm mt-0.5 leading-relaxed block transition-colors">
-                    {ADDRESS_LINES.map((line, i) => (
+                    {[BUSINESS.displayName, ...ADDRESS_LINES].map((line, i) => (
                       <React.Fragment key={line}>{i > 0 && <br />}{line}</React.Fragment>
                     ))}
                   </a>
@@ -64,11 +65,11 @@ const Contact = () => {
                 </div>
                 <div>
                   <p className="text-gray-900 dark:text-zinc-100 text-sm font-semibold">Phone</p>
-                  <a href={`tel:${BUSINESS.phoneE164}`} className="text-gray-500 dark:text-zinc-400 hover:text-accent text-sm mt-0.5 block transition-colors">
-                    {BUSINESS.phone}
+                  <a href={telHref(BUSINESS.phone)} className="text-gray-500 dark:text-zinc-400 hover:text-accent text-sm mt-0.5 block transition-colors">
+                    {formatPhone(BUSINESS.phone)}
                   </a>
-                  <a href={BUSINESS.whatsapp} target="_blank" rel="noopener noreferrer" className="text-gray-500 dark:text-zinc-400 hover:text-accent text-sm mt-0.5 block transition-colors">
-                    WhatsApp: {BUSINESS.phone}
+                  <a href={waHref(BUSINESS.whatsapp, WHATSAPP_ENQUIRY)} target="_blank" rel="noopener noreferrer" className="text-gray-500 dark:text-zinc-400 hover:text-accent text-sm mt-0.5 block transition-colors">
+                    WhatsApp: {formatPhone(BUSINESS.whatsapp)}
                   </a>
                 </div>
               </div>
@@ -89,7 +90,9 @@ const Contact = () => {
             <div className="bg-accent/5 border border-accent/20 rounded-2xl p-5">
               <p className="text-accent text-xs font-black uppercase tracking-widest mb-2">Business Hours</p>
               <p className="text-gray-700 dark:text-zinc-300 text-sm">{BUSINESS.hoursLabel}</p>
-              <p className="text-gray-500 dark:text-zinc-400 text-xs mt-1">{BUSINESS.closedLabel}</p>
+              {BUSINESS.closedLabel && (
+                <p className="text-gray-500 dark:text-zinc-400 text-xs mt-1">{BUSINESS.closedLabel}</p>
+              )}
             </div>
           </div>
 

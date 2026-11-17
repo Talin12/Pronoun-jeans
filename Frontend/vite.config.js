@@ -3,6 +3,36 @@ import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
 import { rename } from 'node:fs/promises'
 import { resolve } from 'node:path'
+import { entityGraph } from './src/content/schemaBuilders.js'
+
+// Writes the site-wide Organization + LocalBusiness JSON-LD into index.html.
+//
+// index.html is a static file and cannot import anything, so the business
+// name, address, phone and opening hours used to be typed into it a third
+// time — and the hours in it were already a different pair of numbers from
+// the ones on /contact. The markup is now built from BUSINESS at build time,
+// which leaves exactly one copy of those facts in the repo.
+const ENTITY_PLACEHOLDER = '<!--entity-jsonld-->'
+
+const entityJsonLd = () => ({
+  name: 'entity-jsonld',
+  transformIndexHtml(html) {
+    if (!html.includes(ENTITY_PLACEHOLDER)) {
+      // Failing the build is the point: silently shipping a shell with no
+      // entity markup would cost the site its Knowledge Panel and nobody
+      // would notice for weeks.
+      throw new Error(`index.html is missing ${ENTITY_PLACEHOLDER} — refusing to build a shell with no entity JSON-LD`)
+    }
+    const siteUrl = (process.env.VITE_SITE_URL || 'https://www.pronounjeans.com')
+      .trim()
+      .replace(/\/+$/, '')
+    const json = JSON.stringify(entityGraph(siteUrl), null, 2).replace(/</g, '\\u003c')
+    return html.replace(
+      ENTITY_PLACEHOLDER,
+      `<script type="application/ld+json">\n${json}\n    </script>`,
+    )
+  },
+})
 
 // Ships the built page as dist/app.html instead of dist/index.html.
 //
@@ -27,7 +57,7 @@ const shellAsAppHtml = () => {
 
 // https://vite.dev/config/
 export default defineConfig({
-  plugins: [react(), tailwindcss(), shellAsAppHtml()],
+  plugins: [react(), tailwindcss(), entityJsonLd(), shellAsAppHtml()],
   build: {
     rollupOptions: {
       output: {

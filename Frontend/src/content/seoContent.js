@@ -7,6 +7,8 @@
 // formal pants, shorts, boxers). There are no jeans in it, so nothing here
 // should say "jeans" or "denim" except the brand name itself.
 
+import { ASSUMPTIONS as A } from './assumptions.js';
+
 export const BRAND = 'Pronoun Jeans';
 
 export const SITE_TAGLINE = "Men's Bottom-wear Wholesale Manufacturer in Ahmedabad";
@@ -18,6 +20,19 @@ export const SITE_DESCRIPTION =
   "Wholesale men's cargo pants, trousers, formal pants, shorts & boxers from Ahmedabad. "
   + 'Size sets, 1-set MOQ, pan-India dispatch.';
 
+// ── When the hand-written pages last changed ────────────────────────────────
+//
+// The sitemap claims a <lastmod> for every URL. Home and /catalog can take it
+// from the newest product, but the static content pages have no row in the
+// database to read a date off, so they had none at all. These are the dates
+// the copy on those pages was actually last edited — bump the entry in the
+// same commit that changes the page, and the sitemap stays honest.
+
+export const CONTENT_UPDATED = {
+  about: '2026-11-18',
+  contact: '2026-11-18',
+};
+
 // ── The business (NAP: name, address, phone) ────────────────────────────────
 //
 // Must match the Google Business Profile character-for-character in meaning:
@@ -25,34 +40,109 @@ export const SITE_DESCRIPTION =
 // schema and the profile for local ranking. Everything that prints the
 // address — Contact page, footer, JSON-LD, server render — reads it from here.
 
-export const BUSINESS = {
-  brand: BRAND,
+// ── Brand mark ──────────────────────────────────────────────────────────────
+//
+// One place decides whether the mark is asserted as registered. Every ® in
+// body copy, headings, meta and JSON-LD goes through this, so flipping
+// ASSUMPTIONS.trademarkRegistered changes the symbol site-wide in one edit.
+
+export const mark = (n) => (A.trademarkRegistered ? `${n}®` : `${n}™`);
+
+// ── Phone ───────────────────────────────────────────────────────────────────
+//
+// The number is stored once, as ten digits, in assumptions.js. Every rendering
+// of it — display text, tel: link, WhatsApp deep link, schema.org telephone —
+// is built from those digits by one of these, so there is no second copy to
+// fall out of step and nothing to re-type when the client corrects it.
+
+/** The prefilled message on every WhatsApp link, so none of them retypes it. */
+export const WHATSAPP_ENQUIRY = 'Hello Pronoun Jeans! I have a query regarding your products.';
+
+export const formatPhone = (d) => (d ? `+91 ${d.slice(0, 5)} ${d.slice(5)}` : '');
+export const telHref     = (d) => (d ? `tel:+91${d}` : '');
+export const waHref      = (d, t) => (d ? `https://wa.me/91${d}?text=${encodeURIComponent(t)}` : '');
+/** E.164, the form schema.org wants. */
+export const phoneE164   = (d) => (d ? `+91${d}` : '');
+
+// ── Opening hours ───────────────────────────────────────────────────────────
+//
+// The human-readable label is DERIVED from the 24-hour values below, never
+// typed beside them. The displayed hours and the openingHoursSpecification in
+// the JSON-LD drifted apart once before (the page said 6:30 PM while the
+// schema said 18:30 on a day the hours had already changed); now they cannot,
+// because there is only one pair of numbers. Asserted by formatHours.test.js.
+
+const DAY_SHORT = { Mo: 'Mon', Tu: 'Tue', We: 'Wed', Th: 'Thu', Fr: 'Fri', Sa: 'Sat', Su: 'Sun' };
+const DAY_LONG  = {
+  Mo: 'Monday', Tu: 'Tuesday', We: 'Wednesday', Th: 'Thursday',
+  Fr: 'Friday', Sa: 'Saturday', Su: 'Sunday',
+};
+
+/** "11:00" → "11:00 AM"; "20:00" → "8:00 PM". */
+export function to12Hour(hhmm) {
+  const [h, m] = String(hhmm).split(':').map(Number);
+  const suffix = h >= 12 ? 'PM' : 'AM';
+  const hour = h % 12 === 0 ? 12 : h % 12;
+  return `${hour}:${String(m).padStart(2, '0')} ${suffix}`;
+}
+
+/** schema.org day names for the openingHoursSpecification. */
+export const openDayNames = (days) => days.map((d) => DAY_LONG[d]).filter(Boolean);
+
+/** "Mon – Sat: 11:00 AM – 8:00 PM", built from openDays/opensAt/closesAt. */
+export function formatHours({ openDays, opensAt, closesAt }) {
+  const named = openDays.map((d) => DAY_SHORT[d]).filter(Boolean);
+  const span = named.length > 1 ? `${named[0]} – ${named[named.length - 1]}` : named[0] || '';
+  return `${span}: ${to12Hour(opensAt)} – ${to12Hour(closesAt)}`;
+}
+
+// The facts. Everything derivable from them is derived below rather than
+// stored, so a correction is a one-line change here or in assumptions.js.
+const BUSINESS_FACTS = {
+  brand: 'PRO-NOUN',
   legalName: 'M. Sankhlecha Creation',
-  phone: '+91 93751 43100',
-  phoneE164: '+919375143100',
-  phoneSchema: '+91-93751-43100',
-  whatsapp: 'https://wa.me/919375143100',
+  displayName: A.displayName,
+  phone: A.phone,
+  whatsapp: A.whatsapp,
   email: 'pronounjeans@gmail.com',
-  streetAddress: 'C-129/130, 1st Floor, Sharanam Square, Khokhra Road, Opp. Gayatri Dairy Road',
+  addressLines: A.addressLines,
   locality: 'Ahmedabad',
   region: 'Gujarat',
   postalCode: '380008',
   country: 'IN',
-  // Pin of the Google Business Profile listing.
+  opensAt: '11:00',
+  closesAt: '20:00',
+  openDays: ['Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'],
+  closedLabel: A.closedLabel,
+  grievance: A.grievance,
+  // Pin of the Google Business Profile listing, and the link the address
+  // points at. Kept here with the rest of the NAP: the LocalBusiness JSON-LD
+  // and every address link read them from this object.
   latitude: 23.0049793,
   longitude: 72.6160975,
   mapUrl: 'https://maps.app.goo.gl/s9NX16aYkiNnHcfr6',
-  hoursLabel: 'Mon – Sat: 10:00 AM – 6:30 PM',
-  closedLabel: 'Sunday & Public Holidays: Closed',
 };
 
-/** The address as display lines (Contact page, server render). */
-export const ADDRESS_LINES = [
-  `${BRAND} (${BUSINESS.legalName})`,
-  'C-129/130, 1st Floor, Sharanam Square',
-  'Khokhra Road, Opp. Gayatri Dairy Road',
-  `${BUSINESS.locality}, ${BUSINESS.region} — ${BUSINESS.postalCode}`,
-];
+export const BUSINESS = {
+  ...BUSINESS_FACTS,
+  // Derived, never typed.
+  hoursLabel: formatHours(BUSINESS_FACTS),
+  // The street lines of the address, joined — schema.org's streetAddress is
+  // one string, and this keeps it equal to what the page prints.
+  streetAddress: BUSINESS_FACTS.addressLines.slice(0, -1).join(', '),
+  // The ledger stores the name with ® so the client's decision list reads
+  // plainly; the symbol still answers to ASSUMPTIONS.trademarkRegistered.
+  displayName: A.trademarkRegistered ? A.displayName : A.displayName.replace(/®/g, '™'),
+};
+
+/**
+ * The address as display lines (Contact page, footer, legal pages, server
+ * render). A re-export, not a second copy: ADDRESS_LINES had its own literals
+ * and the business-name line baked in as line 0, which is why the name and
+ * the address could not be changed independently. The name line is now
+ * rendered separately from BUSINESS.displayName.
+ */
+export const ADDRESS_LINES = BUSINESS.addressLines;
 
 // ── MOQ ─────────────────────────────────────────────────────────────────────
 //
@@ -192,8 +282,8 @@ export const ABOUT_VALUES = [
 
 export const CONTACT_TITLE = 'Contact Us — Wholesale Enquiry, Ahmedabad';
 export const CONTACT_DESCRIPTION =
-  'WhatsApp or call +91 93751 43100 for men\'s bottom-wear wholesale rates and catalogue. '
-  + 'Sharanam Square, Khokhra Road, Ahmedabad 380008.';
+  `WhatsApp or call ${formatPhone(BUSINESS.phone)} for men's bottom-wear wholesale rates and `
+  + 'catalogue. Sharanam Square, Khokhra Road, Ahmedabad 380008.';
 export const CONTACT_HEADING = 'Contact Our Wholesale Team';
 export const CONTACT_INTRO =
   'Reach out to discuss bulk orders, partnership inquiries, or any questions about our B2B programme.';

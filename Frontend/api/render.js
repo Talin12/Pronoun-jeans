@@ -37,7 +37,12 @@ import {
   categoryContent, faqSchema, moqLabel, piecesLabel, sizeRanges, plainText,
   withBrandSuffix, clampDescription,
   productSeoTitle, productSeoDescription, categorySeoTitle, categorySeoDescription,
+  formatPhone, telHref, waHref, WHATSAPP_ENQUIRY,
 } from '../src/content/seoContent.js';
+// The LocalBusiness builder, shared with src/config/schema.js. This file used
+// to carry its own hand-copied contactSchema(), which is how the server HTML
+// came to publish different opening hours from the React page.
+import { contactLocalBusinessSchema } from '../src/content/schemaBuilders.js';
 
 const DEFAULT_OG_IMAGE = `${SITE_URL}/og-default.jpg`;
 
@@ -376,7 +381,7 @@ function contactPage() {
       title: withBrandSuffix(CONTACT_TITLE),
       description: clampDescription(CONTACT_DESCRIPTION),
       canonical: absoluteUrl('/contact'),
-      jsonLd: [breadcrumbSchema(items), contactSchema()],
+      jsonLd: [breadcrumbSchema(items), contactLocalBusinessSchema(SITE_URL)],
     }),
     body: `
   ${crumbs(items)}
@@ -384,49 +389,14 @@ function contactPage() {
   <p>${esc(CONTACT_INTRO)}</p>
   <h2>Our Details</h2>
   <address>
-  <p><a href="${esc(BUSINESS.mapUrl)}">${ADDRESS_LINES.map(esc).join('<br />')}</a></p>
-  <p>Phone: <a href="tel:${esc(BUSINESS.phoneE164)}">${esc(BUSINESS.phone)}</a></p>
-  <p>WhatsApp: <a href="${esc(BUSINESS.whatsapp)}">${esc(BUSINESS.phone)}</a></p>
+  <p><a href="${esc(BUSINESS.mapUrl)}">${[BUSINESS.displayName, ...ADDRESS_LINES].map(esc).join('<br />')}</a></p>
+  <p>Phone: <a href="${esc(telHref(BUSINESS.phone))}">${esc(formatPhone(BUSINESS.phone))}</a></p>
+  <p>WhatsApp: <a href="${esc(waHref(BUSINESS.whatsapp, WHATSAPP_ENQUIRY))}">${esc(formatPhone(BUSINESS.whatsapp))}</a></p>
   <p>Email: <a href="mailto:${esc(BUSINESS.email)}">${esc(BUSINESS.email)}</a></p>
   </address>
   <h2>Business Hours</h2>
   <p>${esc(BUSINESS.hoursLabel)}</p>
-  <p>${esc(BUSINESS.closedLabel)}</p>`,
-  };
-}
-
-// Mirrors contactLocalBusinessSchema() in src/config/schema.js (which cannot
-// be imported here: it pulls in import.meta via config/site.js).
-function contactSchema() {
-  return {
-    '@context': 'https://schema.org',
-    '@type': 'LocalBusiness',
-    '@id': `${SITE_URL}/#localbusiness`,
-    name: BRAND,
-    legalName: BUSINESS.legalName,
-    url: `${SITE_URL}/`,
-    image: DEFAULT_OG_IMAGE,
-    telephone: BUSINESS.phoneSchema,
-    email: BUSINESS.email,
-    priceRange: '$$',
-    parentOrganization: { '@id': `${SITE_URL}/#organization` },
-    address: {
-      '@type': 'PostalAddress',
-      streetAddress: BUSINESS.streetAddress,
-      addressLocality: BUSINESS.locality,
-      addressRegion: BUSINESS.region,
-      postalCode: BUSINESS.postalCode,
-      addressCountry: BUSINESS.country,
-    },
-    geo: { '@type': 'GeoCoordinates', latitude: BUSINESS.latitude, longitude: BUSINESS.longitude },
-    areaServed: { '@type': 'Country', name: 'IN' },
-    openingHoursSpecification: [{
-      '@type': 'OpeningHoursSpecification',
-      dayOfWeek: ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'],
-      opens: '10:00',
-      closes: '18:30',
-    }],
-    hasMap: BUSINESS.mapUrl,
+  ${BUSINESS.closedLabel ? `<p>${esc(BUSINESS.closedLabel)}</p>` : ''}`,
   };
 }
 

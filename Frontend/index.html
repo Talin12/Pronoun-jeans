@@ -38,100 +38,17 @@
     <meta data-default-meta name="twitter:description" content="Wholesale men&#39;s cargo pants, trousers, formal pants, shorts &amp; boxers from Ahmedabad. Size sets, 1-set MOQ, pan-India dispatch." />
     <meta data-default-meta name="twitter:image" content="https://www.pronounjeans.com/og-default.jpg" />
 
-    <!-- Static entity markup. Not marked data-default-meta: it describes the
-         business, not the page, so it stays valid on every route and must
-         survive hydration. Page-level JSON-LD is passed to <Seo> as children. -->
-    <script type="application/ld+json">
-    {
-      "@context": "https://schema.org",
-      "@graph": [
-        {
-          "@type": "Organization",
-          "@id": "https://www.pronounjeans.com/#organization",
-          "name": "Pronoun Jeans",
-          "legalName": "M. Sankhlecha Creation",
-          "alternateName": ["PRO-NOUN", "pronounjeans"],
-          "url": "https://www.pronounjeans.com/",
-          "logo": {
-            "@type": "ImageObject",
-            "url": "https://www.pronounjeans.com/logo.png",
-            "width": 716,
-            "height": 348
-          },
-          "image": "https://www.pronounjeans.com/og-default.jpg",
-          "description": "B2B manufacturer and wholesale supplier of men's bottom-wear — cargo pants, travel-wear pants, trousers, formal pants, shorts and boxers — based in Ahmedabad, Gujarat.",
-          "email": "pronounjeans@gmail.com",
-          "telephone": "+91-93751-43100",
-          "address": {
-            "@type": "PostalAddress",
-            "streetAddress": "C-129/130, 1st Floor, Sharanam Square, Khokhra Road, Opp. Gayatri Dairy Road",
-            "addressLocality": "Ahmedabad",
-            "addressRegion": "Gujarat",
-            "postalCode": "380008",
-            "addressCountry": "IN"
-          },
-          "areaServed": {
-            "@type": "Country",
-            "name": "IN"
-          },
-          "sameAs": [
-            "https://www.instagram.com/pronounjeans/",
-            "https://www.facebook.com/pronounjeans/"
-          ],
-          "contactPoint": {
-            "@type": "ContactPoint",
-            "contactType": "sales",
-            "telephone": "+91-93751-43100",
-            "email": "pronounjeans@gmail.com",
-            "areaServed": "IN",
-            "availableLanguage": ["en", "hi", "gu"]
-          }
-        },
-        {
-          "@type": "LocalBusiness",
-          "@id": "https://www.pronounjeans.com/#localbusiness",
-          "parentOrganization": { "@id": "https://www.pronounjeans.com/#organization" },
-          "name": "Pronoun Jeans",
-          "legalName": "M. Sankhlecha Creation",
-          "url": "https://www.pronounjeans.com/",
-          "image": "https://www.pronounjeans.com/og-default.jpg",
-          "telephone": "+91-93751-43100",
-          "email": "pronounjeans@gmail.com",
-          "priceRange": "$$",
-          "geo": {
-            "@type": "GeoCoordinates",
-            "latitude": 23.0049793,
-            "longitude": 72.6160975
-          },
-          "hasMap": "https://maps.app.goo.gl/s9NX16aYkiNnHcfr6",
-          "address": {
-            "@type": "PostalAddress",
-            "streetAddress": "C-129/130, 1st Floor, Sharanam Square, Khokhra Road, Opp. Gayatri Dairy Road",
-            "addressLocality": "Ahmedabad",
-            "addressRegion": "Gujarat",
-            "postalCode": "380008",
-            "addressCountry": "IN"
-          },
-          "areaServed": {
-            "@type": "Country",
-            "name": "IN"
-          },
-          "sameAs": [
-            "https://www.instagram.com/pronounjeans/",
-            "https://www.facebook.com/pronounjeans/"
-          ],
-          "openingHoursSpecification": [
-            {
-              "@type": "OpeningHoursSpecification",
-              "dayOfWeek": ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"],
-              "opens": "10:00",
-              "closes": "18:30"
-            }
-          ]
-        }
-      ]
-    }
-    </script>
+    <!-- Static entity markup — the Organization and LocalBusiness nodes.
+
+         Not marked data-default-meta: it describes the business, not the page,
+         so it stays valid on every route and must survive hydration.
+         Page-level JSON-LD is passed to <Seo> as children.
+
+         Built from BUSINESS (src/content/seoContent.js) at build time by the
+         entity-jsonld plugin in vite.config.js and substituted for the comment
+         below. It used to be typed out here, which made this the third copy of
+         the address and phone in the repo and the second set of opening hours. -->
+    <!--entity-jsonld-->
   </head>
   <body>
     <div id="root"></div>

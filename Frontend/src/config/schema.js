@@ -9,40 +9,13 @@
 // instead of several near-duplicates.
 
 import { SITE_URL, SITE_NAME, absoluteUrl } from './site';
-import { BUSINESS } from '../content/seoContent';
+import {
+  contactLocalBusinessSchema as buildContactLocalBusinessSchema,
+  organizationId, localBusinessId,
+} from '../content/schemaBuilders';
 
-export const ORGANIZATION_ID = `${SITE_URL}/#organization`;
-export const LOCAL_BUSINESS_ID = `${SITE_URL}/#localbusiness`;
-
-// Same NAP as the Google Business Profile — see BUSINESS in seoContent.js.
-const POSTAL_ADDRESS = {
-  '@type': 'PostalAddress',
-  streetAddress: BUSINESS.streetAddress,
-  addressLocality: BUSINESS.locality,
-  addressRegion: BUSINESS.region,
-  postalCode: BUSINESS.postalCode,
-  addressCountry: BUSINESS.country,
-};
-
-// Read off the company's own Google Business Profile pin — the same place the
-// address links to from the footer and the contact page.
-const GEO = {
-  '@type': 'GeoCoordinates',
-  latitude: BUSINESS.latitude,
-  longitude: BUSINESS.longitude,
-};
-
-// Mon–Sat 10:00–18:30, matching the hours shown on /contact. Sunday is absent
-// rather than listed as closed: an omitted day already means closed, and a
-// second entry would be one more thing to keep in step with the page copy.
-const OPENING_HOURS = [
-  {
-    '@type': 'OpeningHoursSpecification',
-    dayOfWeek: ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'],
-    opens: '10:00',
-    closes: '18:30',
-  },
-];
+export const ORGANIZATION_ID = organizationId(SITE_URL);
+export const LOCAL_BUSINESS_ID = localBusinessId(SITE_URL);
 
 /** Absolute, deduped, http(s)-only image list. */
 function imageList(...candidates) {
@@ -242,24 +215,12 @@ function productVideoSchema(product) {
     });
 }
 
-/** /contact — the same LocalBusiness entity as index.html, enriched with geo. */
+/**
+ * /contact — the same LocalBusiness entity as index.html.
+ *
+ * A thin wrapper: the builder lives in src/content/schemaBuilders.js so that
+ * api/render.js, which cannot import this file, emits the identical object.
+ */
 export function contactLocalBusinessSchema() {
-  return {
-    '@context': 'https://schema.org',
-    '@type': 'LocalBusiness',
-    '@id': LOCAL_BUSINESS_ID,
-    name: SITE_NAME,
-    legalName: BUSINESS.legalName,
-    url: `${SITE_URL}/`,
-    image: `${SITE_URL}/og-default.jpg`,
-    telephone: BUSINESS.phoneSchema,
-    email: BUSINESS.email,
-    priceRange: '$$',
-    parentOrganization: { '@id': ORGANIZATION_ID },
-    address: POSTAL_ADDRESS,
-    geo: GEO,
-    areaServed: { '@type': 'Country', name: 'IN' },
-    openingHoursSpecification: OPENING_HOURS,
-    hasMap: BUSINESS.mapUrl,
-  };
+  return buildContactLocalBusinessSchema(SITE_URL);
 }
