@@ -54,7 +54,12 @@ const ColorSwatch = ({ hex, name }) => (
   </span>
 );
 
-const StockBadge = ({ qty }) => {
+// `available === false` is the admin having switched this colour or size off
+// -- usually because it sold out in the shop, which the stock count does not
+// know about. To a buyer it is simply out of stock, so it reads the same.
+const StockBadge = ({ qty, available = true }) => {
+  if (!available)
+    return <span className="text-[10px] font-bold text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-500/10 border border-red-200 dark:border-red-500/20 px-1.5 py-0.5 rounded-full">Out of Stock</span>;
   if (qty === 0 || qty == null)
     return <span className="text-[10px] font-bold text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-500/10 border border-red-200 dark:border-red-500/20 px-1.5 py-0.5 rounded-full">Out of Stock</span>;
   if (qty <= 10)
@@ -533,7 +538,10 @@ const ProductDetail = () => {
                     <BadgeCheck className="w-3.5 h-3.5" /> MOQ: {moqLabel(product)}
                   </div>
                   {(() => {
-                    const total = product.variations.reduce((s, v) => s + (v.stock_quantity ?? 0), 0);
+                    // Switched-off variants do not count towards the
+                    // product's headline stock: they cannot be ordered.
+                    const total = product.variations.reduce(
+                      (s, v) => s + (v.is_available === false ? 0 : (v.stock_quantity ?? 0)), 0);
                     return <StockBadge qty={total} />;
                   })()}
                 </div>
@@ -600,7 +608,7 @@ const ProductDetail = () => {
                               <span className="text-gray-400 dark:text-zinc-600">/</span>
                               <ColorSwatch hex={v.color_hex || '#CCCCCC'} name={v.color_name || v.color} />
                             </div>
-                            <div className="mt-1"><StockBadge qty={v.stock_quantity} /></div>
+                            <div className="mt-1"><StockBadge qty={v.stock_quantity} available={v.is_available !== false} /></div>
                           </td>
                           {/* break-all: forces long SKU slugs to wrap within the capped column width */}
                           <td className="px-4 py-3 text-gray-400 dark:text-zinc-500 font-mono text-xs break-all max-w-[120px]">{v.sku}</td>
@@ -612,7 +620,7 @@ const ProductDetail = () => {
                               value={quantities[v.id] || ''}
                               onChange={e => handleQtyChange(v.id, e.target.value)}
                               placeholder="0"
-                              disabled={!v.stock_quantity}
+                              disabled={!v.stock_quantity || v.is_available === false}
                               className="w-14 bg-gray-50 dark:bg-zinc-800 border border-gray-200 dark:border-white/10 text-gray-900 dark:text-zinc-100 rounded-lg px-2 py-1.5 text-sm focus:outline-none focus:border-accent transition-colors disabled:opacity-40 disabled:cursor-not-allowed" />
                           </td>
                           <TotalCell v={v} qty={quantities[v.id] || 0} />

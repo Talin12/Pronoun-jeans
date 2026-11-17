@@ -469,6 +469,23 @@ class ProductVariation(models.Model):
     mrp_per_piece   = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
 
     stock_quantity  = models.PositiveIntegerField(default=0)
+
+    # The counter above tracks what the warehouse shipped against online
+    # orders. It does not know about the shop: a colourway can sell out over
+    # the counter on a Saturday while the column still reads 40. This switch
+    # is how that gets said -- the admin turns the row off and buyers stop
+    # being able to order it, without the count being falsified to zero and
+    # without the variant being deleted, which would take its SKU, its
+    # photos and its order history with it. Turning it back on restores the
+    # row exactly as it was.
+    is_available    = models.BooleanField(
+        default=True,
+        verbose_name='Available to order',
+        help_text='Turn off when this colour or size is finished, including '
+                  'when it sold out in the shop. The row stays on the product '
+                  'page marked out of stock and the stock count is untouched.',
+    )
+
     image           = CompressedImageField(upload_to='variations/', null=True, blank=True)
 
     class Meta:
@@ -535,6 +552,17 @@ class ProductVariation(models.Model):
         self._original_size_breakdown_id = self.size_breakdown_id
 
     # ── Convenience properties used by serializer ─────────────────────────────
+
+    @property
+    def sellable(self):
+        """
+        Orderable right now: switched on and with stock recorded against it.
+
+        Everything that gates a purchase asks this rather than reading
+        stock_quantity, so switching a variant off and running it down to
+        zero behave identically everywhere.
+        """
+        return self.is_available and self.stock_quantity > 0
 
     @property
     def size(self):

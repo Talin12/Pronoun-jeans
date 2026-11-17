@@ -214,7 +214,7 @@ class ProductVariationSerializer(serializers.ModelSerializer):
             'id', 'product', 'size_set', 'size_name', 'size_breakdown',
             'color_palette', 'color', 'color_name', 'sku',
             'per_piece_price', 'mrp_per_piece', 'b2b_price', 'mrp',
-            'stock_quantity', 'image', 'image_url',
+            'stock_quantity', 'is_available', 'image', 'image_url',
         ]
         extra_kwargs = {
             # Set totals are derived — per-piece price × pieces in the breakdown,

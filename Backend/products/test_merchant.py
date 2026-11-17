@@ -605,3 +605,105 @@ class MerchantReadinessFixTargetsTests(ReadinessFixture, TestCase):
             color_palette=None, color='', size_set=None, size_breakdown=None)
         self.assertEqual(self.fix_for('color')['field'], 'color_palette')
         self.assertEqual(self.fix_for('size')['field'], 'size_set')
+
+
+class VariantAvailabilityTests(ReadinessFixture, TestCase):
+    """
+    The per-variant on/off switch, and what it changes.
+
+    It exists because the business is not only online: a colour sells out
+    over the counter while stock_quantity still reads 40. Everything that
+    gates a purchase or a listing therefore asks `sellable`, not the count,
+    so switching a variant off and running it down to zero behave the same
+    way everywhere.
+    """
+
+    def test_a_switched_off_variant_is_not_sellable(self):
+        self.assertTrue(self.variation.sellable)
+        self.variation.is_available = False
+        self.variation.save(update_fields=['is_available'])
+        self.assertFalse(self.variation.sellable)
+        # The count is deliberately untouched: it tracks something else.
+        self.assertEqual(self.variation.stock_quantity, 12)
+
+    def test_a_variant_at_zero_is_not_sellable_even_when_switched_on(self):
+        self.variation.stock_quantity = 0
+        self.variation.save(update_fields=['stock_quantity'])
+        self.assertTrue(self.variation.is_available)
+        self.assertFalse(self.variation.sellable)
+
+    def test_variants_are_on_sale_by_default(self):
+        """The column arrives on a live catalogue, so the default has to be
+        the state every existing row is already in."""
+        self.assertTrue(
+            ProductVariation.objects.get(pk=self.variation.pk).is_available)
+
+    @override_settings(**MERCHANT_ON)
+    def test_switching_every_variant_off_publishes_out_of_stock(self):
+        self.variation.is_available = False
+        self.variation.save(update_fields=['is_available'])
+        self.product.refresh_from_db()
+        payload = merchant.build_payload(self.product)
+        self.assertEqual(
+            payload['productAttributes']['availability'], 'OUT_OF_STOCK')
+
+    @override_settings(**MERCHANT_ON)
+    def test_a_switched_on_variant_still_publishes_in_stock(self):
+        """One colourway going off sale must not take the listing with it."""
+        second = ProductVariation.objects.create(
+            product=self.product, size_set=self.size_set,
+            size_breakdown=self.breakdown,
+            color_palette=Color.objects.create(name='NAVY', hex_code='#000080'),
+            sku='PJ1891_NAVY_L3XL',
+            per_piece_price=Decimal('645.00'), mrp_per_piece=Decimal('1299.00'),
+            stock_quantity=4,
+        )
+        self.variation.is_available = False
+        self.variation.save(update_fields=['is_available'])
+        self.product.refresh_from_db()
+
+        payload = merchant.build_payload(self.product)
+        self.assertEqual(
+            payload['productAttributes']['availability'], 'IN_STOCK')
+        # ...and the listing represents the colourway that can be bought.
+        self.assertEqual(payload['productAttributes']['mpn'], second.sku)
+
+    def test_the_panel_says_switch_one_back_on_rather_than_add_stock(self):
+        """Telling someone to add stock to a row they switched off on purpose
+        is the checklist being wrong at them."""
+        self.variation.is_available = False
+        self.variation.save(update_fields=['is_available'])
+
+        labels = {c['label'] for c in self.report()['checks']}
+        self.assertIn('Switch a variant back on', labels)
+        self.assertNotIn('Add stock', labels)
+
+    def test_that_finding_points_at_the_row_switch(self):
+        self.variation.is_available = False
+        self.variation.save(update_fields=['is_available'])
+
+        fix = next(c['fix'] for c in self.report()['checks']
+                   if c['label'] == 'Switch a variant back on')
+        self.assertEqual(fix['step'], 'variants')
+        self.assertEqual(fix['field'], 'is_available')
+        self.assertEqual(fix['variation'], self.variation.pk)
+
+    def test_a_mix_of_switched_off_and_zero_still_asks_for_stock(self):
+        olive = ProductVariation.objects.create(
+            product=self.product, size_set=self.size_set,
+            size_breakdown=self.breakdown,
+            color_palette=Color.objects.create(name='OLIVE', hex_code='#556B2F'),
+            sku='PJ1891_OLIVE_L3XL',
+            per_piece_price=Decimal('645.00'), mrp_per_piece=Decimal('1299.00'),
+            stock_quantity=0,
+        )
+        self.variation.is_available = False
+        self.variation.save(update_fields=['is_available'])
+
+        checks = self.report()['checks']
+        self.assertIn('Add stock', {c['label'] for c in checks})
+
+        # And it opens the row that is still on sale: typing a quantity into
+        # the switched-off one would change nothing.
+        fix = next(c['fix'] for c in checks if c['label'] == 'Add stock')
+        self.assertEqual(fix['variation'], olive.pk)

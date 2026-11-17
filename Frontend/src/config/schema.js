@@ -148,7 +148,10 @@ export function categoryItemListSchema({ name, slug, products = [] }) {
  */
 export function productSchema(product) {
   const variations = product.variations ?? [];
-  const inStock = variations.reduce((sum, v) => sum + (v.stock_quantity ?? 0), 0) > 0;
+  // Matches what the product page will let a buyer order: a variant switched
+  // off by the admin is out of stock however many the count claims.
+  const inStock = variations.some(
+    v => v.is_available !== false && (v.stock_quantity ?? 0) > 0);
 
   const images = imageList(
     product.image,

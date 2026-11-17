@@ -168,22 +168,41 @@ class CartItemUpdateView(APIView):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        cart, _ = Cart.objects.get_or_create(user=request.user)
+        # Every row is checked before any of them is written. The bulk order
+        # table posts the whole matrix in one request and gets back a single
+        # error, so applying the rows that passed and refusing the rest would
+        # leave a cart the buyer never agreed to -- and the atomic block does
+        # not help here, because returning a 400 commits, only a raised
+        # exception rolls back.
+        wanted = []
         for item in items:
             qty = int(item.get('quantity', 0))
-            if qty > 0:
-                try:
-                    variation = ProductVariation.objects.get(pk=item.get('variation_id'), product=product)
-                    if qty > variation.stock_quantity:
-                        return Response(
-                            {'error': f'Only {variation.stock_quantity} sets available for {variation.sku}.'},
-                            status=status.HTTP_400_BAD_REQUEST,
-                        )
-                    CartItem.objects.update_or_create(
-                        cart=cart, variation=variation, defaults={'quantity': qty}
-                    )
-                except ProductVariation.DoesNotExist:
-                    continue
+            if qty <= 0:
+                continue
+            try:
+                variation = ProductVariation.objects.get(
+                    pk=item.get('variation_id'), product=product)
+            except ProductVariation.DoesNotExist:
+                continue
+            # Switched off by the admin -- sold out over the counter, most
+            # often, which the stock column does not know about.
+            if not variation.is_available:
+                return Response(
+                    {'error': f'{variation.sku} is not available right now.'},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            if qty > variation.stock_quantity:
+                return Response(
+                    {'error': f'Only {variation.stock_quantity} sets available for {variation.sku}.'},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            wanted.append((variation, qty))
+
+        cart, _ = Cart.objects.get_or_create(user=request.user)
+        for variation, qty in wanted:
+            CartItem.objects.update_or_create(
+                cart=cart, variation=variation, defaults={'quantity': qty}
+            )
 
         cart = _fetch_cart(request.user, pk=cart.pk)
         return Response(CartSerializer(cart, context={'request': request}).data, status=status.HTTP_200_OK)
@@ -207,6 +226,11 @@ class CartItemDetailView(APIView):
         if quantity <= 0:
             item.delete()
         else:
+            if not item.variation.is_available:
+                return Response(
+                    {'error': f'{item.variation.sku} is not available right now.'},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
             if quantity > item.variation.stock_quantity:
                 return Response(
                     {'error': f'Only {item.variation.stock_quantity} sets available for {item.variation.sku}.'},
@@ -400,6 +424,13 @@ class DirectUPICheckoutView(APIView):
         }
         for var_id, qty in qty_map.items():
             lv = locked_vars[var_id]
+            # Checked again here, under the row lock, because a variant can be
+            # switched off between filling the cart and paying for it.
+            if not lv.is_available:
+                return Response(
+                    {'error': f'{lv.sku} is no longer available.'},
+                    status=status.HTTP_409_CONFLICT,
+                )
             if qty > lv.stock_quantity:
                 return Response(
                     {'error': f'Only {lv.stock_quantity} sets available for {lv.sku}.'},

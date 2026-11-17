@@ -66,7 +66,7 @@ class ProductVariationSerializer(serializers.ModelSerializer):
             'pieces',
             'margin_percentage',
             'set_breakdown',
-            'stock_quantity', 'image', 'gallery_images', 'videos',
+            'stock_quantity', 'is_available', 'image', 'gallery_images', 'videos',
         ]
 
     def get_videos(self, obj):

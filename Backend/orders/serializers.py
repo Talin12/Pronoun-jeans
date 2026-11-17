@@ -18,7 +18,8 @@ class ProductVariationBriefSerializer(serializers.ModelSerializer):
         fields = [
             'id', 'sku', 'size', 'set_breakdown',
             'color', 'color_name', 'color_hex',
-            'b2b_price', 'stock_quantity', 'product_name', 'moq',
+            'b2b_price', 'stock_quantity', 'is_available',
+            'product_name', 'moq',
             'display_image',
         ]
 

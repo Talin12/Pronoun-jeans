@@ -203,8 +203,10 @@ def _representative_variation(product):
 
     The hand-built listings are one item per product carrying a single colour
     and size, not one item per variant, so this mirrors that. Prefers a
-    variation that is actually priced and in stock, because an item published
-    as out of stock earns nothing.
+    variation that is actually priced and sellable, because an item published
+    as out of stock earns nothing -- and `sellable` rather than the stock
+    count, so a colourway switched off after selling out in the shop is not
+    the one that represents the product.
     """
     variations = list(product.variations.all())
     if not variations:
@@ -212,7 +214,7 @@ def _representative_variation(product):
 
     def rank(v):
         return (
-            0 if (v.stock_quantity or 0) > 0 else 1,
+            0 if v.sellable else 1,
             0 if (v.mrp_per_piece or v.mrp) else 1,
             v.pk,
         )
@@ -433,14 +435,31 @@ def readiness(product):
                 _fix('variants', 'size_set', variation),
             ))
 
-    if variations and sum((v.stock_quantity or 0) for v in variations) <= 0:
-        checks.append(_check(
-            'warning', 'stock_quantity', 'Add stock',
-            'Every variation is at zero, so this publishes as out of stock '
-            'and will not be shown to shoppers. This opens the first row; '
-            'set the quantity on whichever colours you actually hold.',
-            _fix('variants', 'stock_quantity', variation),
-        ))
+    if variations and not any(v.sellable for v in variations):
+        # Two ways to end up here, and they are fixed by different actions, so
+        # the panel should not tell someone to add stock to a row they
+        # deliberately switched off.
+        if not any(v.is_available for v in variations):
+            checks.append(_check(
+                'warning', 'stock_quantity', 'Switch a variant back on',
+                'Every variant is switched off, so this publishes as out of '
+                'stock and will not be shown to shoppers. Switch one back on '
+                'when that colour or size is available again.',
+                _fix('variants', 'is_available', variation),
+            ))
+        else:
+            # Point at a row that is switched on and empty. The representative
+            # variation may well be one that was deliberately switched off,
+            # and typing a quantity into that one changes nothing.
+            target = next((v for v in variations if v.is_available), variation)
+            checks.append(_check(
+                'warning', 'stock_quantity', 'Add stock',
+                'Every variant is switched off or at zero, so this publishes '
+                'as out of stock and will not be shown to shoppers. This '
+                'opens the first row still on sale; set the quantity on '
+                'whichever colours you actually hold.',
+                _fix('variants', 'stock_quantity', target),
+            ))
 
     images = [_image_url(product.image)]
     images += [_image_url(g.image) for g in product.gallery_images.all()]
@@ -527,7 +546,7 @@ def build_payload(product):
             'listing it on Google Merchant.'
         )
 
-    in_stock = sum((v.stock_quantity or 0) for v in product.variations.all()) > 0
+    in_stock = any(v.sellable for v in product.variations.all())
 
     images = [_image_url(product.image)]
     images += [_image_url(g.image) for g in product.gallery_images.all()]

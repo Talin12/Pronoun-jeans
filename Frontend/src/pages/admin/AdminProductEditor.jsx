@@ -289,8 +289,10 @@ export default function AdminProductEditor() {
   const goFix = useCallback((fix) => {
     if (!fix) return;
     if (fix.step) setStep(fix.step);
-    if (fix.variation) setVariantFocus({ id: fix.variation, at: Date.now() });
-    revealField(fix.field);
+    if (fix.variation) {
+      setVariantFocus({ id: fix.variation, field: fix.field, at: Date.now() });
+    }
+    revealField(fix.field, { variation: fix.variation });
   }, []);
 
   // ?fix=next — the products list links straight here from its "3 missing"
@@ -658,6 +660,58 @@ const Row = ({ label, value }) => (
   </div>
 );
 
+/**
+ * The per-variant on/off switch.
+ *
+ * The business is not only online. A colour can sell out over the counter on
+ * a Saturday while the stock column still reads 40, and the honest move then
+ * is to stop taking orders for it -- not to type a zero into a count that
+ * tracks something else, and not to delete the variant, which would take its
+ * SKU, its photos and its order history with it.
+ *
+ * So it saves on the spot, from the row, without opening the edit panel:
+ * turning a colourway off is a correction made in a hurry, usually on a
+ * phone, and anything that needs a form and a Save button will not get done.
+ * The row stays where it is, marked, and the switch goes back on when the
+ * stock does.
+ */
+function AvailabilityToggle({ variation, onSaved }) {
+  const [busy, setBusy] = useState(false);
+  const [err, setErr]   = useState(false);
+  const on = variation.is_available !== false;
+
+  const flip = () => {
+    setBusy(true);
+    setErr(false);
+    updateVariation(variation.id, { is_available: !on })
+      .then(onSaved)
+      .catch(() => setErr(true))
+      .finally(() => setBusy(false));
+  };
+
+  return (
+    <button type="button" onClick={flip} disabled={busy}
+      data-fix="is_available" data-fix-variation={variation.id}
+      role="switch" aria-checked={on}
+      aria-label={`${on ? 'Stop' : 'Start'} taking orders for ${variation.sku}`}
+      title={on
+        ? 'Taking orders. Turn off when this colour or size is finished.'
+        : 'Not taking orders. Turn on when it is back in stock.'}
+      className={`inline-flex items-center gap-1.5 shrink-0 pl-1.5 pr-2.5 py-1 rounded-full border text-[11px] font-bold transition disabled:opacity-50 ${
+        err
+          ? 'bg-red-50 dark:bg-red-500/10 text-red-700 dark:text-red-400 border-red-200 dark:border-red-500/20'
+          : on
+            ? 'bg-green-50 dark:bg-green-500/10 text-green-700 dark:text-green-400 border-green-200 dark:border-green-500/20'
+            : 'bg-gray-100 dark:bg-white/5 text-gray-500 dark:text-zinc-400 border-gray-200 dark:border-white/10'
+      }`}>
+      <span className={`relative w-6 h-3.5 rounded-full transition-colors ${on ? 'bg-green-500' : 'bg-gray-300 dark:bg-zinc-600'}`}>
+        <span className={`absolute top-0.5 w-2.5 h-2.5 rounded-full bg-white shadow transition-all ${on ? 'left-3' : 'left-0.5'}`} />
+      </span>
+      {err ? 'Failed' : busy ? '…' : on ? 'On sale' : 'Off'}
+    </button>
+  );
+}
+
 // ── Variants editor ──────────────────────────────────────────────────────────
 function VariantsEditor({ productId, productName, productCode, colors, sizeSets, categoryId, variations, onChange, focus, onColorsChange, onSizeSetsChange }) {
   const [adding, setAdding]   = useState(false);
@@ -683,7 +737,11 @@ function VariantsEditor({ productId, productName, productCode, colors, sizeSets,
   // panel, so arriving from "Take me there" has to open it. Set, not toggled:
   // the request is "show me this row", which is true however the panels stood.
   useEffect(() => {
-    if (focus?.id) setPanel({ id: focus.id, kind: 'edit' });
+    // The availability switch is on the row, not in the form, so opening the
+    // panel for it would bury the thing being pointed at.
+    if (focus?.id && focus.field !== 'is_available') {
+      setPanel({ id: focus.id, kind: 'edit' });
+    }
   }, [focus]);
 
   // The server returns the saved row, including the recalculated set total and
@@ -695,6 +753,11 @@ function VariantsEditor({ productId, productName, productCode, colors, sizeSets,
     setNote(`Saved ${saved.sku}`);
   };
 
+  // The availability switch saves on its own and leaves the panels alone --
+  // flipping it is a one-click correction, not an edit being committed.
+  const replaceQuietly = (saved) =>
+    onChange(variations.map(v => (v.id === saved.id ? saved : v)));
+
   return (
     <div>
       {variations.length > 0 && (
@@ -705,13 +768,21 @@ function VariantsEditor({ productId, productName, productCode, colors, sizeSets,
                 <span className="w-8 h-8 rounded-full border border-gray-200 dark:border-white/10 shrink-0"
                       style={{ background: colors.find(c => c.name === (v.color_name || v.color))?.hex_code || '#e5e7eb' }} />
                 <div className="flex-1 min-w-0">
-                  <p className="font-bold text-gray-900 dark:text-zinc-100 truncate">{v.sku}</p>
+                  <p className="font-bold text-gray-900 dark:text-zinc-100 truncate">
+                    {v.sku}
+                    {v.is_available === false && (
+                      <span className="ml-2 align-middle text-[10px] font-bold uppercase tracking-wide text-gray-400 dark:text-zinc-500 border border-gray-200 dark:border-white/10 rounded-full px-1.5 py-0.5">
+                        off sale
+                      </span>
+                    )}
+                  </p>
                   {/* The meta line wraps on a phone rather than being clipped. */}
                   <p className="text-xs text-gray-500 dark:text-zinc-400 sm:truncate">
                     {(v.color_name || v.color || 'No colour')} · {v.size_name || 'No size'} · ₹{v.per_piece_price ?? '—'}/pc · set ₹{v.b2b_price ?? '—'} · stock {v.stock_quantity}
                   </p>
                 </div>
                 <div className="flex items-center gap-1 ml-auto">
+                  <AvailabilityToggle variation={v} onSaved={replaceQuietly} />
                   <button onClick={() => { setNote(''); openPanel(v.id, 'edit'); }}
                     className="inline-flex items-center gap-1 px-2 py-2 text-xs font-semibold text-accent hover:underline">
                     <Pencil size={14} /> Edit {panel?.id === v.id && panel.kind === 'edit' ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
@@ -875,7 +946,7 @@ function VariantForm({ productId, productCode, colors, sizeSets, variation = nul
     <div className={editing ? '' : 'border border-gray-200 dark:border-white/10 rounded-2xl p-4 bg-gray-50/50 dark:bg-white/[0.02]'}>
       {err && <p className="text-sm text-red-600 dark:text-red-400 mb-3">{err}</p>}
       <div className="grid sm:grid-cols-3 gap-3">
-        <div data-fix="sku">
+        <div data-fix="sku" data-fix-variation={variation?.id}>
           <label className={labelCls}>SKU</label>
           {/* Generated by the server from code, colour, size set and pieces.
               Typing here overrides it for this one variant. */}
@@ -890,7 +961,7 @@ function VariantForm({ productId, productCode, colors, sizeSets, variation = nul
             </p>
           )}
         </div>
-        <div data-fix="size_set">
+        <div data-fix="size_set" data-fix-variation={variation?.id}>
           <div className="flex items-center justify-between">
             <label className={labelCls}>Size set</label>
             <button type="button" onClick={() => setSizeModal(true)} className="text-xs font-bold text-accent hover:underline mb-1.5">+ New</button>
@@ -907,7 +978,7 @@ function VariantForm({ productId, productCode, colors, sizeSets, variation = nul
             {breakdowns.map(b => <option key={b.id} value={b.id}>{b.label} ({b.pieces} pcs)</option>)}
           </select>
         </div>
-        <div data-fix="color_palette">
+        <div data-fix="color_palette" data-fix-variation={variation?.id}>
           <div className="flex items-center justify-between">
             <label className={labelCls}>Colour</label>
             <button type="button" onClick={() => setColorModal(true)} className="text-xs font-bold text-accent hover:underline mb-1.5">+ New</button>
@@ -917,15 +988,15 @@ function VariantForm({ productId, productCode, colors, sizeSets, variation = nul
             {colors.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
           </select>
         </div>
-        <div data-fix="per_piece_price">
+        <div data-fix="per_piece_price" data-fix-variation={variation?.id}>
           <label className={labelCls}>Per-piece price ₹</label>
           <input type="number" step="0.01" className={inputCls} value={v.per_piece_price} onChange={e => set('per_piece_price', e.target.value)} />
         </div>
-        <div data-fix="mrp_per_piece">
+        <div data-fix="mrp_per_piece" data-fix-variation={variation?.id}>
           <label className={labelCls}>MRP per piece ₹</label>
           <input type="number" step="0.01" className={inputCls} value={v.mrp_per_piece} onChange={e => set('mrp_per_piece', e.target.value)} />
         </div>
-        <div data-fix="stock_quantity">
+        <div data-fix="stock_quantity" data-fix-variation={variation?.id}>
           <label className={labelCls}>Stock</label>
           <input type="number" min="0" className={inputCls} value={v.stock_quantity} onChange={e => set('stock_quantity', e.target.value)} />
         </div>

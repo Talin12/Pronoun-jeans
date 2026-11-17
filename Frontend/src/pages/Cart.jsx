@@ -1053,6 +1053,14 @@ const Cart = () => {
                           <button onClick={() => handleQtyChange(item.id, 0)} className="text-gray-400 hover:text-red-500 ml-2"><Trash2 className="w-4 h-4" /></button>
                         </div>
                         <p className="text-gray-400 text-xs font-mono mt-0.5">{item.variation?.sku}</p>
+                        {/* Checkout refuses these. Saying so here means the
+                            buyer finds out while they can still change it,
+                            rather than at the payment step. */}
+                        {item.variation?.is_available === false && (
+                          <p className="mt-1 inline-flex items-center gap-1 text-[11px] font-bold text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-500/10 border border-red-200 dark:border-red-500/20 rounded-full px-2 py-0.5">
+                            No longer available — remove to check out
+                          </p>
+                        )}
                         <div className="flex items-center gap-2 mt-1 text-xs text-gray-500">
                           <span>{item.variation?.size}</span><span>/</span>
                           <ColorSwatch hex={item.variation?.color_hex || '#CCCCCC'} name={item.variation?.color_name || item.variation?.color || '—'} />

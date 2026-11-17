@@ -17,12 +17,20 @@ const FLASH_MS = 1800;
 const MAX_FRAMES = 60;      // ~1s at 60fps, enough for a step change plus a panel.
 const FOCUSABLE = 'input, select, textarea, button, [tabindex]';
 
-export function revealField(field, { onMissing } = {}) {
+export function revealField(field, { variation, onMissing } = {}) {
   if (!field) return;
+
+  // Variant fields exist once per row -- every row has an availability
+  // switch, and the form fields exist on whichever panel is open. So a
+  // finding about a variant is matched on the row id as well as the field,
+  // or it would land on whichever row happens to come first in the DOM.
+  const selector = variation
+    ? `[data-fix="${field}"][data-fix-variation="${variation}"]`
+    : `[data-fix="${field}"]`;
 
   let frames = 0;
   const tick = () => {
-    const el = document.querySelector(`[data-fix="${field}"]`);
+    const el = document.querySelector(selector);
     if (!el) {
       if (frames++ < MAX_FRAMES) requestAnimationFrame(tick);
       else onMissing?.(field);
