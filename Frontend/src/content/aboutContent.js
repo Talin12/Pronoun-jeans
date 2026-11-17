@@ -28,6 +28,48 @@ import { BUSINESS, mark } from './seoContent.js';
 
 const PRO_NOUN = mark(BUSINESS.brand);
 
+// ── What We Stand For ───────────────────────────────────────────────────────
+//
+// The client's three value cards, defined once and shared by both variants so
+// the wording cannot diverge between them.
+
+const STAND_FOR_CARDS = [
+  {
+    id: 'comfort-first',
+    title: 'Comfort First',
+    body: 'Every garment is designed with comfort, practical fits and freedom of movement in '
+      + 'mind. We focus on quality fabrics, comfortable fits and everyday wearability, so your '
+      + 'customers feel good in every pair.',
+  },
+  {
+    id: 'quality-craftsmanship',
+    title: 'Quality Craftsmanship',
+    body: 'From fabric selection to stitching and finishing, we pay attention to the details '
+      + 'that matter. Our focus is on dependable quality, thoughtful designs and comfortable '
+      + "men's bottom wear made for everyday use.",
+  },
+  {
+    id: 'honest-pricing',
+    title: 'Honest Pricing',
+    body: 'Good quality should offer great value. We focus on delivering well-made, stylish '
+      + "and comfortable men's bottom wear at competitive prices, helping retailers offer "
+      + 'better products to their customers.',
+  },
+];
+
+// ── The facts a wholesale buyer checks first ───────────────────────────────
+//
+// Read from the ledger and BUSINESS rather than written as copy, so they
+// cannot drift from the catalogue or contradict the Terms. Nothing here is a
+// claim the client has not already made elsewhere on the site.
+
+export const aboutHighlights = () => [
+  { icon: 'package', label: 'Minimum order', value: '1 complete size set per design' },
+  { icon: 'ruler', label: 'Size sets', value: A.sizeSets.join(' · ') },
+  { icon: 'layers', label: 'Waist sizes', value: A.waistRange },
+  { icon: 'truck', label: 'Dispatch', value: `${BUSINESS.locality}, across India` },
+];
+
 // ── Variant: who-we-are (the default) ──────────────────────────────────────
 
 const WHO_WE_ARE = {
@@ -82,26 +124,7 @@ const WHO_WE_ARE = {
     {
       id: 'what-we-stand-for',
       heading: 'What We Stand For',
-      cards: [
-        {
-          title: 'Comfort First',
-          body: 'Every garment is designed with comfort, practical fits and freedom of movement in '
-            + 'mind. We focus on quality fabrics, comfortable fits and everyday wearability, so your '
-            + 'customers feel good in every pair.',
-        },
-        {
-          title: 'Quality Craftsmanship',
-          body: 'From fabric selection to stitching and finishing, we pay attention to the details '
-            + 'that matter. Our focus is on dependable quality, thoughtful designs and comfortable '
-            + "men's bottom wear made for everyday use.",
-        },
-        {
-          title: 'Honest Pricing',
-          body: 'Good quality should offer great value. We focus on delivering well-made, stylish '
-            + "and comfortable men's bottom wear at competitive prices, helping retailers offer "
-            + 'better products to their customers.',
-        },
-      ],
+      cards: STAND_FOR_CARDS,
     },
     {
       id: 'our-commitment',
@@ -179,6 +202,15 @@ const ABOUT_US_LONG = {
         'We serve retailers, multi-brand outlets, distributors and online sellers across India, '
         + 'with dispatch from Ahmedabad through trusted logistics partners.',
       ],
+    },
+    {
+      // The client's "What We Stand For" block, the same three cards the
+      // short variant carries. Asked for on 18 Nov 2026 to run with the long
+      // text as well, so both variants hold it and the wording is identical
+      // in each — it is defined once, below, and shared.
+      id: 'what-we-stand-for',
+      heading: 'What We Stand For',
+      cards: STAND_FOR_CARDS,
     },
     {
       id: 'our-philosophy',

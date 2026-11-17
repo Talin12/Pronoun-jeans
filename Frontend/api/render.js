@@ -38,7 +38,7 @@ import {
   productSeoTitle, productSeoDescription, categorySeoTitle, categorySeoDescription,
   formatPhone, telHref, waHref, WHATSAPP_ENQUIRY, mark, grievanceContact,
 } from '../src/content/seoContent.js';
-import { aboutContent, aboutAddressLines } from '../src/content/aboutContent.js';
+import { aboutContent, aboutAddressLines, aboutHighlights } from '../src/content/aboutContent.js';
 import { legalPage, contactValue, LEGAL_SLUGS } from '../src/content/legalContent.js';
 // The LocalBusiness builder, shared with src/config/schema.js. This file used
 // to carry its own hand-copied contactSchema(), which is how the server HTML
@@ -370,6 +370,7 @@ function aboutPage() {
   <h1>${esc(h1)}</h1>
   <p>${esc(tagline)}</p>
   ${paragraphs(intro ?? [])}
+  <dl>${aboutHighlights().map((h) => `<dt>${esc(h.label)}</dt><dd>${esc(h.value)}</dd>`).join('')}</dl>
   ${sections.map((s) => `<section>
   <h2 id="${esc(s.id)}">${esc(s.heading)}</h2>
   ${s.cards

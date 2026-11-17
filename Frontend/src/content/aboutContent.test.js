@@ -7,7 +7,9 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { ABOUT_VARIANTS, aboutContent, aboutAddressLines } from './aboutContent.js';
+import {
+  ABOUT_VARIANTS, aboutContent, aboutAddressLines, aboutHighlights,
+} from './aboutContent.js';
 import { BUSINESS, mark } from './seoContent.js';
 import { ASSUMPTIONS } from './assumptions.js';
 
@@ -93,6 +95,36 @@ test('the trademark symbol in the About copy answers to the ledger flag', () => 
     assert.ok(all.includes(mark(BUSINESS.brand)), `${name} never names the brand with its mark`);
     assert.ok(!all.includes(wrong), `${name} hardcodes a ${wrong}`);
   }
+});
+
+test('both variants carry the same "What We Stand For" cards', () => {
+  const cardsOf = (name) => ABOUT_VARIANTS[name].sections
+    .find((s) => s.id === 'what-we-stand-for')?.cards;
+  const first = cardsOf(NAMES[0]);
+  assert.ok(first && first.length === 3, 'the values cards are missing');
+  for (const name of NAMES) {
+    const cards = cardsOf(name);
+    assert.ok(cards, `${name} has no "What We Stand For" section`);
+    // Defined once and shared, so the wording cannot diverge between them.
+    assert.deepEqual(cards, first, `${name} states the values differently`);
+    for (const card of cards) {
+      assert.match(card.id, /^[a-z0-9-]+$/, `card id is not usable as a key: ${card.id}`);
+      assert.ok(card.title.trim() && card.body.trim());
+    }
+  }
+});
+
+test('the buyer-facing highlights come from the ledger, not from copy', () => {
+  const highlights = aboutHighlights();
+  assert.ok(highlights.length >= 3);
+  for (const h of highlights) {
+    assert.ok(h.label.trim() && h.value.trim(), 'an empty highlight');
+    assert.ok(h.icon, `${h.label} has no icon key`);
+  }
+  const byLabel = Object.fromEntries(highlights.map((h) => [h.label, h.value]));
+  assert.equal(byLabel['Size sets'], ASSUMPTIONS.sizeSets.join(' · '));
+  assert.equal(byLabel['Waist sizes'], ASSUMPTIONS.waistRange);
+  assert.ok(byLabel.Dispatch.includes(BUSINESS.locality));
 });
 
 test('the address under the closing line comes from BUSINESS', () => {
