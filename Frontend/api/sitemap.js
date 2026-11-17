@@ -10,12 +10,17 @@
 // dashboards and admin are disallowed in robots.txt and deliberately absent.
 
 import { SITE_URL, escapeHtml, listCategories, listProducts } from './_lib/catalog.js';
+import { CONTENT_UPDATED } from '../src/content/seoContent.js';
 
+// `lastmod` here is the date the page's copy was last edited, from
+// CONTENT_UPDATED. Home and /catalog take theirs from the newest product
+// instead, because their content is the catalogue. The two static content
+// pages previously had no lastmod at all.
 const STATIC_PAGES = [
   { path: '/',        changefreq: 'daily',   priority: '1.0' },
   { path: '/catalog', changefreq: 'daily',   priority: '0.9' },
-  { path: '/about',   changefreq: 'monthly', priority: '0.5' },
-  { path: '/contact', changefreq: 'monthly', priority: '0.5' },
+  { path: '/about',   changefreq: 'monthly', priority: '0.5', lastmod: CONTENT_UPDATED.about },
+  { path: '/contact', changefreq: 'monthly', priority: '0.5', lastmod: CONTENT_UPDATED.contact },
   // /terms, /privacy and /refund are deliberately absent: those pages carry
   // noindex, and listing a noindex URL in the sitemap is a contradiction
   // Search Console and Bing report as an error.
@@ -60,7 +65,7 @@ export default async function handler(req, res) {
   const entries = [
     ...STATIC_PAGES.map((p) => ({
       loc: `${SITE_URL}${p.path === '/' ? '/' : p.path}`,
-      lastmod: (p.path === '/' || p.path === '/catalog') ? newest : null,
+      lastmod: p.lastmod ?? ((p.path === '/' || p.path === '/catalog') ? newest : null),
       changefreq: p.changefreq,
       priority: p.priority,
     })),

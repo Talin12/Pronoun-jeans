@@ -3,12 +3,20 @@ import { Link } from 'react-router-dom';
 import { ArrowRight } from 'lucide-react';
 import Seo from '../components/seo/Seo';
 import { usePrerenderReady } from '../hooks/usePrerenderReady';
-import {
-  ABOUT_TITLE, ABOUT_DESCRIPTION, ABOUT_HEADING, ABOUT_HEADING_ACCENT, ABOUT_LEAD,
-  ABOUT_WHO_HEADING, ABOUT_WHO, ABOUT_VALUES,
-} from '../content/seoContent';
+import { ABOUT_TITLE, ABOUT_DESCRIPTION, BUSINESS, mark } from '../content/seoContent';
+import { aboutContent, aboutAddressLines } from '../content/aboutContent';
+
+// The copy lives in src/content/aboutContent.js, which aboutPage() in
+// api/render.js renders from too — the server HTML and this page cannot say
+// different things. Which of the client's two texts appears is decided by
+// ASSUMPTIONS.aboutVariant.
+
+const Divider = () => (
+  <div className="border-t border-gray-200 dark:border-white/5 max-w-4xl mx-auto" />
+);
 
 const AboutUs = () => {
+  const { h1, tagline, sections, closing } = aboutContent();
   usePrerenderReady();
 
   return (
@@ -20,62 +28,72 @@ const AboutUs = () => {
         canonical="/about"
       />
 
-      {/* Hero */}
+      {/* Hero — the only <h1> on the page */}
       <div className="max-w-4xl mx-auto px-6 py-24 text-center">
         <h1 className="text-4xl sm:text-5xl font-black text-gray-900 dark:text-zinc-100 leading-tight mb-8">
-          {ABOUT_HEADING}{' '}
-          <span className="text-accent">{ABOUT_HEADING_ACCENT}</span>
+          {h1}
         </h1>
-        <p className="text-lg font-semibold text-gray-700 dark:text-zinc-300 leading-relaxed mb-8">
-          {ABOUT_LEAD}
-        </p>
-        <p className="text-base text-gray-600 dark:text-zinc-400 leading-relaxed max-w-3xl mx-auto">
-          A man's wardrobe should be two things: effortless and authentic. We believe luxury isn't in logos,
-          but in the whisper-soft touch of cotton-Lycra, the precision of a stitch that outlasts seasons.
-          We design for the man who <em>does</em>—whether he's navigating a workday or a weekend adventure—not
-          the mannequin in a store window. Balance is everything, and it's hard: between durability and
-          lightness, structure and stretch, trend and timelessness. Our relationships with fabric mills and
-          tailors span years; this isn't fast fashion, it's <em>conscious craft.</em> Celebrity flash? We'd
-          rather elevate the everyday. Our mission? To make budget-friendly pieces feel premium, and premium
-          pieces feel lived-in. Confidence isn't vanity—it's self-respect. PRO-NOUN isn't about hiding behind
-          layers; it's about clothes that reveal <em>you.</em> And casual? We've mastered it: every pair of
-          joggers, every cargo short, is a lesson in refined ease.
+        <p className="text-lg font-semibold text-gray-700 dark:text-zinc-300 leading-relaxed">
+          {tagline}
         </p>
       </div>
 
-      {/* Divider */}
-      <div className="border-t border-gray-200 dark:border-white/5 max-w-4xl mx-auto" />
+      {sections.map((section) => (
+        <React.Fragment key={section.id}>
+          <Divider />
+          <div className="max-w-4xl mx-auto px-6 py-20">
+            <h2
+              id={section.id}
+              className="text-2xl font-black text-gray-900 dark:text-zinc-100 text-center mb-8 scroll-mt-24"
+            >
+              {section.heading}
+            </h2>
 
-      {/* Who we are — plain facts for buyers */}
-      <div className="max-w-4xl mx-auto px-6 py-20">
-        <h2 className="text-2xl font-black text-gray-900 dark:text-zinc-100 text-center mb-8">{ABOUT_WHO_HEADING}</h2>
-        <div className="space-y-4 max-w-3xl mx-auto">
-          {ABOUT_WHO.map((para) => (
-            <p key={para.slice(0, 40)} className="text-base text-gray-600 dark:text-zinc-400 leading-relaxed">{para}</p>
-          ))}
-        </div>
-      </div>
+            {section.cards ? (
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-8 mt-4">
+                {section.cards.map((card) => (
+                  <div key={card.title} className="bg-white dark:bg-zinc-900 rounded-2xl border border-gray-200 dark:border-white/5 p-6 shadow-sm">
+                    <div className="w-2 h-2 rounded-full bg-accent mb-4" />
+                    <h3 className="text-gray-900 dark:text-zinc-100 font-bold text-base mb-2">{card.title}</h3>
+                    <p className="text-gray-500 dark:text-zinc-400 text-sm leading-relaxed">{card.body}</p>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="space-y-4 max-w-3xl mx-auto">
+                {section.paragraphs.map((para) => (
+                  <p key={para.slice(0, 40)} className="text-base text-gray-600 dark:text-zinc-400 leading-relaxed">
+                    {para}
+                  </p>
+                ))}
+              </div>
+            )}
+          </div>
+        </React.Fragment>
+      ))}
 
-      <div className="border-t border-gray-200 dark:border-white/5 max-w-4xl mx-auto" />
+      <Divider />
 
-      {/* Values grid */}
-      <div className="max-w-4xl mx-auto px-6 py-20">
-        <h2 className="text-2xl font-black text-gray-900 dark:text-zinc-100 text-center mb-12">What We Stand For</h2>
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-8">
-          {ABOUT_VALUES.map((item) => (
-            <div key={item.title} className="bg-white dark:bg-zinc-900 rounded-2xl border border-gray-200 dark:border-white/5 p-6 shadow-sm">
-              <div className="w-2 h-2 rounded-full bg-accent mb-4" />
-              <h3 className="text-gray-900 dark:text-zinc-100 font-bold text-base mb-2">{item.title}</h3>
-              <p className="text-gray-500 dark:text-zinc-400 text-sm leading-relaxed">{item.body}</p>
-            </div>
-          ))}
-        </div>
+      {/* Closing line and the business address */}
+      <div className="max-w-4xl mx-auto px-6 py-20 text-center">
+        <p className="text-lg font-black text-gray-900 dark:text-zinc-100 mb-6">{closing.line}</p>
+        {closing.showAddress && (
+          <address className="not-italic text-sm text-gray-500 dark:text-zinc-400 leading-relaxed">
+            <a href={BUSINESS.mapUrl} target="_blank" rel="noopener noreferrer" className="hover:text-accent transition-colors">
+              {aboutAddressLines().map((line, i) => (
+                <React.Fragment key={line}>{i > 0 && <br />}{line}</React.Fragment>
+              ))}
+            </a>
+          </address>
+        )}
       </div>
 
       {/* CTA */}
       <div className="border-t border-gray-200 dark:border-white/5">
         <div className="max-w-4xl mx-auto px-6 py-16 text-center">
-          <h2 className="text-2xl font-black text-gray-900 dark:text-zinc-100 mb-4">Ready to stock PRO-NOUN?</h2>
+          <h2 className="text-2xl font-black text-gray-900 dark:text-zinc-100 mb-4">
+            Ready to stock {mark(BUSINESS.brand)}?
+          </h2>
           <p className="text-gray-500 dark:text-zinc-400 mb-8 text-sm">
             Join our network of wholesale partners across India.
           </p>

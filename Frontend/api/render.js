@@ -31,14 +31,14 @@ import {
 import {
   BRAND, BUSINESS, ADDRESS_LINES, SITE_DESCRIPTION, HOME_HEADING, HOME_TITLE, HOME_INTRO, HOME_ABOUT, HOME_FAQS,
   CATALOG_TITLE, CATALOG_DESCRIPTION,
-  ABOUT_TITLE, ABOUT_DESCRIPTION, ABOUT_HEADING, ABOUT_HEADING_ACCENT, ABOUT_LEAD, ABOUT_STORY,
-  ABOUT_WHO_HEADING, ABOUT_WHO, ABOUT_VALUES,
+  ABOUT_TITLE, ABOUT_DESCRIPTION,
   CONTACT_TITLE, CONTACT_DESCRIPTION, CONTACT_HEADING, CONTACT_INTRO,
   categoryContent, faqSchema, moqLabel, piecesLabel, sizeRanges, plainText,
   withBrandSuffix, clampDescription,
   productSeoTitle, productSeoDescription, categorySeoTitle, categorySeoDescription,
-  formatPhone, telHref, waHref, WHATSAPP_ENQUIRY,
+  formatPhone, telHref, waHref, WHATSAPP_ENQUIRY, mark,
 } from '../src/content/seoContent.js';
+import { aboutContent, aboutAddressLines } from '../src/content/aboutContent.js';
 // The LocalBusiness builder, shared with src/config/schema.js. This file used
 // to carry its own hand-copied contactSchema(), which is how the server HTML
 // came to publish different opening hours from the React page.
@@ -351,8 +351,12 @@ async function productPage(slug) {
   };
 }
 
+// Renders from src/content/aboutContent.js — the same objects AboutUs.jsx
+// renders — so the client's copy exists in exactly one place and the variant
+// switch moves both at once.
 function aboutPage() {
   const items = [{ name: 'Home', path: '/' }, { name: 'About', path: '/about' }];
+  const { h1, tagline, sections, closing } = aboutContent();
   return {
     head: headTags({
       title: withBrandSuffix(ABOUT_TITLE),
@@ -362,14 +366,17 @@ function aboutPage() {
     }),
     body: `
   ${crumbs(items)}
-  <h1>${esc(ABOUT_HEADING)} ${esc(ABOUT_HEADING_ACCENT)}</h1>
-  <p>${esc(ABOUT_LEAD)}</p>
-  <p>${esc(ABOUT_STORY)}</p>
-  <h2>${esc(ABOUT_WHO_HEADING)}</h2>
-  ${paragraphs(ABOUT_WHO)}
-  <h2>What We Stand For</h2>
-  ${ABOUT_VALUES.map((v) => `<h3>${esc(v.title)}</h3><p>${esc(v.body)}</p>`).join('\n  ')}
-  <h2>Ready to stock PRO-NOUN?</h2>
+  <h1>${esc(h1)}</h1>
+  <p>${esc(tagline)}</p>
+  ${sections.map((s) => `<section>
+  <h2 id="${esc(s.id)}">${esc(s.heading)}</h2>
+  ${s.cards
+    ? s.cards.map((c) => `<h3>${esc(c.title)}</h3><p>${esc(c.body)}</p>`).join('\n  ')
+    : paragraphs(s.paragraphs)}
+  </section>`).join('\n  ')}
+  <p>${esc(closing.line)}</p>
+  ${closing.showAddress ? `<address><p><a href="${esc(BUSINESS.mapUrl)}">${aboutAddressLines().map(esc).join('<br />')}</a></p></address>` : ''}
+  <h2>Ready to stock ${esc(mark(BUSINESS.brand))}?</h2>
   <p>Join our network of wholesale partners across India. <a href="/catalog">Browse the wholesale catalogue</a> or <a href="/contact">contact us</a>.</p>`,
   };
 }
