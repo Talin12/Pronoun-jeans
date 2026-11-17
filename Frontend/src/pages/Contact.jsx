@@ -6,8 +6,9 @@ import { contactLocalBusinessSchema } from '../config/schema';
 import { usePrerenderReady } from '../hooks/usePrerenderReady';
 import {
   BUSINESS, ADDRESS_LINES, CONTACT_TITLE, CONTACT_DESCRIPTION, CONTACT_HEADING, CONTACT_INTRO,
-  formatPhone, telHref, waHref, WHATSAPP_ENQUIRY,
+  formatPhone, telHref, waHref, WHATSAPP_ENQUIRY, grievanceContact,
 } from '../content/seoContent';
+import { SITE_URL } from '../config/site';
 import { ASSUMPTIONS } from '../content/assumptions';
 import { mobileFieldError, normaliseIndianMobile } from '../utils/indianMobile';
 
@@ -17,6 +18,7 @@ const Contact = () => {
   });
   const [mobileError, setMobileError] = useState('');
   const [submitted, setSubmitted] = useState(false);
+  const grievance = grievanceContact();
   usePrerenderReady();
 
   const setField = (key) => (value) => setForm((p) => ({ ...p, [key]: value }));
@@ -112,6 +114,38 @@ const Contact = () => {
               {BUSINESS.closedLabel && (
                 <p className="text-gray-500 dark:text-zinc-400 text-xs mt-1">{BUSINESS.closedLabel}</p>
               )}
+            </div>
+
+            {/* Statutory disclosure: the seller's identity and a reachable
+                grievance contact, which the E-Commerce Rules require to be
+                published. Same card pattern as "Our Details" above. */}
+            <div className="bg-white dark:bg-zinc-900 rounded-2xl border border-gray-200 dark:border-white/5 p-6 shadow-sm space-y-5">
+              <h2 className="text-gray-900 dark:text-zinc-100 font-bold text-base">Seller Details</h2>
+
+              <div>
+                <p className="text-gray-900 dark:text-zinc-100 text-sm font-semibold">Legal entity</p>
+                <p className="text-gray-500 dark:text-zinc-400 text-sm mt-0.5 leading-relaxed">
+                  {BUSINESS.legalName}<br />
+                  {ADDRESS_LINES.join(', ')}
+                </p>
+                <a href={SITE_URL} className="text-gray-500 dark:text-zinc-400 hover:text-accent text-sm mt-0.5 block transition-colors">
+                  {SITE_URL.replace(/^https?:\/\//, '')}
+                </a>
+              </div>
+
+              <div>
+                <p className="text-gray-900 dark:text-zinc-100 text-sm font-semibold">{grievance.heading}</p>
+                {grievance.name && (
+                  <p className="text-gray-500 dark:text-zinc-400 text-sm mt-0.5">{grievance.name}</p>
+                )}
+                <p className="text-gray-500 dark:text-zinc-400 text-sm mt-0.5">{grievance.designation}</p>
+                <a href={`mailto:${grievance.email}`} className="text-gray-500 dark:text-zinc-400 hover:text-accent text-sm mt-0.5 block transition-colors">
+                  {grievance.email}
+                </a>
+                <a href={grievance.phoneHref} className="text-gray-500 dark:text-zinc-400 hover:text-accent text-sm mt-0.5 block transition-colors">
+                  {grievance.phoneDisplay}
+                </a>
+              </div>
             </div>
           </div>
 

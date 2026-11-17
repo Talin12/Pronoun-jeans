@@ -1,11 +1,15 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
-import { MapPin, Phone, Mail, MessageCircle } from 'lucide-react';
+import { MapPin, Phone, Mail, MessageCircle, ShieldCheck } from 'lucide-react';
 import {
   BUSINESS, formatPhone, telHref, waHref, WHATSAPP_ENQUIRY,
+  grievanceContact,
 } from '../../content/seoContent';
 
-const Footer = () => (
+const Footer = () => {
+  const grievance = grievanceContact();
+
+  return (
   <footer className="bg-gray-50 dark:bg-zinc-900 border-t border-gray-200 dark:border-white/5 mt-auto">
     <div className="max-w-7xl mx-auto px-6 py-14">
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-10">
@@ -87,6 +91,18 @@ const Footer = () => (
                 {BUSINESS.email}
               </a>
             </li>
+            {/* Statutory grievance contact. A role, not a person: no officer
+                has been named and one must not be invented. */}
+            <li className="flex items-start gap-2.5 text-sm text-gray-500 dark:text-zinc-400">
+              <ShieldCheck className="w-4 h-4 text-accent mt-0.5 shrink-0" />
+              <span className="leading-relaxed">
+                {grievance.name && <>{grievance.name}<br /></>}
+                {grievance.designation}<br />
+                <a href={`mailto:${grievance.email}`} className="hover:text-accent transition-colors">{grievance.email}</a>
+                {' · '}
+                <a href={grievance.phoneHref} className="hover:text-accent transition-colors">{grievance.phoneDisplay}</a>
+              </span>
+            </li>
           </ul>
         </div>
       </div>
@@ -96,7 +112,8 @@ const Footer = () => (
         <p className="text-gray-400 dark:text-zinc-600 text-xs">B2B Wholesale Portal · Authorised Partners Only</p>
       </div>
     </div>
-  </footer>
-);
+    </footer>
+  );
+};
 
 export default Footer;

@@ -136,6 +136,31 @@ export const BUSINESS = {
 };
 
 /**
+ * The statutory grievance contact, as display lines.
+ *
+ * The Consumer Protection (E-Commerce) Rules require a reachable grievance
+ * contact to be published. No officer was named, so this renders the role and
+ * the business contact details and nothing more — `name` is empty and a
+ * person must never be invented to fill it. From 1 Jan 2027 the amendment
+ * rules want a named officer, so ASSUMPTIONS.grievance.name needs filling in
+ * before then.
+ */
+export function grievanceContact() {
+  const { name, designation, email, phone } = BUSINESS.grievance;
+  return {
+    // Not "Grievance Officer": the designation already says that, and the two
+    // together read as a stutter.
+    heading: 'Grievance Redressal',
+    name: name || '',
+    designation,
+    email,
+    phone,
+    phoneDisplay: formatPhone(phone),
+    phoneHref: telHref(phone),
+  };
+}
+
+/**
  * The address as display lines (Contact page, footer, legal pages, server
  * render). A re-export, not a second copy: ADDRESS_LINES had its own literals
  * and the business-name line baked in as line 0, which is why the name and

@@ -36,7 +36,7 @@ import {
   categoryContent, faqSchema, moqLabel, piecesLabel, sizeRanges, plainText,
   withBrandSuffix, clampDescription,
   productSeoTitle, productSeoDescription, categorySeoTitle, categorySeoDescription,
-  formatPhone, telHref, waHref, WHATSAPP_ENQUIRY, mark,
+  formatPhone, telHref, waHref, WHATSAPP_ENQUIRY, mark, grievanceContact,
 } from '../src/content/seoContent.js';
 import { aboutContent, aboutAddressLines } from '../src/content/aboutContent.js';
 // The LocalBusiness builder, shared with src/config/schema.js. This file used
@@ -409,8 +409,26 @@ function contactPage() {
   requirement. To reach the wholesale team directly instead, message us on
   <a href="${esc(waHref(BUSINESS.whatsapp, WHATSAPP_ENQUIRY))}">WhatsApp at ${esc(formatPhone(BUSINESS.whatsapp))}</a>,
   call <a href="${esc(telHref(BUSINESS.phone))}">${esc(formatPhone(BUSINESS.phone))}</a>
-  or email <a href="mailto:${esc(BUSINESS.email)}">${esc(BUSINESS.email)}</a>.</p>`,
+  or email <a href="mailto:${esc(BUSINESS.email)}">${esc(BUSINESS.email)}</a>.</p>
+  ${sellerDetailsBlock()}`,
   };
+}
+
+// The seller's identity and a reachable grievance contact — the disclosure the
+// Consumer Protection (E-Commerce) Rules require to be published. Rendered
+// from BUSINESS, and the officer's name is only printed when there is one.
+function sellerDetailsBlock() {
+  const g = grievanceContact();
+  return `<h2>Seller Details</h2>
+  <address>
+  <p>${esc(BUSINESS.legalName)}<br />${ADDRESS_LINES.map(esc).join('<br />')}</p>
+  <p><a href="${esc(SITE_URL)}/">${esc(SITE_URL.replace(/^https?:\/\//, ''))}</a></p>
+  <p>Customer care: <a href="${esc(telHref(BUSINESS.phone))}">${esc(formatPhone(BUSINESS.phone))}</a>
+  · <a href="mailto:${esc(BUSINESS.email)}">${esc(BUSINESS.email)}</a></p>
+  <p>${esc(g.heading)}: ${g.name ? `${esc(g.name)}, ` : ''}${esc(g.designation)}<br />
+  <a href="mailto:${esc(g.email)}">${esc(g.email)}</a>
+  · <a href="${esc(g.phoneHref)}">${esc(g.phoneDisplay)}</a></p>
+  </address>`;
 }
 
 // ── Handler ─────────────────────────────────────────────────────────────────
